@@ -1144,9 +1144,26 @@
                 } else if (data.owner === 'enemy') {
                     let targetBox = null; if (playerInVehicle) { targetBox = playerInVehicle.userData.collisionBox.clone().translate(playerInVehicle.position); } else if (!isGameOver) { targetBox = new THREE.Box3(new THREE.Vector3(-0.5, -1.8, -0.5), new THREE.Vector3(0.5, 0.2, 0.5)).translate(gameState.position); }
                     if (targetBox) { const hitPoint = bulletRay.intersectBox(targetBox, new THREE.Vector3()); if (hitPoint) { const dist = oldPosition.distanceTo(hitPoint); if (dist < minHitDist) { minHitDist = dist; bestHit = { type: 'player', point: hitPoint }; } } }
+                    
+                    // [수정] 적의 총알 처리: 오크만 맞게 변경 (일반 좀비는 면역)
                     for (const zombie of zombies) {
-                        if (!zombie.parent || zombie.userData.health <= 0) continue; if (bullet.position.distanceToSquared(zombie.position) > dynamicCheckSq) continue; const box = new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.6), new THREE.Vector3(0.6, 2.0, 0.6)).translate(zombie.position); const hitPoint = bulletRay.intersectBox(box, new THREE.Vector3());
-                        if (hitPoint) { const dist = oldPosition.distanceTo(hitPoint); if (dist < minHitDist) { minHitDist = dist; bestHit = { type: 'zombie_friendly_fire', obj: zombie, point: hitPoint }; } }
+                        if (!zombie.parent || zombie.userData.health <= 0) continue; 
+                        
+                        // [중요] 오크가 아니면 적 총알 무시 (break가 아니라 continue로 다음 좀비 확인)
+                        if (!zombie.userData.isOrc) continue;
+
+                        if (bullet.position.distanceToSquared(zombie.position) > dynamicCheckSq) continue; 
+                        const box = new THREE.Box3(new THREE.Vector3(-0.6, 0, -0.6), new THREE.Vector3(0.6, 2.0, 0.6)).translate(zombie.position); 
+                        const hitPoint = bulletRay.intersectBox(box, new THREE.Vector3());
+                        
+                        if (hitPoint) { 
+                            const dist = oldPosition.distanceTo(hitPoint); 
+                            if (dist < minHitDist) { 
+                                minHitDist = dist; 
+                                // 오크 피격 타입으로 설정
+                                bestHit = { type: 'orc_friendly_fire', obj: zombie, point: hitPoint }; 
+                            } 
+                        }
                     }
                 }
                 for (const object of objects) { if (data.owner === 'player' && playerInVehicle && object === playerInVehicle) continue; if (!object.geometry || !object.parent) continue; if (object.geometry.type === 'PlaneGeometry') continue; if (bullet.position.distanceToSquared(object.position) > dynamicCheckSq) continue; if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); const box = new THREE.Box3().setFromObject(object); if (bulletRay.intersectsBox(box)) { raycaster.set(oldPosition, travelVec.clone().normalize()); raycaster.far = rayLength + 0.1; const intersections = raycaster.intersectObject(object, false); if (intersections.length > 0) { const hit = intersections[0]; if (hit.distance < minHitDist) { minHitDist = hit.distance; bestHit = { type: 'object', obj: object, point: hit.point }; } } } }
@@ -1157,10 +1174,27 @@
                     else if (bestHit.type === 'zombie') { hitZombie(bestHit.obj, damage); }
                     else if (bestHit.type === 'player') { const pDmg = damage * 0.5; attackPlayer(pDmg); if (data.ownerRef && data.ownerRef.userData) { data.ownerRef.userData.consecutiveMisses = 0; } }
                     else if (bestHit.type === 'boss') { const boss = bestHit.obj; boss.userData.health -= damage; showDamage(boss.position, damage); }
-                    else if (bestHit.type === 'zombie_friendly_fire') {
-                        const zombie = bestHit.obj; const friendlyDmg = 15; zombie.userData.health -= friendlyDmg; showDamage(zombie.position, friendlyDmg, '#ff4400');
-                        if (zombie.userData.health > 0) { zombie.userData.isProvoked = true; if (data.ownerRef && data.ownerRef.parent && data.ownerRef.userData.health > 0) { zombie.userData.customTarget = data.ownerRef; if (zombie.userData.isOrc && Math.random() < 0.3) { showChat(zombie.userData.name, "네 이놈! 감히 나를 쏴? (적 공격 중)"); } } } else { handleZombieDeath(zombie, zombies.indexOf(zombie)); }
+                    
+                    // [수정] 오크 피격 처리 (기존 zombie_friendly_fire -> orc_friendly_fire)
+                    else if (bestHit.type === 'orc_friendly_fire') {
+                        const orc = bestHit.obj; 
+                        const friendlyDmg = 15; 
+                        orc.userData.health -= friendlyDmg; 
+                        showDamage(orc.position, friendlyDmg, '#ff4400');
+                        
+                        if (orc.userData.health > 0) { 
+                            orc.userData.isProvoked = true; 
+                            if (data.ownerRef && data.ownerRef.parent && data.ownerRef.userData.health > 0) { 
+                                orc.userData.customTarget = data.ownerRef; 
+                                if (Math.random() < 0.3) { 
+                                    showChat(orc.userData.name, "네 이놈! 감히 나를 쏴? (적 공격 중)"); 
+                                } 
+                            } 
+                        } else { 
+                            handleZombieDeath(orc, zombies.indexOf(orc)); 
+                        }
                     }
+                    
                     else if (bestHit.type === 'object') { const object = bestHit.obj; if (data.weaponKey === 'FlashGun') { createFlare(bestHit.point); } const debrisColor = object.userData.originalColor || object.material.color || new THREE.Color(0x888888); if (isPositionInView(bestHit.point)) { createDebrisEffect(bestHit.point, debrisColor); } if (data.owner === 'player' && object.userData.health) { object.userData.health -= damage; if (object.userData.health <= 0) { createDebrisEffect(object.position, debrisColor, 10); if (object.userData.instancedMesh) { const imesh = object.userData.instancedMesh; const idx = object.userData.instanceId; const zeroMatrix = new THREE.Matrix4().set(0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0); imesh.setMatrixAt(idx, zeroMatrix); imesh.instanceMatrix.needsUpdate = true; } scene.remove(object); objects.splice(objects.indexOf(object), 1); } } if (data.owner === 'enemy' && data.ownerRef && data.ownerRef.userData) { data.ownerRef.userData.consecutiveMisses++; } }
                     scene.remove(bullet); bullets.splice(i, 1); continue;
                 }
@@ -1205,8 +1239,21 @@
                     data.speed = Math.max(0, playerBaseSpeed - 0.1); 
                 }
 
-                if (damageTick > 0 && data.health > 0 && !data.isTroll && !data.isOrc) { data.health -= damageTick; const healthPercent = Math.max(0, data.health / data.maxHealth); enemy.material.color.copy(data.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); if (data.health <= 0) { handleZombieDeath(enemy, index); continue; } }
-                if (data.health <= 0) { handleZombieDeath(enemy, index); continue; }
+                if (damageTick > 0 && data.health > 0 && !data.isTroll && !data.isOrc) { 
+                    data.health -= damageTick; 
+                    const healthPercent = Math.max(0, data.health / data.maxHealth); 
+                    enemy.material.color.copy(data.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); 
+                    if (data.health <= 0) { 
+                        // [수정] 햇빛으로 인한 사망은 플레이어 킬로 인정하지 않음 (false 전달)
+                        handleZombieDeath(enemy, index, false); 
+                        continue; 
+                    } 
+                }
+                if (data.health <= 0) { 
+                    // [수정] 그 외의 사망(전투 등)은 플레이어 킬로 인정 (기본값 true)
+                    handleZombieDeath(enemy, index, true); 
+                    continue; 
+                }
                 
                 let zombieGroundY = -100; let validGroundHit = null; const biome = getBiome(enemy.position.x, enemy.position.z);
                 if (biome !== 'city') { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } else { raycaster.far = 20; raycaster.set(enemy.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const zombieIntersects = raycaster.intersectObjects(structures, true); validGroundHit = zombieIntersects.find(hit => hit.point.y < enemy.position.y + 2.0 && (hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.geometry.type === 'PlaneGeometry')); if (validGroundHit) { zombieGroundY = validGroundHit.point.y; } else { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } }
@@ -1283,13 +1330,45 @@
             else { if (now - data.lastPortalUse > data.portalCooldown) { enemy.position.copy(destination); enemy.position.y += 0.5; data.velocityY = 0; data.isJumping = false; data.lastPortalUse = now; data.state = 'chase'; data.portalAction = null; } } 
         }
         
-        function handleZombieDeath(enemy, index) { 
-            if (questState.status === 1 && questState.type === 'hunt_zombie') { questState.currentAmount++; if (questState.currentAmount >= questState.targetAmount) { questState.currentAmount = questState.targetAmount; questState.status = 2; showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); } updateQuestUI(); } 
-            gameStats.zombieKills++; checkAchievements(); 
-            addMoloch(Math.floor(Math.random() * 5) + 1); 
-            let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; gainXP(xpGain);
-            showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
-            createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); zombies.splice(index, 1); if (Math.random() < 0.5) { const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); } 
+        // [수정] 좀비 처치 처리 함수: isPlayerKill 플래그 추가 (기본값 true)
+        function handleZombieDeath(enemy, index, isPlayerKill = true) { 
+            // 1. 공통 처리: 이펙트 및 제거 (항상 실행)
+            createDebrisEffect(enemy.position, enemy.material.color); 
+            scene.remove(enemy); 
+            zombies.splice(index, 1); 
+
+            // 2. 플레이어 보상 처리 (플레이어가 죽였을 때만 실행)
+            if (isPlayerKill) {
+                if (questState.status === 1 && questState.type === 'hunt_zombie') { 
+                    questState.currentAmount++; 
+                    if (questState.currentAmount >= questState.targetAmount) { 
+                        questState.currentAmount = questState.targetAmount; 
+                        questState.status = 2; 
+                        showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); 
+                    } 
+                    updateQuestUI(); 
+                } 
+                gameStats.zombieKills++; 
+                checkAchievements(); 
+                addMoloch(Math.floor(Math.random() * 5) + 1); 
+                let xpGain = 10; 
+                if (enemy.userData.isTroll) xpGain = 50; 
+                if (enemy.userData.isOrc) xpGain = 20; 
+                gainXP(xpGain);
+                showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
+                
+                // 아이템 드랍
+                if (Math.random() < 0.5) { 
+                    const lootOptions = [ 
+                        { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, 
+                        { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, 
+                        { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, 
+                        { type: 'item', name: '에너지드링크', amount: 1 } 
+                    ]; 
+                    const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; 
+                    spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); 
+                } 
+            }
         }
         
         function checkLineOfSight(fromPos, toPos) { const eyePos = fromPos.clone().add(new THREE.Vector3(0, 2.0, 0)); const targetEyePos = toPos.clone().add(new THREE.Vector3(0, 1.0, 0)); const direction = targetEyePos.clone().sub(eyePos).normalize(); const distance = eyePos.distanceTo(targetEyePos); raycaster.set(eyePos, direction); raycaster.far = distance; const intersects = raycaster.intersectObjects(objects, true); const hit = intersects.find(i => i.object.geometry.type !== 'PlaneGeometry' && i.object.userData.type !== 'roof' && i.object.userData.type !== 'floor' && i.distance > 1.0 ); return !hit || hit.distance > distance - 1; }
