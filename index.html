@@ -89,6 +89,11 @@
         #vehicle-health-bar { height: 15px; border-radius: 8px; }
         #vehicle-health-fill { height: 100%; background: #3498db; transition: width 0.3s ease; width: 100%; }
         #vehicle-status-row { display: none; }
+        /* [NEW] 경험치 바 스타일 */
+        #xp-bar-container { width: 100%; height: 8px; background: rgba(0,0,0,0.5); position: fixed; bottom: 0; left: 0; z-index: 103; }
+        #xp-fill { height: 100%; background: #9b59b6; width: 0%; transition: width 0.5s; }
+        #level-badge { position: fixed; bottom: 15px; left: 20px; background: #9b59b6; color: white; width: 40px; height: 40px; border-radius: 50%; display: flex; justify-content: center; align-items: center; font-weight: bold; border: 2px solid white; z-index: 103; font-size: 18px; box-shadow: 0 0 10px #9b59b6; }
+
         .status-text { font-size: 14px; min-width: 120px; }
         #ammo-container { text-align: right; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); display: flex; flex-direction: column; align-items: flex-end; }
         #ammo-display-group { display: flex; align-items: baseline; gap: 10px; }
@@ -133,6 +138,21 @@
         .sell-btn:disabled { background: #555; cursor: not-allowed; color: #aaa; }
         #close-trade-btn { background: #f44336; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; margin-top: 10px; font-weight: bold; }
         #close-trade-btn:hover { background: #d32f2f; }
+        
+        /* [NEW] 스탯창 UI */
+        #stats-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); border: 2px solid #9b59b6; padding: 30px; border-radius: 15px; color: white; z-index: 2100; width: 350px; display: none; flex-direction: column; gap: 20px; box-shadow: 0 0 30px rgba(155, 89, 182, 0.4); }
+        #stats-modal h2 { color: #9b59b6; text-align: center; margin-bottom: 10px; font-size: 28px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #9b59b6; }
+        .stat-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; }
+        .stat-name { font-weight: bold; font-size: 18px; width: 100px; }
+        .stat-val { font-family: 'Consolas', monospace; color: #ffff00; font-size: 20px; width: 50px; text-align: center; }
+        .stat-btn { background: #4caf50; color: white; border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 18px; display: flex; justify-content: center; align-items: center; transition: transform 0.2s; }
+        .stat-btn:hover { transform: scale(1.1); background: #66bb6a; }
+        .stat-btn:disabled { background: #555; cursor: not-allowed; opacity: 0.5; }
+        #stat-points-display { text-align: center; font-size: 16px; color: #ddd; margin-bottom: 10px; }
+        #stat-points-val { color: #ffff00; font-weight: bold; font-size: 20px; }
+        #close-stats-btn { background: #555; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: background 0.2s; }
+        #close-stats-btn:hover { background: #777; }
+
         @keyframes damage-float { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-50px); opacity: 0; } }
     </style>
 </head>
@@ -177,10 +197,60 @@
         <div id="chat-box"></div>
         <div id="horde-warning">⚠️ 경고: 좀비떼가 몰려옵니다!<span id="horde-sub-warning">주변을 경계하세요!</span></div>
 
+        <!-- [NEW] 레벨 및 XP 바 -->
+        <div id="level-badge">1</div>
+        <div id="xp-bar-container"><div id="xp-fill"></div></div>
+
         <div id="trade-modal">
             <h2>상점 (아이템 판매)</h2>
             <div id="trade-list"></div>
             <button id="close-trade-btn">상점 닫기</button>
+        </div>
+
+        <!-- [NEW] 스탯창 모달 -->
+        <div id="stats-modal">
+            <h2>능력치</h2>
+            <div id="stat-points-display">남은 포인트: <span id="stat-points-val">0</span></div>
+            
+            <!-- [수정] 체력 (Vitality) 분리 -->
+            <div class="stat-row">
+                <div class="stat-name">체력</div>
+                <div class="stat-val" id="vit-val">0</div>
+                <button class="stat-btn" onclick="increaseStat('vitality')">+</button>
+            </div>
+            <div style="font-size:12px; color:#aaa; margin-top:-15px; margin-bottom:10px; text-align:right;">최대 체력 증가 (+10)</div>
+
+            <!-- [수정] 근력 (Strength) 분리 -->
+            <div class="stat-row">
+                <div class="stat-name">근력</div>
+                <div class="stat-val" id="str-val">0</div>
+                <button class="stat-btn" onclick="increaseStat('strength')">+</button>
+            </div>
+            <div style="font-size:12px; color:#aaa; margin-top:-15px; margin-bottom:10px; text-align:right;">주먹 공격력 증가 (+2)</div>
+
+            <div class="stat-row">
+                <div class="stat-name">민첩 (속도)</div>
+                <div class="stat-val" id="agi-val">0</div>
+                <button class="stat-btn" onclick="increaseStat('agility')">+</button>
+            </div>
+            <div style="font-size:12px; color:#aaa; margin-top:-15px; margin-bottom:10px; text-align:right;">이동 속도 증가 (+5%)</div>
+
+            <div class="stat-row">
+                <div class="stat-name">내구 (지구력)</div>
+                <div class="stat-val" id="end-val">0</div>
+                <button class="stat-btn" onclick="increaseStat('endurance')">+</button>
+            </div>
+            <div style="font-size:12px; color:#aaa; margin-top:-15px; margin-bottom:10px; text-align:right;">최대 스태미나 증가 (+20)</div>
+
+            <!-- [NEW] 밝기 스탯 추가 -->
+            <div class="stat-row">
+                <div class="stat-name">감각 (밝기)</div>
+                <div class="stat-val" id="per-val">0</div>
+                <button class="stat-btn" onclick="increaseStat('perception')">+</button>
+            </div>
+            <div style="font-size:12px; color:#aaa; margin-top:-15px; margin-bottom:10px; text-align:right;">야간 시야 밝기 증가</div>
+
+            <button id="close-stats-btn" onclick="closeStatsModal()">닫기 (P)</button>
         </div>
 
         <div id="ui-overlay">
@@ -319,17 +389,104 @@
             weaponPrices["Fist"] = 0; if(!ammoPrices["Flare"]) ammoPrices["Flare"] = 10;
         }
 
-        const MAX_PLAYER_HEALTH = 1000;
-        let playerStamina = 100; const MAX_STAMINA = 100; const STAMINA_RECOVERY_RATE = 1.1; const STAMINA_DRAIN_RATE = 15; const JUMP_STAMINA_COST = 15; const STAMINA_THRESHOLD = 5;
+        // [수정] 기본값은 변수로 두고, 실제 값은 스탯 비례 함수로 계산
+        const BASE_PLAYER_HEALTH = 1000;
+        const BASE_PLAYER_STAMINA = 100;
+        let playerStamina = 100; 
+        const STAMINA_RECOVERY_RATE = 1.1; const STAMINA_DRAIN_RATE = 15; const JUMP_STAMINA_COST = 15; const STAMINA_THRESHOLD = 5;
 
         let gameState = {
-            health: MAX_PLAYER_HEALTH, moloch: 0, 
+            health: BASE_PLAYER_HEALTH, moloch: 0, 
             ammoInventory: { "5.56mm": 60, "7.62mm": 60, "9mm": 0, ".45 ACP": 14, "12 Gauge": 10, ".300": 0, "Flare": 5 },
             weapons: [ { key: "Fist" }, { key: "P1911", magAmmo: 7 }, { key: "FlashGun", magAmmo: 1 } ],
             currentWeaponIndex: 0,
             position: new THREE.Vector3(0, 1.8, 0), rotation: new THREE.Vector2(0, 0), velocityY: 0, onGround: true, lastShotTime: 0, isReloading: false, inHighrise: false,
-            lastHordeTime: -300, hordeCooldown: 240, hordeActive: false
+            lastHordeTime: -300, hordeCooldown: 240, hordeActive: false,
+            // [수정] 스탯 분리: vitality(체력), strength(근력)
+            stats: { vitality: 0, strength: 0, agility: 0, endurance: 0, perception: 0 },
+            statPoints: 0,
+            level: 1,
+            xp: 0,
+            xpToNextLevel: 100
         };
+
+        // [NEW] 스탯 도우미 함수들
+        // [수정] 최대 체력은 이제 vitality 스탯의 영향을 받음 (1당 +10)
+        function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10); }
+        function getMaxStamina() { return BASE_PLAYER_STAMINA + (gameState.stats.endurance * 20); }
+        function getMoveSpeed() { return 10 * (1 + gameState.stats.agility * 0.05); }
+
+        function checkLevelUp() {
+            if (gameState.xp >= gameState.xpToNextLevel) {
+                gameState.xp -= gameState.xpToNextLevel;
+                gameState.level++;
+                gameState.statPoints++; // 레벨업당 1포인트 (원하면 더 줘도 됨)
+                gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * 1.5);
+                
+                // 체력/스태미나 모두 회복
+                gameState.health = getMaxHealth();
+                playerStamina = getMaxStamina();
+                
+                showChat('시스템', `레벨 업! 현재 레벨: ${gameState.level} (스탯 포인트 +1)`);
+                // 연속 레벨업 처리
+                checkLevelUp();
+            }
+            updateUI();
+        }
+
+        function gainXP(amount) {
+            gameState.xp += amount;
+            checkLevelUp();
+        }
+
+        // UI 함수: 스탯창 열기/닫기
+        let isStatsOpen = false;
+        function toggleStatsModal() {
+            if (isTrading) return;
+            isStatsOpen = !isStatsOpen;
+            const modal = document.getElementById('stats-modal');
+            if (isStatsOpen) {
+                document.exitPointerLock();
+                modal.style.display = 'flex';
+                updateStatsUI();
+            } else {
+                modal.style.display = 'none';
+                document.body.requestPointerLock();
+            }
+        }
+        function closeStatsModal() {
+            isStatsOpen = false;
+            document.getElementById('stats-modal').style.display = 'none';
+            document.body.requestPointerLock();
+        }
+        function updateStatsUI() {
+            document.getElementById('stat-points-val').textContent = gameState.statPoints;
+            // [수정] 분리된 스탯 UI 업데이트
+            document.getElementById('vit-val').textContent = gameState.stats.vitality;
+            document.getElementById('str-val').textContent = gameState.stats.strength;
+            document.getElementById('agi-val').textContent = gameState.stats.agility;
+            document.getElementById('end-val').textContent = gameState.stats.endurance;
+            document.getElementById('per-val').textContent = gameState.stats.perception;
+            
+            const btns = document.querySelectorAll('.stat-btn');
+            btns.forEach(btn => {
+                btn.disabled = gameState.statPoints <= 0;
+            });
+        }
+        function increaseStat(stat) {
+            if (gameState.statPoints > 0) {
+                gameState.stats[stat]++;
+                gameState.statPoints--;
+                
+                // 즉시 반영 효과
+                // [수정] 체력 스탯 증가 시 현재 체력도 같이 회복 (비례)
+                if (stat === 'vitality') gameState.health += 10;
+                if (stat === 'endurance') playerStamina += 20;
+                
+                updateStatsUI();
+                updateUI();
+            }
+        }
 
         let controls = { moveForward: false, moveBackward: false, moveLeft: false, moveRight: false, sprint: false, jump: false };
 
@@ -356,7 +513,7 @@
         function showAchievementPopup(ach) { const popup = document.getElementById('achievement-popup'); document.getElementById('achievement-title').textContent = ach.title; document.getElementById('achievement-desc').textContent = ach.desc; popup.style.display = 'block'; setTimeout(() => { popup.style.transform = 'translateX(0)'; }, 50); setTimeout(() => { popup.style.transform = 'translateX(100%)'; setTimeout(() => { popup.style.display = 'none'; }, 500); }, 10000); }
 
         function startLoading() {
-            const tips = ["세계수 근처에는 강력한 트롤이 서식합니다.", "숲속에는 오크 군락이 숨겨져 있을 수 있습니다.", "마녀는 흑마법을 사용하여 좀비를 소환하거나 폭발을 일으킵니다.", "Shift 키로 더 빠르게 달릴 수 있습니다.", "F 키로 차량에 탑승하거나 아이템을 주울 수 있습니다."]; 
+            const tips = ["P키를 눌러 능력치를 찍어보세요.", "민첩을 올리면 이동 속도가 빨라집니다.", "내구도를 올리면 더 오래 달릴 수 있습니다.", "레벨업 시 체력과 스태미나가 모두 회복됩니다.", "F 키로 차량에 탑승하거나 아이템을 주울 수 있습니다."]; 
             let tipIndex = 0; const tipElement = document.getElementById('loading-tips'); tipElement.textContent = `게임 팁: ${tips[tipIndex]}`;
             const tipInterval = setInterval(() => { tipIndex = (tipIndex + 1) % tips.length; tipElement.textContent = `게임 팁: ${tips[tipIndex]}`; }, 3000);
             let progress = 0;
@@ -620,7 +777,12 @@
                 if (remaining > 0) { zone.mesh.material.opacity = 0.3 + Math.sin(now * 0.01) * 0.2; } else { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const distSq = zone.mesh.position.distanceToSquared(playerPos); createDebrisEffect(zone.mesh.position, new THREE.Color(0xff4500), 20); if (distSq < zone.radius * zone.radius) { attackPlayer(zone.damage); showChat('시스템', '마법 폭발에 휘말렸습니다!'); } scene.remove(zone.mesh); hazardZones.splice(i, 1); }
             }
         }
-        function handleBossDeath(boss, index) { showChat('시스템', `⚔️ 전설적인 적 처치: ${boss.userData.name}!`); addMoloch(1000 + Math.floor(Math.random() * 1000)); createDebrisEffect(boss.position, boss.userData.originalColor, 50); scene.remove(boss); bosses.splice(index, 1); objects = objects.filter(o => o !== boss); document.getElementById('boss-container').style.display = 'none'; }
+        function handleBossDeath(boss, index) { 
+            showChat('시스템', `⚔️ 전설적인 적 처치: ${boss.userData.name}!`); 
+            addMoloch(1000 + Math.floor(Math.random() * 1000)); 
+            gainXP(500); // 보스 XP 보상
+            createDebrisEffect(boss.position, boss.userData.originalColor, 50); scene.remove(boss); bosses.splice(index, 1); objects = objects.filter(o => o !== boss); document.getElementById('boss-container').style.display = 'none'; 
+        }
 
         function addBoxInstance(matrices, proxies, x, y, z, w, h, d, userDataBase, originalColor) {
             dummy.position.set(x, y, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(w, h, d); dummy.updateMatrix(); matrices.push(dummy.matrix.clone());
@@ -653,7 +815,7 @@
         
         function createNPC(x, z, color, name, dialogue, yBase) { 
             const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2, 8), new THREE.MeshLambertMaterial({ color: color })); body.position.set(x, yBase + 1, z); body.castShadow = true; body.userData = { type: 'npc', name: name, dialogue: dialogue, dialogueIndex: 0, spawnPosition: new THREE.Vector3(x, yBase + 1, z), wanderTarget: null, lastMoveTime: 0, speed: 2.5 };
-            if (name === '생존자') { body.userData.tutorialDialogue = [ "1. [캐릭터 조작] WASD로 이동하고, Shift로 달립니다. Space는 점프, F키는 상호작용입니다.", "2. [차량 조작] 차량 근처에서 F키로 타고 내립니다. WASD로 운전하며, 좀비들을 들이받아 날려버릴 수 있습니다.", "3. [생존 위협] 좀비와 적들은 소리를 듣고 쫓아옵니다. 특히 밤에는 시야가 좁아지고 적들이 더 위험해집니다.", "4. [전투 방법] 마우스 왼쪽 버튼으로 사격, 우클릭으로 조준합니다. 탄약이 떨어지면 R키로 재장전하세요.", "5. [상태 관리] 체력은 의료키트, 스태미나는 음식/음료로 회복합니다. 스태미나를 90% 이상 유지하면 체력이 서서히 회복됩니다.", "6. [지형 주의] 화산 지대의 용암에 닿으면 큰 피해를 입습니다! 조심하세요!" ]; body.userData.tutorialIndex = 0; }
+            if (name === '생존자') { body.userData.tutorialDialogue = [ "1. [캐릭터 조작] WASD로 이동하고, Shift로 달립니다. Space는 점프, F키는 상호작용입니다.", "2. [차량 조작] 차량 근처에서 F키로 타고 내립니다. WASD로 운전하며, 좀비들을 들이받아 날려버릴 수 있습니다.", "3. [생존 위협] 좀비와 적들은 소리를 듣고 쫓아옵니다. 특히 밤에는 시야가 좁아지고 적들이 더 위험해집니다.", "4. [전투 방법] 마우스 왼쪽 버튼으로 사격, 우클릭으로 조준합니다. 탄약이 떨어지면 R키로 재장전하세요.", "5. [성장 시스템] 좀비를 잡아 레벨업하고, P키를 눌러 스탯을 찍으세요! 더 강해질 수 있습니다.", "6. [지형 주의] 화산 지대의 용암에 닿으면 큰 피해를 입습니다! 조심하세요!" ]; body.userData.tutorialIndex = 0; }
             const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshLambertMaterial({ color: 0x333333 })); head.position.set(0, 1.3, 0); head.castShadow = true; body.add(head); scene.add(body); npcs.push(body);
         }
 
@@ -708,10 +870,30 @@
         }
 
         function setupControls() {
-            document.addEventListener('keydown', (e) => { if(isGameOver || gameState.isReloading) return; if (playerInVehicle) { switch(e.code) { case 'KeyW': vehicleAcceleration = -1; break; case 'KeyS': vehicleAcceleration = 1; break; case 'KeyA': vehicleSteering = -1; break; case 'KeyD': vehicleSteering = 1; break; } } else { if (!isTrading) { switch (e.code) { case 'KeyW': controls.moveForward = true; break; case 'KeyA': controls.moveLeft = true; break; case 'KeyS': controls.moveBackward = true; break; case 'KeyD': controls.moveRight = true; break; case 'Space': controls.jump = true; break; case 'ShiftLeft': controls.sprint = true; break; } } } switch (e.code) { case 'KeyR': reload(); break; case 'Digit1': switchWeapon(0); break; case 'Digit2': switchWeapon(1); break; case 'Digit3': switchWeapon(2); break; case 'Digit4': switchWeapon(3); break; case 'Digit5': switchWeapon(4); break; case 'KeyF': interact(); break; } });
+            document.addEventListener('keydown', (e) => { 
+                if(isGameOver || gameState.isReloading) return; 
+                if (playerInVehicle) { 
+                    switch(e.code) { case 'KeyW': vehicleAcceleration = -1; break; case 'KeyS': vehicleAcceleration = 1; break; case 'KeyA': vehicleSteering = -1; break; case 'KeyD': vehicleSteering = 1; break; } 
+                } else { 
+                    if (!isTrading && !isStatsOpen) { // 스탯창 열렸을 때 이동 제한
+                        switch (e.code) { case 'KeyW': controls.moveForward = true; break; case 'KeyA': controls.moveLeft = true; break; case 'KeyS': controls.moveBackward = true; break; case 'KeyD': controls.moveRight = true; break; case 'Space': controls.jump = true; break; case 'ShiftLeft': controls.sprint = true; break; } 
+                    } 
+                } 
+                switch (e.code) { 
+                    case 'KeyR': reload(); break; 
+                    case 'Digit1': switchWeapon(0); break; 
+                    case 'Digit2': switchWeapon(1); break; 
+                    case 'Digit3': switchWeapon(2); break; 
+                    case 'Digit4': switchWeapon(3); break; 
+                    case 'Digit5': switchWeapon(4); break; 
+                    case 'KeyF': interact(); break; 
+                    // [NEW] 스탯창 토글 키
+                    case 'KeyP': toggleStatsModal(); break;
+                } 
+            });
             document.addEventListener('keyup', (e) => { if (playerInVehicle) { switch(e.code) { case 'KeyW': if (vehicleAcceleration < 0) vehicleAcceleration = 0; break; case 'KeyS': if (vehicleAcceleration > 0) vehicleAcceleration = 0; break; case 'KeyA': if (vehicleSteering < 0) vehicleSteering = 0; break; case 'KeyD': if (vehicleSteering > 0) vehicleSteering = 0; break; } } switch (e.code) { case 'KeyW': controls.moveForward = false; break; case 'KeyA': controls.moveLeft = false; break; case 'KeyS': controls.moveBackward = false; break; case 'KeyD': controls.moveRight = false; break; case 'ShiftLeft': controls.sprint = false; case 'Space': controls.jump = false; break; } });
-            document.addEventListener('click', () => { if (!isPointerLocked && !isTrading) document.body.requestPointerLock(); });
-            document.addEventListener('pointerlockchange', () => { isPointerLocked = document.pointerLockElement === document.body; document.getElementById('crosshair').style.display = isPointerLocked ? 'block' : 'none'; document.body.style.cursor = isPointerLocked ? 'none' : 'default'; if (isPointerLocked && isTrading) { closeTradeModal(); } });
+            document.addEventListener('click', () => { if (!isPointerLocked && !isTrading && !isStatsOpen) document.body.requestPointerLock(); });
+            document.addEventListener('pointerlockchange', () => { isPointerLocked = document.pointerLockElement === document.body; document.getElementById('crosshair').style.display = isPointerLocked ? 'block' : 'none'; document.body.style.cursor = isPointerLocked ? 'none' : 'default'; if (isPointerLocked && (isTrading || isStatsOpen)) { closeTradeModal(); closeStatsModal(); } });
             document.addEventListener('mousemove', (e) => { if (isPointerLocked) { const sensitivity = 0.0015; if (!playerInVehicle) { gameState.rotation.y -= e.movementX * sensitivity; } gameState.rotation.x -= e.movementY * sensitivity; gameState.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gameState.rotation.x)); } });
             document.addEventListener('mousedown', (e) => { if (isPointerLocked && !playerInVehicle && !gameState.isReloading) { e.preventDefault(); if (e.button === 0) shoot(); else if (e.button === 2) isAiming = true; } });
             document.addEventListener('mouseup', (e) => { if (isPointerLocked && e.button === 2 && isAiming) isAiming = false; });
@@ -760,9 +942,16 @@
         function renderTradeItems() { const list = document.getElementById('trade-list'); list.innerHTML = ''; const ammoHeader = document.createElement('h3'); ammoHeader.style.color = '#ff6b6b'; ammoHeader.style.fontSize = '16px'; ammoHeader.style.marginTop = '0'; ammoHeader.style.borderBottom = '1px solid #555'; ammoHeader.style.paddingBottom = '5px'; ammoHeader.textContent = '탄약 판매 (내 물건 팔기)'; list.appendChild(ammoHeader); for (const [type, amount] of Object.entries(gameState.ammoInventory)) { const price = ammoPrices[type] || 10; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type}: ${amount}발 보유`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.textContent = `10발 판매 (+${price} 몰록)`; if (amount < 10) { btn.disabled = true; btn.textContent = '수량 부족'; } btn.onclick = () => { if (gameState.ammoInventory[type] >= 10) { gameState.ammoInventory[type] -= 10; addMoloch(price); showChat('상인', `${type} 10발을 ${price} 몰록에 샀네.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const ammoBuyHeader = document.createElement('h3'); ammoBuyHeader.style.color = '#4ecdc4'; ammoBuyHeader.style.fontSize = '16px'; ammoBuyHeader.style.marginTop = '20px'; ammoBuyHeader.style.borderBottom = '1px solid #555'; ammoBuyHeader.style.paddingBottom = '5px'; ammoBuyHeader.textContent = '탄약 구매 (상인 물건 사기)'; list.appendChild(ammoBuyHeader); for (const type of Object.keys(gameState.ammoInventory)) { const sellPrice = ammoPrices[type] || 10; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type} (10발)`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); gameState.ammoInventory[type] += 10; showChat('상인', `여기 ${type} 10발일세. 아껴 쓰게나.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const weaponHeader = document.createElement('h3'); weaponHeader.style.color = '#ff6b6b'; weaponHeader.style.fontSize = '16px'; weaponHeader.style.marginTop = '20px'; weaponHeader.style.borderBottom = '1px solid #555'; weaponHeader.style.paddingBottom = '5px'; weaponHeader.textContent = '무기 판매'; list.appendChild(weaponHeader); let sellableWeaponsCount = 0; gameState.weapons.forEach((weapon, index) => { if (weapon.key === 'Fist') return; sellableWeaponsCount++; const weaponData = WEAPON_DATABASE[weapon.key]; const price = weaponPrices[weapon.key] || 100; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; let nameText = `${weaponData.name}`; if (index === gameState.currentWeaponIndex) { nameText += ` (장착 중)`; info.style.color = '#ffff00'; } info.textContent = nameText; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#ff9800'; btn.textContent = `판매 (+${price} 몰록)`; btn.onclick = () => { addMoloch(price); showChat('상인', `${weaponData.name}을(를) ${price} 몰록에 매입하지.`); if (index === gameState.currentWeaponIndex) { switchWeapon(0); } else if (index < gameState.currentWeaponIndex) { gameState.currentWeaponIndex--; } gameState.weapons.splice(index, 1); renderTradeItems(); updateUI(); }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); }); if (sellableWeaponsCount === 0) { const emptyMsg = document.createElement('div'); emptyMsg.style.padding = '10px'; emptyMsg.style.color = '#aaa'; emptyMsg.style.fontSize = '14px'; emptyMsg.textContent = '판매할 무기가 없습니다.'; list.appendChild(emptyMsg); } const weaponBuyHeader = document.createElement('h3'); weaponBuyHeader.style.color = '#4ecdc4'; weaponBuyHeader.style.fontSize = '16px'; weaponBuyHeader.style.marginTop = '20px'; weaponBuyHeader.style.borderBottom = '1px solid #555'; weaponBuyHeader.style.paddingBottom = '5px'; weaponBuyHeader.textContent = '무기 구매'; list.appendChild(weaponBuyHeader); for (const key in WEAPON_DATABASE) { if (key === 'Fist') continue; const weaponData = WEAPON_DATABASE[key]; const sellPrice = weaponPrices[key] || 100; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const isOwned = gameState.weapons.find(w => w.key === key); const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = weaponData.name; if (isOwned) { info.textContent += " (보유중)"; info.style.color = "#aaa"; } const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); if (isOwned) { showChat('상인', `이미 ${weaponData.name}이 있구만. 탄약만 챙겨주지.`); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } else { showChat('상인', `좋은 선택이야. ${weaponData.name}은(는) 아주 쓸만하지.`); gameState.weapons.push({ key: key, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } }
 
         function performPunch(weaponData) {
-            const damage = weaponData.damage; const range = weaponData.range; const direction = new THREE.Vector3(); camera.getWorldDirection(direction); raycaster.set(gameState.position, direction); raycaster.far = range; const allHits = raycaster.intersectObjects([...rangedEnemies, ...zombies, ...bosses], true); if (allHits.length === 0) return; let closestHit = null; for (const hit of allHits) { if (!closestHit || hit.distance < closestHit.distance) { closestHit = hit; } } if (!closestHit) return; if (playerGun && playerGun.userData.type === 'Melee') { if (playerGun.userData.isAnimating) return; playerGun.userData.isAnimating = true; const originalPos = { y: -0.3, z: -0.8 }; const punchY = originalPos.y + 0.1; const punchZ = originalPos.z - 0.2; playerGun.position.y = punchY; setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.z = punchZ; } setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.y = originalPos.y; playerGun.position.z = originalPos.z; playerGun.userData.isAnimating = false; } }, 50); }, 100); }
+            // [수정] 근력(Strength) 스탯 반영: 기본 데미지 + (힘 * 2)
+            // 이제 힘 스탯은 순수하게 공격력에만 관여함
+            let damage = weaponData.damage; 
+            if (weaponData.type === 'Melee') {
+                damage += (gameState.stats.strength * 2);
+            }
+            
+            const range = weaponData.range; const direction = new THREE.Vector3(); camera.getWorldDirection(direction); raycaster.set(gameState.position, direction); raycaster.far = range; const allHits = raycaster.intersectObjects([...rangedEnemies, ...zombies, ...bosses], true); if (allHits.length === 0) return; let closestHit = null; for (const hit of allHits) { if (!closestHit || hit.distance < closestHit.distance) { closestHit = hit; } } if (!closestHit) return; if (playerGun && playerGun.userData.type === 'Melee') { if (playerGun.userData.isAnimating) return; playerGun.userData.isAnimating = true; const originalPos = { y: -0.3, z: -0.8 }; const punchY = originalPos.y + 0.1; const punchZ = originalPos.z - 0.2; playerGun.position.y = punchY; setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.z = punchZ; } setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.y = originalPos.y; playerGun.position.z = originalPos.z; playerGun.userData.isAnimating = false; } }, 50); }, 100); }
             let target = closestHit.object; while (target.parent && target.parent !== scene) { target = target.parent; }
-            if (target.userData.type === 'zombie') { hitZombie(target, damage); } else if (target.userData.type === 'enemy') { const enemy = target; if (!enemy.parent || enemy.userData.health <= 0) return; enemy.userData.health -= damage; showDamage(enemy.position, damage); const healthPercent = Math.max(0, enemy.userData.health / enemy.userData.maxHealth); enemy.material.color.copy(enemy.userData.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); if (enemy.userData.health > 0) { enemy.userData.state = 'chase'; const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position; enemy.userData.lastKnownPlayerPosition.copy(targetPos); } if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } }
+            if (target.userData.type === 'zombie') { hitZombie(target, damage); } else if (target.userData.type === 'enemy') { const enemy = target; if (!enemy.parent || enemy.userData.health <= 0) return; enemy.userData.health -= damage; showDamage(enemy.position, damage); const healthPercent = Math.max(0, enemy.userData.health / enemy.userData.maxHealth); enemy.material.color.copy(enemy.userData.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); if (enemy.userData.health > 0) { enemy.userData.state = 'chase'; const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position; enemy.userData.lastKnownPlayerPosition.copy(targetPos); } if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); /* 적 처치 시 XP */ if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } }
             else if (target.userData.type === 'boss') { target.userData.health -= damage; showDamage(target.position, damage); }
         }
 
@@ -775,7 +964,7 @@
         
         function updateQuestUI() { const display = document.getElementById('quest-display'); const objective = document.getElementById('quest-objective'); if (questState.status === 0 || questState.status === 3) { display.style.display = 'none'; } else { display.style.display = 'block'; if (questState.status === 1) { objective.innerHTML = `- 좀비 처치: <span style="color:#00ff00">${questState.currentAmount}</span> / ${questState.targetAmount}`; objective.className = ''; } else if (questState.status === 2) { objective.innerHTML = "생존자에게 돌아가 보고하세요!"; objective.className = 'quest-ready'; } } }
         function toggleVehicle(vehicle, isDestroyed = false) { if (playerInVehicle) { const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(vehicle.quaternion); const exitPos = vehicle.position.clone().add(rightDir.multiplyScalar(2.0)); const exitY = getTerrainHeight(exitPos.x, exitPos.z) + 1.8; gameState.position.set(exitPos.x, exitY, exitPos.z); const vehicleRotationY = vehicle.rotation.y; gameState.rotation.y = vehicleRotationY; gameState.rotation.x = 0; scene.add(camera); camera.position.copy(gameState.position); camera.rotation.set(gameState.rotation.x, gameState.rotation.y, 0, 'YXZ'); playerGun.visible = true; playerInVehicle = null; if (isDestroyed) { gameState.health = Math.max(0, gameState.health - 25); showChat("시스템", "차량이 파괴되었습니다! 비상 탈출합니다!"); const newPlayerPos = gameState.position.clone(); [...zombies, ...rangedEnemies].forEach(enemy => { if (enemy.userData.health > 0) { enemy.userData.lastKnownPlayerPosition.copy(newPlayerPos); enemy.userData.state = 'chase'; } }); } else { showChat('시스템', '차량에서 하차했습니다.'); } } else { playerInVehicle = vehicle; vehicle.add(camera); camera.position.set(0, 1.2, -0.5); camera.rotation.set(0, 0, 0, 'YXZ'); playerGun.visible = false; showChat('시스템', `차량에 탑승했습니다.`); } updateUI(); }
-        function pickupItem(item) { const data = item.userData; if (data.type === 'weapon') { const weaponData = WEAPON_DATABASE[data.name]; const alreadyOwned = gameState.weapons.find(w => w.key === data.name); if (!alreadyOwned) { gameState.weapons.push({ key: data.name, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] = (gameState.ammoInventory[weaponData.ammoType] || 0) + (weaponData.magSize * 2); } showChat('시스템', `<span class="weapon-name-chat">${weaponData.name}</span>을(를) 획득했습니다.`); switchWeapon(gameState.weapons.length - 1); } else { if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] = (gameState.ammoInventory[weaponData.ammoType] || 0) + weaponData.magSize; showChat('시스템', `이미 소지한 무기입니다. <span class="item-name">${weaponData.ammoType}</span> ${weaponData.magSize}발을 획득합니다.`); } else { showChat('시스템', `이미 소지한 무기입니다.`); } } } else if (data.name === '탄약') { if (gameState.ammoInventory.hasOwnProperty(data.subtype)) { gameState.ammoInventory[data.subtype] += data.amount; showChat('시스템', `<span class="item-name">${data.subtype}</span> ${data.amount}발을 획득했습니다.`); } } else if (data.name === '의료키트') { gameState.health = Math.min(MAX_PLAYER_HEALTH, gameState.health + 500); showChat('시스템', `체력이 회복되었습니다!`); } else if (data.name === '음식') { playerStamina = Math.min(MAX_STAMINA, playerStamina + 50); showChat('시스템', `<span class="item-name">음식</span>으로 스태미나를 회복했습니다!`); } else if (data.name === '에너지드링크') { playerStamina = Math.min(MAX_STAMINA, playerStamina + 40); showChat('시스템', `<span class="item-name" style="color:#00ffff">에너지드링크</span>를 마셔 활력을 되찾았습니다!`); } scene.remove(item); items = items.filter(i => i !== item); updateUI(); }
+        function pickupItem(item) { const data = item.userData; if (data.type === 'weapon') { const weaponData = WEAPON_DATABASE[data.name]; const alreadyOwned = gameState.weapons.find(w => w.key === data.name); if (!alreadyOwned) { gameState.weapons.push({ key: data.name, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] = (gameState.ammoInventory[weaponData.ammoType] || 0) + (weaponData.magSize * 2); } showChat('시스템', `<span class="weapon-name-chat">${weaponData.name}</span>을(를) 획득했습니다.`); switchWeapon(gameState.weapons.length - 1); } else { if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] = (gameState.ammoInventory[weaponData.ammoType] || 0) + weaponData.magSize; showChat('시스템', `이미 소지한 무기입니다. <span class="item-name">${weaponData.ammoType}</span> ${weaponData.magSize}발을 획득합니다.`); } else { showChat('시스템', `이미 소지한 무기입니다.`); } } } else if (data.name === '탄약') { if (gameState.ammoInventory.hasOwnProperty(data.subtype)) { gameState.ammoInventory[data.subtype] += data.amount; showChat('시스템', `<span class="item-name">${data.subtype}</span> ${data.amount}발을 획득했습니다.`); } } else if (data.name === '의료키트') { gameState.health = Math.min(getMaxHealth(), gameState.health + 500); showChat('시스템', `체력이 회복되었습니다!`); } else if (data.name === '음식') { playerStamina = Math.min(getMaxStamina(), playerStamina + 50); showChat('시스템', `<span class="item-name">음식</span>으로 스태미나를 회복했습니다!`); } else if (data.name === '에너지드링크') { playerStamina = Math.min(getMaxStamina(), playerStamina + 40); showChat('시스템', `<span class="item-name" style="color:#00ffff">에너지드링크</span>를 마셔 활력을 되찾았습니다!`); } scene.remove(item); items = items.filter(i => i !== item); updateUI(); }
         function showChat(name, message) { const chatBox = document.getElementById('chat-box'); const messageDiv = document.createElement('div'); messageDiv.className = 'chat-message'; let nameSpan; 
             if (name === '시스템') nameSpan = `<span class="system-name">${name}:</span>`; 
             else if (name === '좀비') nameSpan = `<span class="zombie-name">${name}:</span>`; 
@@ -786,7 +975,7 @@
             else nameSpan = `<span class="npc-name">${name}:</span>`; 
             messageDiv.innerHTML = `${nameSpan} ${message}`; chatBox.appendChild(messageDiv); chatBox.style.display = 'flex'; while (chatBox.children.length > 5) { chatBox.removeChild(chatBox.firstChild); } setTimeout(() => { if (chatBox.contains(messageDiv)) { messageDiv.style.opacity = '0'; setTimeout(() => { if (chatBox.contains(messageDiv)) chatBox.removeChild(messageDiv); if (chatBox.children.length === 0) chatBox.style.display = 'none'; }, 500); } }, 5000); }
         function updateInteraction() {
-            if (isPointerLocked === false || playerInVehicle || isTrading) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
+            if (isPointerLocked === false || playerInVehicle || isTrading || isStatsOpen) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
             const range = 3.5; let closestObject = null; let minDistance = range; const checkableObjects = [...items, ...vehicles, ...npcs]; checkableObjects.forEach(obj => { const dist = gameState.position.distanceTo(obj.position); if (dist < minDistance) { minDistance = dist; closestObject = obj; } });
             if (closestObject) { const direction = closestObject.position.clone().sub(gameState.position).normalize(); raycaster.set(gameState.position, direction); raycaster.far = range; const intersects = raycaster.intersectObjects([closestObject], true); if (intersects.length > 0 && intersects[0].object) { let target = intersects[0].object; while (target.parent && target.parent !== scene) { target = target.parent; } if (target.userData.type && (target.userData.type === 'item' || target.userData.type === 'weapon' || target.userData.type === 'vehicle' || target.userData.type === 'npc')) { interactableObject = target; } else { interactableObject = null; } } else { interactableObject = null; } } else { interactableObject = null; }
             const prompt = document.getElementById('interaction-prompt'); const itemNameEl = document.getElementById('interaction-item-name'); const actionEl = document.getElementById('interaction-action');
@@ -795,8 +984,19 @@
 
         function updateUI() {
             document.getElementById('moloch-count').textContent = gameState.moloch;
-            const healthPercent = (gameState.health / MAX_PLAYER_HEALTH) * 100; document.getElementById('health-fill').style.width = `${healthPercent}%`; document.getElementById('health-text').textContent = `${Math.floor(gameState.health)} / ${MAX_PLAYER_HEALTH}`;
-            document.getElementById('stamina-fill').style.width = `${playerStamina}%`; document.getElementById('stamina-text').textContent = `${Math.floor(playerStamina)} / ${MAX_STAMINA}`;
+            
+            // [수정] 최대 체력, 최대 스태미나 동적 반영
+            const maxHealth = getMaxHealth();
+            const maxStamina = getMaxStamina();
+            
+            const healthPercent = (gameState.health / maxHealth) * 100; document.getElementById('health-fill').style.width = `${healthPercent}%`; document.getElementById('health-text').textContent = `${Math.floor(gameState.health)} / ${maxHealth}`;
+            const staminaPercent = (playerStamina / maxStamina) * 100; document.getElementById('stamina-fill').style.width = `${staminaPercent}%`; document.getElementById('stamina-text').textContent = `${Math.floor(playerStamina)} / ${maxStamina}`;
+            
+            // [NEW] 레벨 및 XP UI 업데이트
+            document.getElementById('level-badge').textContent = gameState.level;
+            const xpPercent = (gameState.xp / gameState.xpToNextLevel) * 100;
+            document.getElementById('xp-fill').style.width = `${xpPercent}%`;
+
             if (playerStamina < JUMP_STAMINA_COST) { document.getElementById('stamina-fill').style.background = '#FF4136'; } else { document.getElementById('stamina-fill').style.background = '#2196F3'; }
             const vehicleStatusRow = document.getElementById('vehicle-status-row'); if (playerInVehicle) { const vh = playerInVehicle.userData; const vhPercent = (vh.health / vh.maxHealth) * 100; document.getElementById('vehicle-health-fill').style.width = `${vhPercent}%`; document.getElementById('vehicle-health-text').textContent = `${Math.floor(vh.health)} / ${vh.maxHealth}`; vehicleStatusRow.style.display = 'flex'; } else { vehicleStatusRow.style.display = 'none'; }
             const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; document.getElementById('current-ammo').textContent = weaponObj.magAmmo; document.getElementById('ammo-total').textContent = ammoType ? inventoryAmmo : '—'; document.getElementById('weapon-name').textContent = weaponData.name; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { document.getElementById('reload-prompt').style.display = 'block'; } else { document.getElementById('reload-prompt').style.display = 'none'; } } else { document.getElementById('current-ammo').textContent = '-'; document.getElementById('ammo-total').textContent = '-'; document.getElementById('weapon-name').textContent = '맨손'; document.getElementById('reload-prompt').style.display = 'none'; }
@@ -804,11 +1004,17 @@
         }
         
         function updatePlayer(delta) {
-            if (!playerInVehicle && controls.sprint && (controls.moveForward || controls.moveBackward || controls.moveLeft || controls.moveRight)) { if (playerStamina > STAMINA_THRESHOLD) { playerStamina = Math.max(0, playerStamina - STAMINA_DRAIN_RATE * delta); } else { controls.sprint = false; } } else { playerStamina = Math.min(MAX_STAMINA, playerStamina + STAMINA_RECOVERY_RATE * delta); }
-            if (playerStamina >= 90 && gameState.health < MAX_PLAYER_HEALTH) { const healthRegenRate = 1 / 3; const healAmount = healthRegenRate * delta; gameState.health += healAmount; playerStamina -= healAmount * 4; if (gameState.health > MAX_PLAYER_HEALTH) { gameState.health = MAX_PLAYER_HEALTH; } }
+            const maxStamina = getMaxStamina();
+            const maxHealth = getMaxHealth();
+            if (!playerInVehicle && controls.sprint && (controls.moveForward || controls.moveBackward || controls.moveLeft || controls.moveRight)) { if (playerStamina > STAMINA_THRESHOLD) { playerStamina = Math.max(0, playerStamina - STAMINA_DRAIN_RATE * delta); } else { controls.sprint = false; } } else { playerStamina = Math.min(maxStamina, playerStamina + STAMINA_RECOVERY_RATE * delta); }
+            if (playerStamina >= (maxStamina * 0.9) && gameState.health < maxHealth) { const healthRegenRate = 1 / 3; const healAmount = healthRegenRate * delta; gameState.health += healAmount; playerStamina -= healAmount * 4; if (gameState.health > maxHealth) { gameState.health = maxHealth; } }
             if (playerInVehicle) return;
-            const baseSpeed = 10, sprintMultiplier = 1.4, gravity = 0.015, jumpForce = 0.3; const playerHeight = 1.8;
+            
+            // [수정] 스탯 기반 이동 속도 계산
+            const baseSpeed = getMoveSpeed(); 
+            const sprintMultiplier = 1.4; const gravity = 0.015; const jumpForce = 0.3; const playerHeight = 1.8;
             const currentSpeed = (controls.sprint && playerStamina > STAMINA_THRESHOLD) ? baseSpeed * sprintMultiplier : baseSpeed; const moveSpeed = currentSpeed * delta;
+            
             const terrainFloor = getTerrainHeight(gameState.position.x, gameState.position.z);
             raycaster.set(gameState.position.clone().add(new THREE.Vector3(0, 1.0, 0)), new THREE.Vector3(0, -1, 0)); raycaster.far = 20.0; const intersects = raycaster.intersectObjects(objects, true); let objectFloor = -Infinity; let onObject = false;
             const validGroundHitPlayer = intersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object' || hit.object.userData.type === 'lava');
@@ -926,7 +1132,7 @@
 
                 if (bestHit) {
                     const distance = bestHit.point.distanceTo(data.spawnPosition); const damage = calculateDamage(weaponData, distance);
-                    if (bestHit.type === 'enemy') { const enemy = bestHit.obj; enemy.userData.health -= damage; showDamage(enemy.position, damage); const healthPercent = Math.max(0, enemy.userData.health / enemy.userData.maxHealth); enemy.material.color.copy(enemy.userData.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); if (enemy.userData.health > 0) { enemy.userData.state = 'chase'; const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position; enemy.userData.lastKnownPlayerPosition.copy(targetPos); } else { addMoloch(Math.floor(Math.random() * 6) + 5); if (Math.random() < 0.5) { const k = enemy.userData.weapon; const wData = WEAPON_DATABASE[k]; spawnItem({ type: 'weapon', name: k }, enemy.position.x, enemy.position.y, enemy.position.z); spawnItem({ type: 'item', name: '탄약', subtype: wData.ammoType, amount: wData.magSize * (Math.floor(Math.random()*2)+1) }, enemy.position.x+0.5, enemy.position.y, enemy.position.z); } createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } }
+                    if (bestHit.type === 'enemy') { const enemy = bestHit.obj; enemy.userData.health -= damage; showDamage(enemy.position, damage); const healthPercent = Math.max(0, enemy.userData.health / enemy.userData.maxHealth); enemy.material.color.copy(enemy.userData.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); if (enemy.userData.health > 0) { enemy.userData.state = 'chase'; const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position; enemy.userData.lastKnownPlayerPosition.copy(targetPos); } else { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); /* 적 처치 시 XP */ if (Math.random() < 0.5) { const k = enemy.userData.weapon; const wData = WEAPON_DATABASE[k]; spawnItem({ type: 'weapon', name: k }, enemy.position.x, enemy.position.y, enemy.position.z); spawnItem({ type: 'item', name: '탄약', subtype: wData.ammoType, amount: wData.magSize * (Math.floor(Math.random()*2)+1) }, enemy.position.x+0.5, enemy.position.y, enemy.position.z); } createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } }
                     else if (bestHit.type === 'zombie') { hitZombie(bestHit.obj, damage); }
                     else if (bestHit.type === 'player') { const pDmg = damage * 0.5; attackPlayer(pDmg); if (data.ownerRef && data.ownerRef.userData) { data.ownerRef.userData.consecutiveMisses = 0; } }
                     else if (bestHit.type === 'boss') { const boss = bestHit.obj; boss.userData.health -= damage; showDamage(boss.position, damage); }
@@ -959,7 +1165,21 @@
             const theta = (timeOfDay - 0.25) * Math.PI * 2; const sunHeight = Math.sin(theta); const cosTheta = Math.cos(theta); const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const lightOffset = 100;
             sun.position.x = playerPos.x + cosTheta * lightOffset; sun.position.y = playerPos.y + sunHeight * lightOffset; sun.position.z = playerPos.z; sun.target.position.copy(playerPos); sun.target.updateMatrixWorld();
             const visualDist = 2000; sunMesh.position.set(playerPos.x + cosTheta * visualDist, playerPos.y + sunHeight * visualDist, playerPos.z); moonMesh.position.set(playerPos.x - cosTheta * visualDist, playerPos.y - sunHeight * visualDist, playerPos.z); moonMesh.rotation.y += delta * 0.05; sunMesh.lookAt(playerPos); moonMesh.lookAt(playerPos);
-            const lightIntensity = Math.max(0.05, sunHeight); sun.intensity = lightIntensity * 0.8 + 0.1; scene.ambientLight.intensity = Math.max(0.1, lightIntensity * 0.4); 
+            
+            // [수정] 밝기 스탯(perception) 적용 로직 밸런스 조정
+            const lightIntensity = Math.max(0.05, sunHeight); 
+            sun.intensity = lightIntensity * 0.8 + 0.1; 
+            
+            // 기본 밝기 (밤 최소 0.1 ~ 낮 최대 0.4)
+            let ambientBase = Math.max(0.1, lightIntensity * 0.4);
+            
+            // [변경] 감각 스탯 보너스 하향 조정
+            // 기존 0.02 -> 0.005로 변경 (100 포인트 투자 시 +0.5 밝기 추가)
+            // 밤 기본 밝기(0.1) + 보너스(0.5) = 0.6 (흐린 낮 수준)
+            const nightVisionBonus = gameState.stats.perception * 0.005; 
+            
+            scene.ambientLight.intensity = Math.min(1.0, ambientBase + nightVisionBonus); 
+            
             const dayColor = new THREE.Color(0x87CEEB); const sunsetColor = new THREE.Color(0xfd5e53); const nightColor = new THREE.Color(0x050515); const dayFog = new THREE.Color(0x87CEEB); const sunsetFog = new THREE.Color(0xfd5e53); const nightFog = new THREE.Color(0x050515);
             let currentColor, currentFog;
             if (sunHeight < 0.1 && sunHeight > -0.1) { const t = (sunHeight + 0.1) / 0.2; if (timeOfDay < 0.5) { currentColor = nightColor.clone().lerp(dayColor, t); currentFog = nightFog.clone().lerp(dayFog, t); currentColor.lerp(sunsetColor, 0.3 * (1 - Math.abs(t - 0.5) * 2)); } else { currentColor = dayColor.clone().lerp(nightColor, 1-t); currentFog = dayFog.clone().lerp(nightFog, 1-t); currentColor.lerp(sunsetColor, 0.3 * (1 - Math.abs(t - 0.5) * 2)); } } else if (sunHeight >= 0.1) { currentColor = dayColor; currentFog = dayFog; } else { currentColor = nightColor; currentFog = nightFog; }
@@ -1148,7 +1368,23 @@
         function handleWanderState(enemy, data, now, delta) { if (now - data.lastMoveTime > 3000 || enemy.position.distanceTo(data.wanderTarget) < 2) { data.lastMoveTime = now; const angle = Math.random() * Math.PI * 2; const dist = 10 + Math.random() * 20; data.wanderTarget.set(enemy.position.x + Math.cos(angle) * dist, enemy.position.y, enemy.position.z + Math.sin(angle) * dist); } const direction = data.wanderTarget.clone().sub(enemy.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * 0.5 * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(data.wanderTarget.x, enemy.position.y, data.wanderTarget.z); }
         function handleStuckState(enemy, data, delta) { if (!data.isJumping) { data.isJumping = true; data.velocityY = 0.5; } const randomDir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize(); const velocity = randomDir.multiplyScalar(data.speed * delta * 1.5); enemy.position.add(velocity); if (Math.random() < 0.1) { data.stuckTime = 0; data.state = 'chase'; } }
         function handlePortalState(enemy, data, now, delta) { if (!data.targetPortal) { data.state = 'chase'; return; } const portal = data.targetPortal; const distToEntrance = enemy.position.distanceTo(portal.entrance); if (distToEntrance > 1.5) { const direction = portal.entrance.clone().sub(enemy.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(portal.entrance.x, enemy.position.y, portal.entrance.z); } else { if (now - data.lastPortalUse > data.portalCooldown) { enemy.position.copy(portal.exit); data.lastPortalUse = now; data.state = 'chase'; } } }
-        function handleZombieDeath(enemy, index) { if (questState.status === 1 && questState.type === 'hunt_zombie') { questState.currentAmount++; if (questState.currentAmount >= questState.targetAmount) { questState.currentAmount = questState.targetAmount; questState.status = 2; showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); } updateQuestUI(); } gameStats.zombieKills++; checkAchievements(); addMoloch(Math.floor(Math.random() * 5) + 1); showChat('시스템', '✓ 적을 처치했습니다!'); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); zombies.splice(index, 1); if (Math.random() < 0.5) { const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); } }
+        
+        // [수정] 좀비 처치 시 경험치 획득 로직 추가
+        function handleZombieDeath(enemy, index) { 
+            if (questState.status === 1 && questState.type === 'hunt_zombie') { questState.currentAmount++; if (questState.currentAmount >= questState.targetAmount) { questState.currentAmount = questState.targetAmount; questState.status = 2; showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); } updateQuestUI(); } 
+            gameStats.zombieKills++; checkAchievements(); 
+            addMoloch(Math.floor(Math.random() * 5) + 1); 
+            
+            // 경험치 획득
+            let xpGain = 10;
+            if (enemy.userData.isTroll) xpGain = 50;
+            if (enemy.userData.isOrc) xpGain = 20;
+            gainXP(xpGain);
+
+            showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
+            createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); zombies.splice(index, 1); if (Math.random() < 0.5) { const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); } 
+        }
+        
         function checkLineOfSight(fromPos, toPos) { const eyePos = fromPos.clone().add(new THREE.Vector3(0, 2.0, 0)); const targetEyePos = toPos.clone().add(new THREE.Vector3(0, 1.0, 0)); const direction = targetEyePos.clone().sub(eyePos).normalize(); const distance = eyePos.distanceTo(targetEyePos); raycaster.set(eyePos, direction); raycaster.far = distance; const intersects = raycaster.intersectObjects(objects, true); const hit = intersects.find(i => i.object.geometry.type !== 'PlaneGeometry' && i.object.userData.type !== 'roof' && i.object.userData.type !== 'floor' && i.distance > 1.0 ); return !hit || hit.distance > distance - 1; }
         function attackPlayer(damage) { if (isGameOver) return; if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } else { gameState.health -= damage; showPlayerDamageEffect(); updateUI(); if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } } }
         function updateItems(delta) { 
