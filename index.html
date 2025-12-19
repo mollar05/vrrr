@@ -1022,14 +1022,39 @@
             const leafProxy = new THREE.Mesh(sharedLeafGeo, invisibleMat); leafProxy.position.copy(dummy.position); leafProxy.visible = true; leafProxy.userData = { health: 10000, maxHealth: 10000, type: 'object', originalColor: sharedLeafMat.color.clone() }; scene.add(leafProxy); objects.push(leafProxy); leafProxies.push(leafProxy);
         }
 
+        // [수정] 돌맹이 데이터 수집 함수 - 충돌 박스 대폭 축소 (25%)
         function collectRockData(x, z, yBase, rockMatrices, rockProxies) {
-            const radius = Math.random() * 2 + 1; dummy.position.set(x, yBase + 1, z); dummy.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI); dummy.scale.set(radius, radius, radius); dummy.updateMatrix(); rockMatrices.push(dummy.matrix.clone());
-            const rockProxy = new THREE.Mesh(sharedRockGeo, invisibleMat); rockProxy.position.copy(dummy.position); rockProxy.rotation.copy(dummy.rotation); rockProxy.scale.copy(dummy.scale); rockProxy.visible = true; rockProxy.userData = { health: 30000, maxHealth: 30000, type: 'object', isRock: true, originalColor: sharedRockMat.color.clone() }; scene.add(rockProxy); objects.push(rockProxy); rockProxies.push(rockProxy);
+            const radius = Math.random() * 2 + 1; 
+            
+            // 1. 눈에 보이는 돌 (회전 있음 - 시각적으로는 큼)
+            dummy.position.set(x, yBase + 1, z); 
+            dummy.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI); 
+            dummy.scale.set(radius, radius, radius); 
+            dummy.updateMatrix(); 
+            rockMatrices.push(dummy.matrix.clone());
+
+            // 2. 물리 충돌용 돌 (회전 제거 & 크기 25%로 축소)
+            const rockProxy = new THREE.Mesh(sharedRockGeo, invisibleMat); 
+            rockProxy.position.copy(dummy.position); 
+            
+            // 회전 제거 (AABB 최적화)
+            // rockProxy.rotation.copy(dummy.rotation); 
+            
+            // [수정] 실제 크기의 25%로 설정 (거의 중앙만 충돌 판정)
+            rockProxy.scale.set(radius * 0.25, radius * 0.25, radius * 0.25); 
+            
+            rockProxy.visible = true; 
+            rockProxy.userData = { health: 30000, maxHealth: 30000, type: 'object', isRock: true, originalColor: sharedRockMat.color.clone() }; 
+            scene.add(rockProxy); 
+            objects.push(rockProxy); 
+            rockProxies.push(rockProxy);
         }
 
         function createChunkInstancedMeshes(matrices, geometry, material, proxies) {
             if (matrices.length === 0) return; const mesh = new THREE.InstancedMesh(geometry, material, matrices.length); mesh.castShadow = true; if (geometry === sharedLeafGeo) mesh.castShadow = false; mesh.receiveShadow = true;
-            for (let i = 0; i < matrices.length; i++) { mesh.setMatrixAt(i, matrices[i]); const proxy = proxies[i]; proxy.userData.instancedMesh = mesh; proxy.userData.instanceId = i; } scene.add(mesh);
+            for (let i = 0; i < matrices.length; i++) { mesh.setMatrixAt(i, matrices[i]); const proxy = proxies[i]; proxy.userData.instancedMesh = mesh; proxy.userData.instanceId = i; } 
+            mesh.instanceMatrix.needsUpdate = true;
+            scene.add(mesh);
         }
         
         function updateRangedEnemies(delta) { 
