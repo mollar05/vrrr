@@ -389,7 +389,6 @@
             weaponPrices["Fist"] = 0; if(!ammoPrices["Flare"]) ammoPrices["Flare"] = 10;
         }
 
-        // [수정] 기본값은 변수로 두고, 실제 값은 스탯 비례 함수로 계산
         const BASE_PLAYER_HEALTH = 1000;
         const BASE_PLAYER_STAMINA = 100;
         let playerStamina = 100; 
@@ -402,7 +401,6 @@
             currentWeaponIndex: 0,
             position: new THREE.Vector3(0, 1.8, 0), rotation: new THREE.Vector2(0, 0), velocityY: 0, onGround: true, lastShotTime: 0, isReloading: false, inHighrise: false,
             lastHordeTime: -300, hordeCooldown: 240, hordeActive: false,
-            // [수정] 스탯 분리: vitality(체력), strength(근력)
             stats: { vitality: 0, strength: 0, agility: 0, endurance: 0, perception: 0 },
             statPoints: 0,
             level: 1,
@@ -410,8 +408,6 @@
             xpToNextLevel: 100
         };
 
-        // [NEW] 스탯 도우미 함수들
-        // [수정] 최대 체력은 이제 vitality 스탯의 영향을 받음 (1당 +10)
         function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10); }
         function getMaxStamina() { return BASE_PLAYER_STAMINA + (gameState.stats.endurance * 20); }
         function getMoveSpeed() { return 10 * (1 + gameState.stats.agility * 0.05); }
@@ -420,15 +416,11 @@
             if (gameState.xp >= gameState.xpToNextLevel) {
                 gameState.xp -= gameState.xpToNextLevel;
                 gameState.level++;
-                gameState.statPoints++; // 레벨업당 1포인트 (원하면 더 줘도 됨)
+                gameState.statPoints++; 
                 gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * 1.5);
-                
-                // 체력/스태미나 모두 회복
                 gameState.health = getMaxHealth();
                 playerStamina = getMaxStamina();
-                
                 showChat('시스템', `레벨 업! 현재 레벨: ${gameState.level} (스탯 포인트 +1)`);
-                // 연속 레벨업 처리
                 checkLevelUp();
             }
             updateUI();
@@ -439,7 +431,6 @@
             checkLevelUp();
         }
 
-        // UI 함수: 스탯창 열기/닫기
         let isStatsOpen = false;
         function toggleStatsModal() {
             if (isTrading) return;
@@ -461,13 +452,11 @@
         }
         function updateStatsUI() {
             document.getElementById('stat-points-val').textContent = gameState.statPoints;
-            // [수정] 분리된 스탯 UI 업데이트
             document.getElementById('vit-val').textContent = gameState.stats.vitality;
             document.getElementById('str-val').textContent = gameState.stats.strength;
             document.getElementById('agi-val').textContent = gameState.stats.agility;
             document.getElementById('end-val').textContent = gameState.stats.endurance;
             document.getElementById('per-val').textContent = gameState.stats.perception;
-            
             const btns = document.querySelectorAll('.stat-btn');
             btns.forEach(btn => {
                 btn.disabled = gameState.statPoints <= 0;
@@ -477,12 +466,8 @@
             if (gameState.statPoints > 0) {
                 gameState.stats[stat]++;
                 gameState.statPoints--;
-                
-                // 즉시 반영 효과
-                // [수정] 체력 스탯 증가 시 현재 체력도 같이 회복 (비례)
                 if (stat === 'vitality') gameState.health += 10;
                 if (stat === 'endurance') playerStamina += 20;
-                
                 updateStatsUI();
                 updateUI();
             }
@@ -522,6 +507,7 @@
 
         function startGame() { createScene(); switchWeapon(0); const startY = getTerrainHeight(gameState.position.x, gameState.position.z); gameState.position.y = startY + 1.8; updateWorldChunks(); currentPlayerChunkKey = `${Math.round(gameState.position.x / CHUNK_SIZE)},${Math.round(gameState.position.z / CHUNK_SIZE)}`; setupControls(); document.getElementById('close-trade-btn').addEventListener('click', closeTradeModal); hideLoading(); animate(); }
         function showError(msg) { document.getElementById('loading-screen').innerHTML = `<div class="loading-text" style="color: #ff6666;">오류</div><div style="color:#fff;margin-top:20px;">${msg}</div>`; }
+        function hideLoading() { document.getElementById('loading-screen').style.display = 'none'; }
 
         function createScene() {
             scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0x87CEEB, 1, 200); 
@@ -586,6 +572,83 @@
             }
             return y;
         }
+
+        // [복구] 누락된 함수들 복구 시작 (createChunkInstancedMeshes, collectTreeData, collectRockData, createWorldTree, spawnItem, createRandomLoot, createBuildingLoot)
+
+        function spawnItem(data, x, y, z) {
+            let mesh;
+            if (data.type === 'weapon') {
+                mesh = WEAPON_DATABASE[data.name].model();
+                mesh.scale.set(0.5, 0.5, 0.5);
+                mesh.rotation.z = Math.PI / 4;
+            } else {
+                let color = 0xffffff;
+                let geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+                if (data.name === '탄약') { color = 0x556B2F; geo = new THREE.BoxGeometry(0.3, 0.2, 0.4); }
+                if (data.name === '의료키트') { color = 0xffffff; geo = new THREE.BoxGeometry(0.5, 0.3, 0.4); }
+                if (data.name === '에너지드링크') { color = 0x00ffff; geo = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 8); }
+                if (data.name === '음식') { color = 0xffa500; }
+                mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color }));
+                if (data.name === '의료키트') {
+                    const v = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), new THREE.MeshBasicMaterial({color: 0xff0000}));
+                    const h = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.32), new THREE.MeshBasicMaterial({color: 0xff0000}));
+                    mesh.add(v); v.rotation.z = Math.PI/2; mesh.add(h); h.rotation.y = Math.PI/2;
+                }
+            }
+            mesh.position.set(x, y, z); mesh.castShadow = true;
+            mesh.userData = { ...data, isGrounded: false, velocityY: 0 };
+            scene.add(mesh); items.push(mesh);
+        }
+
+        function createRandomLoot(x, z, y) {
+            const rand = Math.random();
+            if (rand < 0.4) {
+                const ammoTypes = Object.keys(gameState.ammoInventory);
+                const type = ammoTypes[Math.floor(Math.random() * ammoTypes.length)];
+                if (type === 'Flare') return;
+                spawnItem({ type: 'item', name: '탄약', subtype: type, amount: 10 + Math.floor(Math.random() * 20) }, x, y, z);
+            } else if (rand < 0.6) {
+                const cons = ['의료키트', '에너지드링크', '음식'];
+                spawnItem({ type: 'item', name: cons[Math.floor(Math.random() * cons.length)], amount: 1 }, x, y, z);
+            } else if (rand < 0.7) {
+                const keys = Object.keys(WEAPON_DATABASE).filter(k => k !== 'Fist' && k !== 'FlashGun');
+                const key = keys[Math.floor(Math.random() * keys.length)];
+                spawnItem({ type: 'weapon', name: key }, x, y, z);
+            }
+        }
+
+        function createBuildingLoot(x, y, z) {
+            if (Math.random() < 0.7) createRandomLoot(x, z, y);
+        }
+
+        function createWorldTree(x, z, yBase) {
+            const trunkGeo = new THREE.CylinderGeometry(4, 6, 40, 16); const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2e16 }); const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.set(x, yBase + 20, z); trunk.castShadow = true; trunk.receiveShadow = true; trunk.userData = { health: 999999, maxHealth: 999999, type: 'object', originalColor: trunkMat.color.clone() }; scene.add(trunk); objects.push(trunk);
+            const leavesGeo = new THREE.SphereGeometry(25, 16, 16); const leavesMat = new THREE.MeshLambertMaterial({ color: 0x00ff00, emissive: 0x004400, emissiveIntensity: 0.2 }); const leaves = new THREE.Mesh(leavesGeo, leavesMat); leaves.position.set(x, yBase + 50, z); leaves.castShadow = true; leaves.userData = { health: 999999, maxHealth: 999999, type: 'object', originalColor: leavesMat.color.clone() }; scene.add(leaves); foliage.push(leaves);
+            const light = new THREE.PointLight(0x00ff00, 2, 60); light.position.set(x, yBase + 10, z); scene.add(light);
+        }
+
+        function collectTreeData(x, z, yBase, trunkMatrices, leafMatrices, trunkProxies, leafProxies) {
+            dummy.position.set(x, yBase + 3.75, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); trunkMatrices.push(dummy.matrix.clone());
+            const trunkProxy = new THREE.Mesh(sharedTrunkGeo, invisibleMat); trunkProxy.position.copy(dummy.position); trunkProxy.visible = true; trunkProxy.userData = { health: 20000, maxHealth: 20000, type: 'object', originalColor: sharedTrunkMat.color.clone() }; scene.add(trunkProxy); objects.push(trunkProxy); trunkProxies.push(trunkProxy);
+            dummy.position.set(x, yBase + 10, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); leafMatrices.push(dummy.matrix.clone());
+            const leafProxy = new THREE.Mesh(sharedLeafGeo, invisibleMat); leafProxy.position.copy(dummy.position); leafProxy.visible = true; leafProxy.userData = { health: 10000, maxHealth: 10000, type: 'object', originalColor: sharedLeafMat.color.clone() }; scene.add(leafProxy); objects.push(leafProxy); leafProxies.push(leafProxy);
+        }
+
+        function collectRockData(x, z, yBase, rockMatrices, rockProxies) {
+            const radius = Math.random() * 2 + 1; 
+            dummy.position.set(x, yBase + 1, z); dummy.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI); dummy.scale.set(radius, radius, radius); dummy.updateMatrix(); rockMatrices.push(dummy.matrix.clone());
+            const rockProxy = new THREE.Mesh(sharedRockGeo, invisibleMat); rockProxy.position.copy(dummy.position); 
+            // [최적화] 돌맹이 충돌 크기 25% 및 회전 제거 (운전 편의성)
+            rockProxy.scale.set(radius * 0.25, radius * 0.25, radius * 0.25); 
+            rockProxy.visible = true; rockProxy.userData = { health: 30000, maxHealth: 30000, type: 'object', isRock: true, originalColor: sharedRockMat.color.clone() }; scene.add(rockProxy); objects.push(rockProxy); rockProxies.push(rockProxy);
+        }
+
+        function createChunkInstancedMeshes(matrices, geometry, material, proxies) {
+            if (matrices.length === 0) return; const mesh = new THREE.InstancedMesh(geometry, material, matrices.length); mesh.castShadow = true; if (geometry === sharedLeafGeo) mesh.castShadow = false; mesh.receiveShadow = true;
+            for (let i = 0; i < matrices.length; i++) { mesh.setMatrixAt(i, matrices[i]); const proxy = proxies[i]; proxy.userData.instancedMesh = mesh; proxy.userData.instanceId = i; } mesh.instanceMatrix.needsUpdate = true; scene.add(mesh);
+        }
+
+        // [복구 완료]
 
         function generateChunk(chunkX, chunkZ) {
             const chunkOriginX = chunkX * CHUNK_SIZE; const chunkOriginZ = chunkZ * CHUNK_SIZE; const centerBiome = getBiome(chunkOriginX, chunkOriginZ); const seed = chunkX * 31 + chunkZ * 17; let rand = (s) => () => (s = Math.sin(s) * 10000, s - Math.floor(s)); let chunkRand = rand(seed); let buildingsInChunk = [];
@@ -875,7 +938,7 @@
                 if (playerInVehicle) { 
                     switch(e.code) { case 'KeyW': vehicleAcceleration = -1; break; case 'KeyS': vehicleAcceleration = 1; break; case 'KeyA': vehicleSteering = -1; break; case 'KeyD': vehicleSteering = 1; break; } 
                 } else { 
-                    if (!isTrading && !isStatsOpen) { // 스탯창 열렸을 때 이동 제한
+                    if (!isTrading && !isStatsOpen) { 
                         switch (e.code) { case 'KeyW': controls.moveForward = true; break; case 'KeyA': controls.moveLeft = true; break; case 'KeyS': controls.moveBackward = true; break; case 'KeyD': controls.moveRight = true; break; case 'Space': controls.jump = true; break; case 'ShiftLeft': controls.sprint = true; break; } 
                     } 
                 } 
@@ -887,7 +950,6 @@
                     case 'Digit4': switchWeapon(3); break; 
                     case 'Digit5': switchWeapon(4); break; 
                     case 'KeyF': interact(); break; 
-                    // [NEW] 스탯창 토글 키
                     case 'KeyP': toggleStatsModal(); break;
                 } 
             });
@@ -942,8 +1004,6 @@
         function renderTradeItems() { const list = document.getElementById('trade-list'); list.innerHTML = ''; const ammoHeader = document.createElement('h3'); ammoHeader.style.color = '#ff6b6b'; ammoHeader.style.fontSize = '16px'; ammoHeader.style.marginTop = '0'; ammoHeader.style.borderBottom = '1px solid #555'; ammoHeader.style.paddingBottom = '5px'; ammoHeader.textContent = '탄약 판매 (내 물건 팔기)'; list.appendChild(ammoHeader); for (const [type, amount] of Object.entries(gameState.ammoInventory)) { const price = ammoPrices[type] || 10; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type}: ${amount}발 보유`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.textContent = `10발 판매 (+${price} 몰록)`; if (amount < 10) { btn.disabled = true; btn.textContent = '수량 부족'; } btn.onclick = () => { if (gameState.ammoInventory[type] >= 10) { gameState.ammoInventory[type] -= 10; addMoloch(price); showChat('상인', `${type} 10발을 ${price} 몰록에 샀네.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const ammoBuyHeader = document.createElement('h3'); ammoBuyHeader.style.color = '#4ecdc4'; ammoBuyHeader.style.fontSize = '16px'; ammoBuyHeader.style.marginTop = '20px'; ammoBuyHeader.style.borderBottom = '1px solid #555'; ammoBuyHeader.style.paddingBottom = '5px'; ammoBuyHeader.textContent = '탄약 구매 (상인 물건 사기)'; list.appendChild(ammoBuyHeader); for (const type of Object.keys(gameState.ammoInventory)) { const sellPrice = ammoPrices[type] || 10; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type} (10발)`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); gameState.ammoInventory[type] += 10; showChat('상인', `여기 ${type} 10발일세. 아껴 쓰게나.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const weaponHeader = document.createElement('h3'); weaponHeader.style.color = '#ff6b6b'; weaponHeader.style.fontSize = '16px'; weaponHeader.style.marginTop = '20px'; weaponHeader.style.borderBottom = '1px solid #555'; weaponHeader.style.paddingBottom = '5px'; weaponHeader.textContent = '무기 판매'; list.appendChild(weaponHeader); let sellableWeaponsCount = 0; gameState.weapons.forEach((weapon, index) => { if (weapon.key === 'Fist') return; sellableWeaponsCount++; const weaponData = WEAPON_DATABASE[weapon.key]; const price = weaponPrices[weapon.key] || 100; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; let nameText = `${weaponData.name}`; if (index === gameState.currentWeaponIndex) { nameText += ` (장착 중)`; info.style.color = '#ffff00'; } info.textContent = nameText; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#ff9800'; btn.textContent = `판매 (+${price} 몰록)`; btn.onclick = () => { addMoloch(price); showChat('상인', `${weaponData.name}을(를) ${price} 몰록에 매입하지.`); if (index === gameState.currentWeaponIndex) { switchWeapon(0); } else if (index < gameState.currentWeaponIndex) { gameState.currentWeaponIndex--; } gameState.weapons.splice(index, 1); renderTradeItems(); updateUI(); }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); }); if (sellableWeaponsCount === 0) { const emptyMsg = document.createElement('div'); emptyMsg.style.padding = '10px'; emptyMsg.style.color = '#aaa'; emptyMsg.style.fontSize = '14px'; emptyMsg.textContent = '판매할 무기가 없습니다.'; list.appendChild(emptyMsg); } const weaponBuyHeader = document.createElement('h3'); weaponBuyHeader.style.color = '#4ecdc4'; weaponBuyHeader.style.fontSize = '16px'; weaponBuyHeader.style.marginTop = '20px'; weaponBuyHeader.style.borderBottom = '1px solid #555'; weaponBuyHeader.style.paddingBottom = '5px'; weaponBuyHeader.textContent = '무기 구매'; list.appendChild(weaponBuyHeader); for (const key in WEAPON_DATABASE) { if (key === 'Fist') continue; const weaponData = WEAPON_DATABASE[key]; const sellPrice = weaponPrices[key] || 100; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const isOwned = gameState.weapons.find(w => w.key === key); const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = weaponData.name; if (isOwned) { info.textContent += " (보유중)"; info.style.color = "#aaa"; } const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); if (isOwned) { showChat('상인', `이미 ${weaponData.name}이 있구만. 탄약만 챙겨주지.`); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } else { showChat('상인', `좋은 선택이야. ${weaponData.name}은(는) 아주 쓸만하지.`); gameState.weapons.push({ key: key, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } }
 
         function performPunch(weaponData) {
-            // [수정] 근력(Strength) 스탯 반영: 기본 데미지 + (힘 * 2)
-            // 이제 힘 스탯은 순수하게 공격력에만 관여함
             let damage = weaponData.damage; 
             if (weaponData.type === 'Melee') {
                 damage += (gameState.stats.strength * 2);
@@ -984,19 +1044,13 @@
 
         function updateUI() {
             document.getElementById('moloch-count').textContent = gameState.moloch;
-            
-            // [수정] 최대 체력, 최대 스태미나 동적 반영
             const maxHealth = getMaxHealth();
             const maxStamina = getMaxStamina();
-            
             const healthPercent = (gameState.health / maxHealth) * 100; document.getElementById('health-fill').style.width = `${healthPercent}%`; document.getElementById('health-text').textContent = `${Math.floor(gameState.health)} / ${maxHealth}`;
             const staminaPercent = (playerStamina / maxStamina) * 100; document.getElementById('stamina-fill').style.width = `${staminaPercent}%`; document.getElementById('stamina-text').textContent = `${Math.floor(playerStamina)} / ${maxStamina}`;
-            
-            // [NEW] 레벨 및 XP UI 업데이트
             document.getElementById('level-badge').textContent = gameState.level;
             const xpPercent = (gameState.xp / gameState.xpToNextLevel) * 100;
             document.getElementById('xp-fill').style.width = `${xpPercent}%`;
-
             if (playerStamina < JUMP_STAMINA_COST) { document.getElementById('stamina-fill').style.background = '#FF4136'; } else { document.getElementById('stamina-fill').style.background = '#2196F3'; }
             const vehicleStatusRow = document.getElementById('vehicle-status-row'); if (playerInVehicle) { const vh = playerInVehicle.userData; const vhPercent = (vh.health / vh.maxHealth) * 100; document.getElementById('vehicle-health-fill').style.width = `${vhPercent}%`; document.getElementById('vehicle-health-text').textContent = `${Math.floor(vh.health)} / ${vh.maxHealth}`; vehicleStatusRow.style.display = 'flex'; } else { vehicleStatusRow.style.display = 'none'; }
             const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; document.getElementById('current-ammo').textContent = weaponObj.magAmmo; document.getElementById('ammo-total').textContent = ammoType ? inventoryAmmo : '—'; document.getElementById('weapon-name').textContent = weaponData.name; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { document.getElementById('reload-prompt').style.display = 'block'; } else { document.getElementById('reload-prompt').style.display = 'none'; } } else { document.getElementById('current-ammo').textContent = '-'; document.getElementById('ammo-total').textContent = '-'; document.getElementById('weapon-name').textContent = '맨손'; document.getElementById('reload-prompt').style.display = 'none'; }
@@ -1009,12 +1063,9 @@
             if (!playerInVehicle && controls.sprint && (controls.moveForward || controls.moveBackward || controls.moveLeft || controls.moveRight)) { if (playerStamina > STAMINA_THRESHOLD) { playerStamina = Math.max(0, playerStamina - STAMINA_DRAIN_RATE * delta); } else { controls.sprint = false; } } else { playerStamina = Math.min(maxStamina, playerStamina + STAMINA_RECOVERY_RATE * delta); }
             if (playerStamina >= (maxStamina * 0.9) && gameState.health < maxHealth) { const healthRegenRate = 1 / 3; const healAmount = healthRegenRate * delta; gameState.health += healAmount; playerStamina -= healAmount * 4; if (gameState.health > maxHealth) { gameState.health = maxHealth; } }
             if (playerInVehicle) return;
-            
-            // [수정] 스탯 기반 이동 속도 계산
             const baseSpeed = getMoveSpeed(); 
             const sprintMultiplier = 1.4; const gravity = 0.015; const jumpForce = 0.3; const playerHeight = 1.8;
             const currentSpeed = (controls.sprint && playerStamina > STAMINA_THRESHOLD) ? baseSpeed * sprintMultiplier : baseSpeed; const moveSpeed = currentSpeed * delta;
-            
             const terrainFloor = getTerrainHeight(gameState.position.x, gameState.position.z);
             raycaster.set(gameState.position.clone().add(new THREE.Vector3(0, 1.0, 0)), new THREE.Vector3(0, -1, 0)); raycaster.far = 20.0; const intersects = raycaster.intersectObjects(objects, true); let objectFloor = -Infinity; let onObject = false;
             const validGroundHitPlayer = intersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object' || hit.object.userData.type === 'lava');
@@ -1049,16 +1100,9 @@
                 for(let j = i - 1; j >= 0; j--) { const vehicleB = vehicles[j]; if (!vehicleB.parent) continue; if (vehicleA.position.distanceToSquared(vehicleB.position) > 100) continue; const boxA = vehicleA.userData.collisionBox.clone().translate(vehicleA.position); const boxB = vehicleB.userData.collisionBox.clone().translate(vehicleB.position); if(boxA.intersectsBox(boxB)) { const relativeSpeed = Math.abs(vehicleA.userData.speed) + Math.abs(vehicleB.userData.speed); const damage = relativeSpeed * 30 * 0.625; vehicleA.userData.health -= damage; vehicleB.userData.health -= damage; const tempSpeed = vehicleA.userData.speed; vehicleA.userData.speed = vehicleB.userData.speed * -0.5; vehicleB.userData.speed = tempSpeed * -0.5; } }
                 if (playerInVehicle === vehicleA) {
                     const data = vehicleA.userData; data.steering = THREE.MathUtils.lerp(data.steering, vehicleSteering, delta * 5); const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion).normalize(); const samplePos = vehicleA.position.clone().add(forwardDir.clone().multiplyScalar(2.0)); const currentH = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const nextH = getTerrainHeight(samplePos.x, samplePos.z); 
-                    
-                    // [수정] 내리막/오르막 가속도 계수 통일 (gravityFactor = 15.0)
-                    const slope = nextH - currentH; 
-                    const gravityFactor = 15.0; // 내리막 감속 로직 제거, 무조건 15.0 적용
-                    const gravityResistance = slope * gravityFactor * delta; 
-                    
+                    const slope = nextH - currentH; const gravityFactor = 15.0; const gravityResistance = slope * gravityFactor * delta; 
                     data.speed -= gravityResistance; if (vehicleAcceleration > 0) { data.speed = Math.min(data.maxSpeed, data.speed + data.acceleration * delta); } else if (vehicleAcceleration < 0) { data.speed -= (data.speed > 0 ? data.braking : data.acceleration) * delta; } else { data.speed = THREE.MathUtils.lerp(data.speed, 0, delta * data.friction); } const turnFactor = Math.min(1, Math.abs(data.speed) / (data.maxSpeed * 0.5)); vehicleA.rotation.y -= data.steering * data.turnSpeed * turnFactor * delta; const moveDirection = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion); const displacement = moveDirection.multiplyScalar(data.speed * delta); const oldPosition = vehicleA.position.clone(); vehicleA.position.add(displacement); const terrainY = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const targetY = terrainY + 0.4; vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, targetY, delta * 10); if (vehicleA.position.y < targetY) { vehicleA.position.y = targetY; } camera.rotation.set(gameState.rotation.x, 0, 0, 'YXZ'); gameState.position.copy(camera.getWorldPosition(new THREE.Vector3())); gameState.rotation.y = vehicleA.rotation.y; 
                     const vehicleBox = vehicleA.userData.collisionBox.clone().translate(vehicleA.position); const oldSpeed = data.speed; 
-                    
-                    // [복구] 로드킬 로직: 좀비 및 적과 충돌 체크
                     const speedAbs = Math.abs(data.speed);
                     if (speedAbs > 2.0) { 
                         const enemies = [...zombies, ...rangedEnemies];
@@ -1066,37 +1110,14 @@
                             const enemy = enemies[k];
                             if (!enemy.parent || enemy.userData.health <= 0) continue;
                             if (vehicleA.position.distanceToSquared(enemy.position) > 36) continue; 
-
                             const enemyBox = new THREE.Box3().setFromObject(enemy);
                             if (vehicleBox.intersectsBox(enemyBox)) {
-                                const damage = speedAbs * 80; 
-                                createDebrisEffect(enemy.position, new THREE.Color(0xaa0000), 10);
-                                showDamage(enemy.position, damage, '#ff0000');
-                                
-                                gameStats.roadKills++;
-                                checkAchievements();
-
-                                if (enemy.userData.type === 'zombie') {
-                                    hitZombie(enemy, damage);
-                                    if (enemy.userData.health <= 0) showChat('시스템', '로드킬! (좀비 처치)');
-                                } else if (enemy.userData.type === 'enemy') {
-                                    enemy.userData.health -= damage;
-                                    if (enemy.userData.health <= 0) {
-                                        showChat('시스템', '로드킬! (적 처치)');
-                                        createDebrisEffect(enemy.position, enemy.material.color);
-                                        scene.remove(enemy);
-                                        rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
-                                        addMoloch(20);
-                                    } else {
-                                        enemy.userData.state = 'chase';
-                                    }
-                                }
-                                data.speed *= 0.8;
-                                vehicleA.userData.health -= 10;
+                                const damage = speedAbs * 80; createDebrisEffect(enemy.position, new THREE.Color(0xaa0000), 10); showDamage(enemy.position, damage, '#ff0000'); gameStats.roadKills++; checkAchievements();
+                                if (enemy.userData.type === 'zombie') { hitZombie(enemy, damage); if (enemy.userData.health <= 0) showChat('시스템', '로드킬! (좀비 처치)'); } else if (enemy.userData.type === 'enemy') { enemy.userData.health -= damage; if (enemy.userData.health <= 0) { showChat('시스템', '로드킬! (적 처치)'); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); addMoloch(20); } else { enemy.userData.state = 'chase'; } }
+                                data.speed *= 0.8; vehicleA.userData.health -= 10;
                             }
                         }
                     }
-
                     for (const object of objects) { const distSq = vehicleA.position.distanceToSquared(object.position); if (distSq > COLLISION_CHECK_DISTANCE_SQ) continue; if (!object.geometry || !object.parent || object.geometry.type === 'PlaneGeometry' || object.userData.type === 'roof' || object.userData.type === 'lava') continue; if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); const objectBox = new THREE.Box3().setFromObject(object); if (vehicleBox.intersectsBox(objectBox)) { vehicleA.position.copy(oldPosition); const damage = Math.abs(oldSpeed) * 40 * 0.31; vehicleA.userData.health -= damage; vehicleA.userData.speed *= -0.5; break; } }
                 } else { raycaster.set(vehicleA.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const vehicleIntersects = raycaster.intersectObjects(objects, true); let vehicleGroundY = vehicleA.position.y; if (vehicleIntersects.length > 0) { const firstHit = vehicleIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object' || hit.object.userData.type === 'lava'); if(firstHit) vehicleGroundY = firstHit.point.y; } vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, vehicleGroundY + 0.4, 0.1); }
                 raycaster.set(vehicleA.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const groundCheck = raycaster.intersectObjects(objects, true); const lavaHit = groundCheck.find(hit => hit.object.userData.type === 'lava'); if (lavaHit && lavaHit.distance < 2.0) { const damage = 100 * delta; vehicleA.userData.health -= damage; if (playerInVehicle === vehicleA && frameCount % 60 === 0) showChat('시스템', '차량이 용암에 녹고 있습니다!'); }
@@ -1157,27 +1178,206 @@
         function createDebrisEffect(position, color, count = 5) { for (let i = 0; i < count; i++) { const safeColor = color ? color : new THREE.Color(0x888888); const debris = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), new THREE.MeshLambertMaterial({ color: safeColor })); debris.position.copy(position); debris.userData.velocity = new THREE.Vector3((Math.random() - 0.5) * 5, Math.random() * 5, (Math.random() - 0.5) * 5); debris.userData.lifespan = 1 + Math.random(); scene.add(debris); debrisParticles.push(debris); } }
         function updateDebris(delta) { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; for (let i = debrisParticles.length - 1; i >= 0; i--) { const debris = debrisParticles[i]; if (debris.position.distanceToSquared(playerPos) > ACTIVE_RADIUS_SQ) { scene.remove(debris); debrisParticles.splice(i, 1); continue; } debris.userData.velocity.y -= 9.8 * delta; debris.position.add(debris.userData.velocity.clone().multiplyScalar(delta)); debris.userData.lifespan -= delta; debris.material.opacity = Math.max(0, debris.userData.lifespan / 1.5); debris.material.transparent = true; if (debris.userData.lifespan <= 0) { scene.remove(debris); debrisParticles.splice(i, 1); } } }
 
-        function updateWorldState(delta) {
-            // [수정] 시간 흐름 2배 느리게 (0.5배속)
-            gameTime += delta * 0.5;
+        function handleKnockbackState(enemy, data, delta) { data.knockbackVelocity.y -= 20 * delta; data.knockbackVelocity.x *= 0.95; data.knockbackVelocity.z *= 0.95; const moveStep = data.knockbackVelocity.clone().multiplyScalar(delta); const proposedPosition = enemy.position.clone().add(moveStep); let collided = false; const enemyBox = new THREE.Box3().setFromObject(enemy); enemyBox.translate(moveStep); for (const object of objects) { if (object.geometry.type === 'PlaneGeometry' || object.userData.type === 'floor' || object.userData.type === 'roof') continue; const distSq = proposedPosition.distanceToSquared(object.position); if (distSq > 100) continue; if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); const objectBox = new THREE.Box3().setFromObject(object); if (enemyBox.intersectsBox(objectBox)) { collided = true; break; } } const terrainY = getTerrainHeight(enemy.position.x, enemy.position.z); let groundY = terrainY + (enemy.userData.type === 'zombie' ? 0.9 : 1.25); raycaster.set(enemy.position.clone().add(new THREE.Vector3(0, 5, 0)), new THREE.Vector3(0, -1, 0)); const groundIntersects = raycaster.intersectObjects(objects, true); const validHit = groundIntersects.find(hit => hit.object.userData.type === 'floor' || hit.object.userData.type === 'roof'); if(validHit && validHit.point.y > terrainY) { groundY = validHit.point.y + (enemy.userData.type === 'zombie' ? 0.9 : 1.25); } if (collided) { data.knockbackVelocity.set(0, 0, 0); data.state = 'chase'; } else { enemy.position.add(moveStep); if (enemy.position.y <= groundY) { enemy.position.y = groundY; data.knockbackVelocity.y = 0; if (Math.abs(data.knockbackVelocity.x) < 0.5 && Math.abs(data.knockbackVelocity.z) < 0.5) { data.state = 'chase'; } } } }
+        function handleRepositionState(enemy, data, now, delta, targetPos) { const distToPlayer = enemy.position.distanceTo(targetPos); if (now > data.repositionEndTime || distToPlayer < 5.0 || data.stuckTime > 1000) { data.isRepositioning = false; data.state = 'attack'; return; } const direction = targetPos.clone().sub(enemy.position).normalize(); direction.y = 0; if (data.stuckTime > 100) { direction.x += (Math.random() - 0.5) * 0.5; direction.z += (Math.random() - 0.5) * 0.5; direction.normalize(); } const velocity = direction.multiplyScalar(data.speed * 1.2 * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z); }
+
+        function updateZombies(delta) {
+            const now = Date.now(); const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position; const dayDamagePerSec = 100 / 60; const damageTick = (!isNight) ? (dayDamagePerSec * delta * 4) : 0;
             
+            // [수정] 플레이어의 현재 기본 속도(스탯 반영) 가져오기
+            const playerBaseSpeed = getMoveSpeed();
+
+            for (let index = zombies.length - 1; index >= 0; index--) {
+                const enemy = zombies[index]; if (!enemy || !enemy.parent) { zombies.splice(index, 1); continue; } 
+                const data = enemy.userData;
+                let currentTargetPos = targetPos; let isTargetPlayer = true;
+                if (data.customTarget) { if (data.customTarget.parent && data.customTarget.userData.health > 0) { currentTargetPos = data.customTarget.position; isTargetPlayer = false; } else { data.customTarget = null; } }
+
+                const distSq = enemy.position.distanceToSquared(currentTargetPos); 
+                const distToPlayerSq = enemy.position.distanceToSquared(targetPos);
+                const activeDistSq = data.isTroll ? (600 * 600) : ACTIVE_RADIUS_SQ;
+                if (distToPlayerSq > activeDistSq) { enemy.visible = false; continue; } else { enemy.visible = true; }
+                
+                // [수정] 좀비 속도 조정: 낮(플레이어-0.1), 밤(플레이어+0.01)
+                if (isNight) { 
+                    data.speed = playerBaseSpeed + 0.01; 
+                } else { 
+                    data.speed = Math.max(0, playerBaseSpeed - 0.1); 
+                }
+
+                if (damageTick > 0 && data.health > 0 && !data.isTroll && !data.isOrc) { data.health -= damageTick; const healthPercent = Math.max(0, data.health / data.maxHealth); enemy.material.color.copy(data.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); if (data.health <= 0) { handleZombieDeath(enemy, index); continue; } }
+                if (data.health <= 0) { handleZombieDeath(enemy, index); continue; }
+                
+                let zombieGroundY = -100; let validGroundHit = null; const biome = getBiome(enemy.position.x, enemy.position.z);
+                if (biome !== 'city') { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } else { raycaster.far = 20; raycaster.set(enemy.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const zombieIntersects = raycaster.intersectObjects(structures, true); validGroundHit = zombieIntersects.find(hit => hit.point.y < enemy.position.y + 2.0 && (hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.geometry.type === 'PlaneGeometry')); if (validGroundHit) { zombieGroundY = validGroundHit.point.y; } else { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } }
+
+                let heightOffset = 0.9; if (data.isTroll) heightOffset = 1.35; if (data.isOrc) heightOffset = data.name.includes('워치프') ? 1.35 : 1.0;
+                if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03; if (enemy.position.y <= zombieGroundY + heightOffset && data.velocityY < 0) { enemy.position.y = zombieGroundY + heightOffset; data.isJumping = false; data.velocityY = 0; } } else { if (biome !== 'city' || validGroundHit) { enemy.position.y = zombieGroundY + heightOffset; } }
+                
+                if (!currentTargetPos || !enemy || !enemy.position) continue; const distToTarget = Math.sqrt(distSq); const heightDiff = currentTargetPos.y - enemy.position.y; data.targetHeight = heightDiff; data.playerElevated = isTargetPlayer && heightDiff > 3; 
+                const isSafeZone = isTargetPlayer && (hasLeftSafeZone === 0); const isProvoked = data.isProvoked;
+
+                if (now - data.lastPortalCheck > data.portalCheckInterval) { 
+                    data.lastPortalCheck = now; 
+                    if (biome === 'city' && Math.abs(heightDiff) > 3.5 && distToTarget < 50) { 
+                        data.portalAction = findBestPortalAction(enemy.position, currentTargetPos.y);
+                    } else { 
+                        data.portalAction = null; 
+                    } 
+                }
+
+                let hasLineOfSight = false; if (!isSafeZone || isProvoked) { hasLineOfSight = checkLineOfSight(enemy.position, currentTargetPos); } if (hasLineOfSight) { data.lastKnownPlayerPosition.copy(currentTargetPos); }
+                const moved = enemy.position.distanceTo(data.lastPosition); if (!data.isJumping && moved < 0.1 * delta && (data.state === 'chase' || data.state === 'portal')) { data.stuckTime += delta * 1000; } else { data.stuckTime = 0; } data.lastPosition.copy(enemy.position);
+                
+                if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown)) { 
+                    data.state = 'portal'; 
+                } 
+                else if (((!data.isOrc && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
+                else if (isProvoked || (!data.isOrc && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
+                else if (data.stuckTime > data.stuckThreshold) { data.state = 'stuck'; } else { data.state = 'wander'; }
+                
+                switch (data.state) { case 'portal': handlePortalState(enemy, data, now, delta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': handleChaseState(enemy, data, now, delta, hasLineOfSight, currentTargetPos); break; case 'stuck': handleStuckState(enemy, data, delta); break; case 'wander': handleWanderState(enemy, data, now, delta); break; case 'knockback': handleKnockbackState(enemy, data, delta); break; }
+            } 
+        }
+
+        function findBestPortalAction(zombiePos, targetY) {
+            let bestAction = null; let minDistance = Infinity; const zombieY = zombiePos.y; const isGoingUp = targetY > zombieY + 2.5; const isGoingDown = targetY < zombieY - 2.5; if (!isGoingUp && !isGoingDown) return null;
+            portals.forEach(portal => {
+                if (Math.abs(portal.entrance.x - zombiePos.x) > 60 || Math.abs(portal.entrance.z - zombiePos.z) > 60) return;
+                if (isGoingUp) {
+                    if (Math.abs(portal.entrance.y - zombieY) < 3.0) { const dist = zombiePos.distanceTo(portal.entrance); if (dist < minDistance) { minDistance = dist; bestAction = { walkTo: portal.entrance, teleportTo: portal.exit }; } }
+                } else if (isGoingDown) {
+                    if (Math.abs(portal.exit.y - zombieY) < 3.0) { const dist = zombiePos.distanceTo(portal.exit); if (dist < minDistance) { minDistance = dist; bestAction = { walkTo: portal.exit, teleportTo: portal.entrance }; } }
+                }
+            });
+            if (minDistance > 50) return null; return bestAction;
+        }
+
+        function handleChaseState(enemy, data, now, delta, hasLineOfSight, targetPos) { 
+            const dest = hasLineOfSight ? (targetPos || data.lastKnownPlayerPosition) : data.lastKnownPlayerPosition;
+            if (now - data.lastPathUpdate > data.pathUpdateInterval) { data.path = findSimplePath(enemy.position, dest); data.currentPathIndex = 0; data.lastPathUpdate = now; } 
+            let moveTarget = dest; if (data.path && data.path.length > data.currentPathIndex) { moveTarget = data.path[data.currentPathIndex]; if (enemy.position.distanceTo(moveTarget) < 1.0) { data.currentPathIndex++; } } 
+            const direction = moveTarget.clone().sub(enemy.position).normalize(); direction.y = 0; if (!hasLineOfSight) { direction.x += (Math.random() - 0.5) * 0.2; direction.z += (Math.random() - 0.5) * 0.2; direction.normalize(); } 
+            const velocity = direction.multiplyScalar(data.speed * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(moveTarget.x, enemy.position.y, moveTarget.z); 
+        }
+
+        function handleAttackState(enemy, data, now, targetPos, isTargetPlayer) { 
+            if(!targetPos) targetPos = data.lastKnownPlayerPosition;
+            enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z); 
+            if (now - data.lastAttackTime > data.attackCooldown) { 
+                data.lastAttackTime = now; const dist = enemy.position.distanceTo(targetPos); 
+                if (dist <= data.attackRange + 1.0) { if (isTargetPlayer) { attackPlayer(10); } else if (data.customTarget && data.customTarget.userData) { const dmg = 20; data.customTarget.userData.health -= dmg; showDamage(data.customTarget.position, dmg, '#ffaa00'); } } 
+            } 
+        }
+
+        function checkEnemyCollision(enemy) { const enemyRadius = 0.5; const enemyBox = new THREE.Box3(new THREE.Vector3(enemy.position.x - enemyRadius, enemy.position.y, enemy.position.z - enemyRadius), new THREE.Vector3(enemy.position.x + enemyRadius, enemy.position.y + 2, enemy.position.z + enemyRadius)); for (const object of objects) { if (object.geometry.type === 'PlaneGeometry' || object.userData.type === 'roof') continue; const distSq = enemy.position.distanceToSquared(object.position); if (distSq > 100) continue; if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); const objectBox = new THREE.Box3().setFromObject(object); if (enemyBox.intersectsBox(objectBox)) { let hitSteppable = false; if (object.userData.type === 'floor') { if (enemy.position.y >= objectBox.max.y - 0.1) { continue; } hitSteppable = true; } return { collided: true, hitSteppable: hitSteppable }; } } return { collided: false, hitSteppable: false }; }
+        function applyZombieMovement(enemy, velocity) { const data = enemy.userData; const startX = enemy.position.x; enemy.position.x += velocity.x; const colX = checkEnemyCollision(enemy); if (colX.collided) { enemy.position.x = startX; } const startZ = enemy.position.z; enemy.position.z += velocity.z; const colZ = checkEnemyCollision(enemy); if (colZ.collided) { enemy.position.z = startZ; } if ((colX.collided && colX.hitSteppable) || (colZ.collided && colZ.hitSteppable)) { if (!data.isJumping) { data.isJumping = true; data.velocityY = 0.4; } } }
+        function findSimplePath(start, end) { const path = []; const mid = start.clone().lerp(end, 0.5); const offset = new THREE.Vector3((Math.random() - 0.5) * 5, 0, (Math.random() - 0.5) * 5); mid.add(offset); path.push(end.clone()); return path; }
+        function handleWanderState(enemy, data, now, delta) { if (now - data.lastMoveTime > 3000 || enemy.position.distanceTo(data.wanderTarget) < 2) { data.lastMoveTime = now; const angle = Math.random() * Math.PI * 2; const dist = 10 + Math.random() * 20; data.wanderTarget.set(enemy.position.x + Math.cos(angle) * dist, enemy.position.y, enemy.position.z + Math.sin(angle) * dist); } const direction = data.wanderTarget.clone().sub(enemy.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * 0.5 * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(data.wanderTarget.x, enemy.position.y, data.wanderTarget.z); }
+        function handleStuckState(enemy, data, delta) { if (!data.isJumping) { data.isJumping = true; data.velocityY = 0.5; } const randomDir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize(); const velocity = randomDir.multiplyScalar(data.speed * delta * 1.5); enemy.position.add(velocity); if (Math.random() < 0.1) { data.stuckTime = 0; data.state = 'chase'; } }
+        
+        function handlePortalState(enemy, data, now, delta) { 
+            if (!data.portalAction) { data.state = 'chase'; return; } 
+            const target = data.portalAction.walkTo; const destination = data.portalAction.teleportTo; const distToTarget = enemy.position.distanceTo(target); 
+            if (distToTarget > 1.5) { const direction = target.clone().sub(enemy.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(target.x, enemy.position.y, target.z); } 
+            else { if (now - data.lastPortalUse > data.portalCooldown) { enemy.position.copy(destination); enemy.position.y += 0.5; data.velocityY = 0; data.isJumping = false; data.lastPortalUse = now; data.state = 'chase'; data.portalAction = null; } } 
+        }
+        
+        function handleZombieDeath(enemy, index) { 
+            if (questState.status === 1 && questState.type === 'hunt_zombie') { questState.currentAmount++; if (questState.currentAmount >= questState.targetAmount) { questState.currentAmount = questState.targetAmount; questState.status = 2; showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); } updateQuestUI(); } 
+            gameStats.zombieKills++; checkAchievements(); 
+            addMoloch(Math.floor(Math.random() * 5) + 1); 
+            let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; gainXP(xpGain);
+            showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
+            createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); zombies.splice(index, 1); if (Math.random() < 0.5) { const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); } 
+        }
+        
+        function checkLineOfSight(fromPos, toPos) { const eyePos = fromPos.clone().add(new THREE.Vector3(0, 2.0, 0)); const targetEyePos = toPos.clone().add(new THREE.Vector3(0, 1.0, 0)); const direction = targetEyePos.clone().sub(eyePos).normalize(); const distance = eyePos.distanceTo(targetEyePos); raycaster.set(eyePos, direction); raycaster.far = distance; const intersects = raycaster.intersectObjects(objects, true); const hit = intersects.find(i => i.object.geometry.type !== 'PlaneGeometry' && i.object.userData.type !== 'roof' && i.object.userData.type !== 'floor' && i.distance > 1.0 ); return !hit || hit.distance > distance - 1; }
+        function attackPlayer(damage) { if (isGameOver) return; if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } else { gameState.health -= damage; showPlayerDamageEffect(); updateUI(); if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } } }
+        function updateItems(delta) { 
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            items.forEach(item => { if (item.position.distanceToSquared(playerPos) > ACTIVE_RADIUS_SQ) { item.visible = false; return; } item.visible = true; if (item.userData.type !== 'weapon') { item.rotation.y += 0.02; } if (item.userData.isGrounded) return; raycaster.far = 500; raycaster.set(item.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const itemIntersects = raycaster.intersectObjects(objects, true); let targetY = item.position.y; if (itemIntersects.length > 0) { const firstHit = itemIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object'); if(firstHit) { targetY = firstHit.point.y + 0.5; } } if (Math.abs(item.position.y - targetY) < 0.05) { item.position.y = targetY; item.userData.isGrounded = true; } else { item.position.y = THREE.MathUtils.lerp(item.position.y, targetY, 0.1); } item.userData.baseY = item.position.y; });
+        }
+        
+        function animate() {
+            if (isGameOver) return; requestAnimationFrame(animate); 
+            const now = Date.now(); const delta = clock.getDelta(); frameCount++;
+            
+            updateWorldState(delta); updatePlayer(delta); updateBullets(delta); updateZombies(delta);
+            
+            // [최적화] 원거리 적 업데이트 (거리별 빈도 조절)
+            rangedEnemies.forEach(enemy => {
+                if (enemy.userData.health <= 0) return;
+                const distSq = enemy.position.distanceToSquared(gameState.position);
+                if (distSq > ACTIVE_RADIUS_SQ) { enemy.visible = false; return; }
+                enemy.visible = true;
+                
+                // 멀리 있는 적은 프레임 건너뛰기
+                if (distSq > 10000 && frameCount % 2 !== 0) return;
+
+                const data = enemy.userData;
+                const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+                
+                // 중력 적용
+                const groundY = getTerrainHeight(enemy.position.x, enemy.position.z);
+                if (data.isJumping) {
+                    enemy.position.y += data.velocityY;
+                    data.velocityY -= 0.03;
+                    if (enemy.position.y <= groundY + 1.25) {
+                        enemy.position.y = groundY + 1.25;
+                        data.isJumping = false;
+                        data.velocityY = 0;
+                    }
+                } else {
+                    enemy.position.y = groundY + 1.25;
+                }
+
+                if (now - data.lastMoveTime > 100) {
+                    // 간단한 AI: 플레이어 바라보고 사격
+                    enemy.lookAt(playerPos.x, enemy.position.y, playerPos.z);
+                    const dist = Math.sqrt(distSq);
+                    
+                    if (dist <= data.attackRange) {
+                        if (now - data.lastShotTime > data.fireRate) {
+                            data.lastShotTime = now;
+                            rangedEnemyShoot(enemy);
+                        }
+                    } else if (dist <= data.detectionRange) {
+                        // 추적
+                        const dir = playerPos.clone().sub(enemy.position).normalize();
+                        dir.y = 0;
+                        enemy.position.add(dir.multiplyScalar(data.speed * delta * 0.5));
+                    }
+                    data.lastMoveTime = now;
+                }
+            });
+
+            updateVehicles(delta); updateItems(delta); updateNPCs(delta); updateFlares(delta); updateDebris(delta);
+            updateBosses(delta, now, gameState.position); updateHazardZones(now);
+            updateInteraction();
+            
+            // 청크 업데이트 (플레이어 이동 시)
+            const currentChunkX = Math.round(gameState.position.x / CHUNK_SIZE);
+            const currentChunkZ = Math.round(gameState.position.z / CHUNK_SIZE);
+            const newChunkKey = `${currentChunkX},${currentChunkZ}`;
+            if (newChunkKey !== currentPlayerChunkKey) {
+                currentPlayerChunkKey = newChunkKey;
+                updateWorldChunks();
+            }
+
+            renderer.render(scene, camera);
+        }
+        
+        function updateWorldState(delta) {
+            gameTime += delta * 0.5;
             const timeOfDay = (gameTime % GAME_DAY_DURATION) / GAME_DAY_DURATION; const totalMinutes = Math.floor(timeOfDay * 24 * 60); const hours = Math.floor(totalMinutes / 60); const minutes = totalMinutes % 60; document.getElementById('time-display').textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
             const theta = (timeOfDay - 0.25) * Math.PI * 2; const sunHeight = Math.sin(theta); const cosTheta = Math.cos(theta); const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const lightOffset = 100;
             sun.position.x = playerPos.x + cosTheta * lightOffset; sun.position.y = playerPos.y + sunHeight * lightOffset; sun.position.z = playerPos.z; sun.target.position.copy(playerPos); sun.target.updateMatrixWorld();
             const visualDist = 2000; sunMesh.position.set(playerPos.x + cosTheta * visualDist, playerPos.y + sunHeight * visualDist, playerPos.z); moonMesh.position.set(playerPos.x - cosTheta * visualDist, playerPos.y - sunHeight * visualDist, playerPos.z); moonMesh.rotation.y += delta * 0.05; sunMesh.lookAt(playerPos); moonMesh.lookAt(playerPos);
             
-            // [수정] 밝기 스탯(perception) 적용 로직 밸런스 조정
-            const lightIntensity = Math.max(0.05, sunHeight); 
-            sun.intensity = lightIntensity * 0.8 + 0.1; 
-            
-            // 기본 밝기 (밤 최소 0.1 ~ 낮 최대 0.4)
+            const lightIntensity = Math.max(0.05, sunHeight); sun.intensity = lightIntensity * 0.8 + 0.1; 
             let ambientBase = Math.max(0.1, lightIntensity * 0.4);
-            
-            // [변경] 감각 스탯 보너스 하향 조정
-            // 기존 0.02 -> 0.005로 변경 (100 포인트 투자 시 +0.5 밝기 추가)
-            // 밤 기본 밝기(0.1) + 보너스(0.5) = 0.6 (흐린 낮 수준)
             const nightVisionBonus = gameState.stats.perception * 0.005; 
-            
             scene.ambientLight.intensity = Math.min(1.0, ambientBase + nightVisionBonus); 
             
             const dayColor = new THREE.Color(0x87CEEB); const sunsetColor = new THREE.Color(0xfd5e53); const nightColor = new THREE.Color(0x050515); const dayFog = new THREE.Color(0x87CEEB); const sunsetFog = new THREE.Color(0xfd5e53); const nightFog = new THREE.Color(0x050515);
@@ -1190,206 +1390,32 @@
         }
         
         function startHordeEvent() {
-            gameState.lastHordeTime = gameTime; gameState.hordeActive = true; const warningEl = document.getElementById('horde-warning'); warningEl.style.opacity = '1'; showChat('경고', '적들의 습격이 시작됩니다!'); const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
-            const zombieCount = 4; const enemyCount = 2; let spawnedZombies = 0; let spawnedEnemies = 0;
-            const spawnInterval = setInterval(() => { if ((spawnedZombies >= zombieCount && spawnedEnemies >= enemyCount) || isGameOver) { clearInterval(spawnInterval); setTimeout(() => { warningEl.style.opacity = '0'; gameState.hordeActive = false; }, 5000); return; }
-                let spawnType = 'none'; if (spawnedZombies < zombieCount && spawnedEnemies < enemyCount) { spawnType = Math.random() < 0.66 ? 'zombie' : 'enemy'; } else if (spawnedZombies < zombieCount) { spawnType = 'zombie'; } else if (spawnedEnemies < enemyCount) { spawnType = 'enemy'; }
-                const angle = Math.random() * Math.PI * 2; const distance = 40 + Math.random() * 50; const x = playerPos.x + Math.cos(angle) * distance; const z = playerPos.z + Math.sin(angle) * distance; const y = getTerrainHeight(x, z);
-                if (spawnType === 'zombie') { createZombie(x, z, 600, y); const newZombie = zombies[zombies.length - 1]; if(newZombie) { newZombie.userData.state = 'chase'; newZombie.userData.lastKnownPlayerPosition.copy(playerPos); } spawnedZombies++; } else if (spawnType === 'enemy') { createRangedEnemy(x, z, 500, y); const newEnemy = rangedEnemies[rangedEnemies.length - 1]; if(newEnemy) { newEnemy.userData.state = 'chase'; newEnemy.userData.lastKnownPlayerPosition.copy(playerPos); } spawnedEnemies++; } }, 500); 
-        }
-
-        function hideLoading() { const loadingScreen = document.getElementById('loading-screen'); loadingScreen.style.transition = 'opacity 0.5s'; loadingScreen.style.opacity = '0'; setTimeout(() => { loadingScreen.style.display = 'none'; showChat('시스템', '게임에 오신 것을 환영합니다! 화면을 클릭해서 시작하세요!'); }, 500); }
-
-        function updateAim() { const defaultFov = 75; let zoomFov = 60; const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; if (weaponData.type === 'SR' || weaponData.type === 'DMR') { zoomFov = 25; } } const targetFov = isAiming ? zoomFov : defaultFov; camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, 0.2); camera.updateProjectionMatrix(); }
-
-        function optimizeRendering() {
-            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const cutoffSq = 230 * 230; 
-            objects.forEach(obj => { if (obj.geometry.type === 'PlaneGeometry') return; if (obj.position.distanceToSquared(playerPos) > cutoffSq) { obj.visible = false; } else { obj.visible = true; } });
-            foliage.forEach(leaf => { if (leaf.position.distanceToSquared(playerPos) > cutoffSq) { leaf.visible = false; } else { leaf.visible = true; } });
-            lavaPlanes.forEach(lava => { if (lava.position.distanceToSquared(playerPos) > cutoffSq) { lava.visible = false; } else { lava.visible = true; } });
-            npcs.forEach(npc => { npc.visible = npc.position.distanceToSquared(playerPos) <= cutoffSq; });
-            bosses.forEach(boss => { boss.visible = boss.position.distanceToSquared(playerPos) <= (500*500); });
-        }
-
-        function animate() {
-            if (isGameOver) { return; } requestAnimationFrame(animate); 
-            const delta = clock.getDelta(); frameCount++; const now = Date.now();
-            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); const newChunkKey = `${playerChunkX},${playerChunkZ}`; if (newChunkKey !== currentPlayerChunkKey) { updateWorldChunks(); currentPlayerChunkKey = newChunkKey; }
-            if (frameCount % 10 === 0) { optimizeRendering(); }
-            updateAim(); updateWorldState(delta); updateFlares(delta); 
-            if(!isTrading) { updatePlayer(delta); updateBullets(delta); updateDebris(delta); updateInteraction(); updateNPCs(delta); }
-            const frameMod = frameCount % 4;
-            if (playerInVehicle) { updateVehicles(delta); } else if (frameMod === 0) { updateVehicles(delta); }
-            if (frameMod === 1) updateRangedEnemies(delta); if (frameMod === 2) updateItems(delta); if (frameMod === 3) updateZombies(delta); 
-            updateBosses(delta, now, playerPos); updateHazardZones(now);
-            renderer.render(scene, camera);
-        }
-        
-        function createBuildingLoot(x, y, z) { if (Math.random() > 0.2) return; const lootTable = [ { type: 'weapon', name: 'M416' }, { type: 'weapon', name: 'AKM' }, { type: 'weapon', name: 'Beryl_M762' }, { type: 'weapon', name: 'SCAR-L' }, { type: 'weapon', name: 'SKS' }, { type: 'weapon', name: 'Kar98k' }, { type: 'weapon', name: 'M249' }, { type: 'weapon', name: 'UMP45' }, { type: 'weapon', name: 'Vector' }, { type: 'weapon', name: 'S1897' }, { type: 'item', name: '탄약', subtype: '5.56mm', amount: 60 }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 60 }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 40 }, { type: 'item', name: '탄약', subtype: '9mm', amount: 50 }, { type: 'item', name: '탄약', subtype: '12 Gauge', amount: 15 }, { type: 'item', name: '의료키트', amount: 1 }, { type: 'item', name: '의료키트', amount: 1 }, { type: 'item', name: '음식', amount: 1 }, { type: 'item', name: '에너지드링크', amount: 1 }, { type: 'item', name: '에너지드링크', amount: 1 } ]; const data = lootTable[Math.floor(Math.random() * lootTable.length)]; spawnItem(data, x, y, z); if (data.type === 'weapon') { const weaponData = WEAPON_DATABASE[data.name]; if (!weaponData.ammoType) return; const ammoType = weaponData.ammoType; const multiplier = Math.floor(Math.random() * 2) + 1; const ammoAmount = weaponData.magSize * multiplier; const ammoData = { type: 'item', name: '탄약', subtype: ammoType, amount: ammoAmount }; const angle = Math.random() * Math.PI * 2; const distance = 0.5 + Math.random() * 0.5; const offsetX = Math.cos(angle) * distance; const offsetZ = Math.sin(angle) * distance; spawnItem(ammoData, x + offsetX, y, z + offsetZ); } }
-        function createRandomLoot(x, z, y=0.5) { const lootTable = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 30 }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 30 }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 20 }, { type: 'item', name: '탄약', subtype: '9mm', amount: 30 }, { type: 'item', name: '탄약', subtype: '12 Gauge', amount: 10 }, { type: 'item', name: '의료키트', amount: 1 }, { type: 'item', name: '음식', amount: 1 }, { type: 'item', name: '에너지드링크', amount: 1 } ]; spawnItem(lootTable[Math.floor(Math.random() * lootTable.length)], x, y, z); }
-        function spawnItem(data, x, y, z) { let itemMesh; let color = 0xffffff; if (data.type === 'weapon') { const weaponData = WEAPON_DATABASE[data.name]; if (!weaponData) { console.error("스폰 오류: WEAPON_DATABASE에 없는 무기입니다:", data.name); return; } itemMesh = weaponData.model(); itemMesh.scale.set(0.5, 0.5, 0.5); itemMesh.rotation.y = Math.random() * Math.PI * 2; color = 0xff9d00; } else { if (data.name === '탄약') color = 0xffd700; else if (data.name === '의료키트') color = 0xff0000; else if (data.name === '음식') color = 0x00ff00; else if (data.name === '에너지드링크') color = 0x00ffff; itemMesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshLambertMaterial({ color })); } itemMesh.position.set(x, y, z); itemMesh.userData = data; itemMesh.userData.baseY = y; itemMesh.castShadow = false; scene.add(itemMesh); items.push(itemMesh); }
-        
-        function createWorldTree(x, z, yBase) {
-            const trunkGeo = new THREE.CylinderGeometry(4, 6, 40, 16); const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4a2e16 }); const trunk = new THREE.Mesh(trunkGeo, trunkMat); trunk.position.set(x, yBase + 20, z); trunk.castShadow = true; trunk.receiveShadow = true; trunk.userData = { health: 999999, maxHealth: 999999, type: 'object', originalColor: trunkMat.color.clone() }; scene.add(trunk); objects.push(trunk);
-            const leavesGeo = new THREE.SphereGeometry(25, 16, 16); const leavesMat = new THREE.MeshLambertMaterial({ color: 0x00ff00, emissive: 0x004400, emissiveIntensity: 0.2 }); const leaves = new THREE.Mesh(leavesGeo, leavesMat); leaves.position.set(x, yBase + 50, z); leaves.castShadow = true; leaves.userData = { health: 999999, maxHealth: 999999, type: 'object', originalColor: leavesMat.color.clone() }; scene.add(leaves); foliage.push(leaves);
-            const light = new THREE.PointLight(0x00ff00, 2, 60); light.position.set(x, yBase + 10, z); scene.add(light); showChat('시스템', '신비한 기운이 느껴집니다... (세계수 발견)');
-        }
-        
-        function collectTreeData(x, z, yBase, trunkMatrices, leafMatrices, trunkProxies, leafProxies) {
-            dummy.position.set(x, yBase + 3.75, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); trunkMatrices.push(dummy.matrix.clone());
-            const trunkProxy = new THREE.Mesh(sharedTrunkGeo, invisibleMat); trunkProxy.position.copy(dummy.position); trunkProxy.visible = true; trunkProxy.userData = { health: 20000, maxHealth: 20000, type: 'object', originalColor: sharedTrunkMat.color.clone() }; scene.add(trunkProxy); objects.push(trunkProxy); trunkProxies.push(trunkProxy);
-            dummy.position.set(x, yBase + 10, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); leafMatrices.push(dummy.matrix.clone());
-            const leafProxy = new THREE.Mesh(sharedLeafGeo, invisibleMat); leafProxy.position.copy(dummy.position); leafProxy.visible = true; leafProxy.userData = { health: 10000, maxHealth: 10000, type: 'object', originalColor: sharedLeafMat.color.clone() }; scene.add(leafProxy); objects.push(leafProxy); leafProxies.push(leafProxy);
-        }
-
-        // [수정] 돌맹이 데이터 수집 함수 - 충돌 박스 대폭 축소 (25%)
-        function collectRockData(x, z, yBase, rockMatrices, rockProxies) {
-            const radius = Math.random() * 2 + 1; 
+            gameState.hordeActive = true;
+            const warningEl = document.getElementById('horde-warning');
+            warningEl.style.opacity = '1';
+            showChat('시스템', '🚨 피의 밤이 시작되었습니다! 좀비들이 몰려옵니다!');
             
-            // 1. 눈에 보이는 돌 (회전 있음 - 시각적으로는 큼)
-            dummy.position.set(x, yBase + 1, z); 
-            dummy.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI); 
-            dummy.scale.set(radius, radius, radius); 
-            dummy.updateMatrix(); 
-            rockMatrices.push(dummy.matrix.clone());
+            // 호드 이벤트: 주변에 좀비 대량 스폰
+            const playerPos = gameState.position;
+            for(let i=0; i<15; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 30 + Math.random() * 20;
+                const x = playerPos.x + Math.cos(angle) * dist;
+                const z = playerPos.z + Math.sin(angle) * dist;
+                const y = getTerrainHeight(x, z);
+                createZombie(x, z, 300, y);
+                // 호드 좀비는 즉시 추적 상태
+                const zomb = zombies[zombies.length-1];
+                zomb.userData.state = 'chase';
+                zomb.userData.lastKnownPlayerPosition.copy(playerPos);
+            }
 
-            // 2. 물리 충돌용 돌 (회전 제거 & 크기 25%로 축소)
-            const rockProxy = new THREE.Mesh(sharedRockGeo, invisibleMat); 
-            rockProxy.position.copy(dummy.position); 
-            
-            // 회전 제거 (AABB 최적화)
-            // rockProxy.rotation.copy(dummy.rotation); 
-            
-            // [수정] 실제 크기의 25%로 설정 (거의 중앙만 충돌 판정)
-            rockProxy.scale.set(radius * 0.25, radius * 0.25, radius * 0.25); 
-            
-            rockProxy.visible = true; 
-            rockProxy.userData = { health: 30000, maxHealth: 30000, type: 'object', isRock: true, originalColor: sharedRockMat.color.clone() }; 
-            scene.add(rockProxy); 
-            objects.push(rockProxy); 
-            rockProxies.push(rockProxy);
-        }
-
-        function createChunkInstancedMeshes(matrices, geometry, material, proxies) {
-            if (matrices.length === 0) return; const mesh = new THREE.InstancedMesh(geometry, material, matrices.length); mesh.castShadow = true; if (geometry === sharedLeafGeo) mesh.castShadow = false; mesh.receiveShadow = true;
-            for (let i = 0; i < matrices.length; i++) { mesh.setMatrixAt(i, matrices[i]); const proxy = proxies[i]; proxy.userData.instancedMesh = mesh; proxy.userData.instanceId = i; } 
-            mesh.instanceMatrix.needsUpdate = true;
-            scene.add(mesh);
-        }
-        
-        function updateRangedEnemies(delta) { 
-            const now = Date.now(); const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position;
-            for (let index = rangedEnemies.length - 1; index >= 0; index--) {
-                const enemy = rangedEnemies[index]; if (!enemy || !enemy.parent) { rangedEnemies.splice(index, 1); continue; } 
-                const distSq = enemy.position.distanceToSquared(targetPos); const weaponType = WEAPON_DATABASE[enemy.userData.weapon].type; const isSniper = (weaponType === 'SR' || weaponType === 'DMR'); const activeRadSq = isSniper ? (500 * 500) : ACTIVE_RADIUS_SQ;
-                if (distSq > activeRadSq) { enemy.visible = false; continue; } else { enemy.visible = true; }
-                const data = enemy.userData; const weaponData = WEAPON_DATABASE[data.weapon]; 
-                
-                let zombieGroundY = -100; let validGroundHit = null; const biome = getBiome(enemy.position.x, enemy.position.z);
-                if (biome !== 'city') { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } else { raycaster.far = 20; raycaster.set(enemy.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const zombieIntersects = raycaster.intersectObjects(structures, true); validGroundHit = zombieIntersects.find(hit => hit.point.y < enemy.position.y + 2.0 && (hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.geometry.type === 'PlaneGeometry')); if (validGroundHit) { zombieGroundY = validGroundHit.point.y; } else { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } }
-
-                if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03; if (enemy.position.y <= zombieGroundY + 1.25 && data.velocityY < 0) { enemy.position.y = zombieGroundY + 1.25; data.isJumping = false; data.velocityY = 0; } } else { if (biome !== 'city' || validGroundHit) { enemy.position.y = zombieGroundY + 1.25; } }
-                if (!targetPos || !enemy || !enemy.position) continue; if (data.isReloading) { if (now - data.reloadStartTime > weaponData.reloadTime) { data.isReloading = false; data.magAmmo = weaponData.magSize; } continue; }
-                const distToPlayer = Math.sqrt(distSq); const heightDiff = targetPos.y - enemy.position.y; data.targetHeight = heightDiff; data.playerElevated = heightDiff > 3; const isSafeZone = (hasLeftSafeZone === 0); let hasLineOfSight = false; if (!isSafeZone) { hasLineOfSight = checkLineOfSight(enemy.position, targetPos); } if (hasLineOfSight) { data.lastKnownPlayerPosition.copy(targetPos); if (data.state === 'wander' || data.state === 'idle') { data.state = 'chase'; } }
-                const moved = enemy.position.distanceTo(data.lastPosition); if (!data.isJumping && moved < 0.05 * delta && (data.state === 'chase' || data.state === 'reposition')) { data.stuckTime += delta * 1000; } else { data.stuckTime = 0; } data.lastPosition.copy(enemy.position);
-                if (data.consecutiveMisses > 5 && !data.isRepositioning) { data.state = 'reposition'; data.isRepositioning = true; data.repositionEndTime = now + 3000; data.consecutiveMisses = 0; } else if (!isSafeZone && !data.isRepositioning && hasLineOfSight && distToPlayer <= data.attackRange) { data.state = 'attack'; } else if (!isSafeZone && !data.isRepositioning && distToPlayer <= data.detectionRange && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0)) { data.state = 'chase'; } else if (data.stuckTime > data.stuckThreshold) { data.state = 'stuck'; } else if (!data.isRepositioning && data.state !== 'attack' && data.state !== 'chase') { data.state = 'wander'; }
-                switch (data.state) { case 'reposition': handleRepositionState(enemy, data, now, delta, targetPos); break; case 'portal': handlePortalState(enemy, data, now, delta); break; case 'attack': if(!data.isJumping) applyZombieMovement(enemy, new THREE.Vector3(0,0,0)); enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z); const enemyGun = enemy.getObjectByName('enemyGun'); if (enemyGun) { const dx = targetPos.x - enemy.position.x; const dz = targetPos.z - enemy.position.z; const horizontalDist = Math.sqrt(dx*dx + dz*dz); const dy = targetPos.y - (enemy.position.y + 0.8); let pitch = Math.atan2(dy, horizontalDist); enemyGun.rotation.x = -pitch; } if (!hasLineOfSight) { data.state = 'chase'; break; } if (data.outOfAmmo) { if (now - data.lastShotTime > 2000) { attackPlayer(5); data.lastShotTime = now; } } else if (data.magAmmo > 0) { if (now - data.lastShotTime > data.fireRate) { rangedEnemyShoot(enemy); data.magAmmo--; data.lastShotTime = now; } } else if (data.reloadsLeft > 0) { data.isReloading = true; data.reloadStartTime = now; data.reloadsLeft--; } break; case 'chase': handleChaseState(enemy, data, now, delta, hasLineOfSight); break; case 'stuck': handleStuckState(enemy, data, delta); break; case 'wander': handleWanderState(enemy, data, now, delta); break; case 'knockback': handleKnockbackState(enemy, data, delta); break; }
-            } 
-        }
-
-        function handleKnockbackState(enemy, data, delta) { data.knockbackVelocity.y -= 20 * delta; data.knockbackVelocity.x *= 0.95; data.knockbackVelocity.z *= 0.95; const moveStep = data.knockbackVelocity.clone().multiplyScalar(delta); const proposedPosition = enemy.position.clone().add(moveStep); let collided = false; const enemyBox = new THREE.Box3().setFromObject(enemy); enemyBox.translate(moveStep); for (const object of objects) { if (object.geometry.type === 'PlaneGeometry' || object.userData.type === 'floor' || object.userData.type === 'roof') continue; const distSq = proposedPosition.distanceToSquared(object.position); if (distSq > 100) continue; if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); const objectBox = new THREE.Box3().setFromObject(object); if (enemyBox.intersectsBox(objectBox)) { collided = true; break; } } const terrainY = getTerrainHeight(enemy.position.x, enemy.position.z); let groundY = terrainY + (enemy.userData.type === 'zombie' ? 0.9 : 1.25); raycaster.set(enemy.position.clone().add(new THREE.Vector3(0, 5, 0)), new THREE.Vector3(0, -1, 0)); const groundIntersects = raycaster.intersectObjects(objects, true); const validHit = groundIntersects.find(hit => hit.object.userData.type === 'floor' || hit.object.userData.type === 'roof'); if(validHit && validHit.point.y > terrainY) { groundY = validHit.point.y + (enemy.userData.type === 'zombie' ? 0.9 : 1.25); } if (collided) { data.knockbackVelocity.set(0, 0, 0); data.state = 'chase'; } else { enemy.position.add(moveStep); if (enemy.position.y <= groundY) { enemy.position.y = groundY; data.knockbackVelocity.y = 0; if (Math.abs(data.knockbackVelocity.x) < 0.5 && Math.abs(data.knockbackVelocity.z) < 0.5) { data.state = 'chase'; } } } }
-        function handleRepositionState(enemy, data, now, delta, targetPos) { const distToPlayer = enemy.position.distanceTo(targetPos); if (now > data.repositionEndTime || distToPlayer < 5.0 || data.stuckTime > 1000) { data.isRepositioning = false; data.state = 'attack'; return; } const direction = targetPos.clone().sub(enemy.position).normalize(); direction.y = 0; if (data.stuckTime > 100) { direction.x += (Math.random() - 0.5) * 0.5; direction.z += (Math.random() - 0.5) * 0.5; direction.normalize(); } const velocity = direction.multiplyScalar(data.speed * 1.2 * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z); }
-
-        function updateZombies(delta) {
-            const now = Date.now(); const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position; const dayDamagePerSec = 100 / 60; const damageTick = (!isNight) ? (dayDamagePerSec * delta * 4) : 0;
-            for (let index = zombies.length - 1; index >= 0; index--) {
-                const enemy = zombies[index]; if (!enemy || !enemy.parent) { zombies.splice(index, 1); continue; } 
-                const data = enemy.userData;
-                let currentTargetPos = targetPos; let isTargetPlayer = true;
-                if (data.customTarget) { if (data.customTarget.parent && data.customTarget.userData.health > 0) { currentTargetPos = data.customTarget.position; isTargetPlayer = false; } else { data.customTarget = null; } }
-
-                const distSq = enemy.position.distanceToSquared(currentTargetPos); 
-                const distToPlayerSq = enemy.position.distanceToSquared(targetPos);
-                const activeDistSq = data.isTroll ? (600 * 600) : ACTIVE_RADIUS_SQ;
-                if (distToPlayerSq > activeDistSq) { enemy.visible = false; continue; } else { enemy.visible = true; }
-                if (isNight) { data.speed = 40.04; } else { data.speed = data.originalSpeed; }
-                if (damageTick > 0 && data.health > 0 && !data.isTroll && !data.isOrc) { data.health -= damageTick; const healthPercent = Math.max(0, data.health / data.maxHealth); enemy.material.color.copy(data.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); if (data.health <= 0) { handleZombieDeath(enemy, index); continue; } }
-                if (data.health <= 0) { handleZombieDeath(enemy, index); continue; }
-                
-                let zombieGroundY = -100; let validGroundHit = null; const biome = getBiome(enemy.position.x, enemy.position.z);
-                if (biome !== 'city') { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } else { raycaster.far = 20; raycaster.set(enemy.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const zombieIntersects = raycaster.intersectObjects(structures, true); validGroundHit = zombieIntersects.find(hit => hit.point.y < enemy.position.y + 2.0 && (hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.geometry.type === 'PlaneGeometry')); if (validGroundHit) { zombieGroundY = validGroundHit.point.y; } else { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } }
-
-                let heightOffset = 0.9; if (data.isTroll) heightOffset = 1.35; if (data.isOrc) heightOffset = data.name.includes('워치프') ? 1.35 : 1.0;
-                if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03; if (enemy.position.y <= zombieGroundY + heightOffset && data.velocityY < 0) { enemy.position.y = zombieGroundY + heightOffset; data.isJumping = false; data.velocityY = 0; } } else { if (biome !== 'city' || validGroundHit) { enemy.position.y = zombieGroundY + heightOffset; } }
-                
-                if (!currentTargetPos || !enemy || !enemy.position) continue; const distToTarget = Math.sqrt(distSq); const heightDiff = currentTargetPos.y - enemy.position.y; data.targetHeight = heightDiff; data.playerElevated = isTargetPlayer && heightDiff > 3; 
-                const isSafeZone = isTargetPlayer && (hasLeftSafeZone === 0); const isProvoked = data.isProvoked;
-                if (now - data.lastPortalCheck > data.portalCheckInterval) { data.lastPortalCheck = now; if (gameState.inHighrise && isTargetPlayer && distToTarget < 50 && Math.abs(heightDiff) > 3.5) { data.targetPortal = findNearestPortalToPlayer(enemy.position); } else { data.targetPortal = null; } }
-                let hasLineOfSight = false; if (!isSafeZone || isProvoked) { hasLineOfSight = checkLineOfSight(enemy.position, currentTargetPos); } if (hasLineOfSight) { data.lastKnownPlayerPosition.copy(currentTargetPos); }
-                const moved = enemy.position.distanceTo(data.lastPosition); if (!data.isJumping && moved < 0.1 * delta && (data.state === 'chase' || data.state === 'portal')) { data.stuckTime += delta * 1000; } else { data.stuckTime = 0; } data.lastPosition.copy(enemy.position);
-                
-                if (isTargetPlayer && data.targetPortal && gameState.inHighrise && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && data.targetPortal.exit.y > data.targetPortal.entrance.y) { data.state = 'portal'; } 
-                else if (((!data.isOrc && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
-                else if (isProvoked || (!data.isOrc && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
-                else if (data.stuckTime > data.stuckThreshold) { data.state = 'stuck'; } else { data.state = 'wander'; }
-                
-                switch (data.state) { case 'portal': handlePortalState(enemy, data, now, delta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': handleChaseState(enemy, data, now, delta, hasLineOfSight, currentTargetPos); break; case 'stuck': handleStuckState(enemy, data, delta); break; case 'wander': handleWanderState(enemy, data, now, delta); break; case 'knockback': handleKnockbackState(enemy, data, delta); break; }
-            } 
-        }
-
-        // [수정] 추적 상태 함수 (타겟 위치 인자 추가)
-        function handleChaseState(enemy, data, now, delta, hasLineOfSight, targetPos) { 
-            const dest = hasLineOfSight ? (targetPos || data.lastKnownPlayerPosition) : data.lastKnownPlayerPosition;
-            if (now - data.lastPathUpdate > data.pathUpdateInterval) { data.path = findSimplePath(enemy.position, dest); data.currentPathIndex = 0; data.lastPathUpdate = now; } 
-            let moveTarget = dest; if (data.path && data.path.length > data.currentPathIndex) { moveTarget = data.path[data.currentPathIndex]; if (enemy.position.distanceTo(moveTarget) < 1.0) { data.currentPathIndex++; } } 
-            const direction = moveTarget.clone().sub(enemy.position).normalize(); direction.y = 0; if (!hasLineOfSight) { direction.x += (Math.random() - 0.5) * 0.2; direction.z += (Math.random() - 0.5) * 0.2; direction.normalize(); } 
-            const velocity = direction.multiplyScalar(data.speed * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(moveTarget.x, enemy.position.y, moveTarget.z); 
-        }
-
-        // [수정] 공격 상태 함수 (타겟 공격)
-        function handleAttackState(enemy, data, now, targetPos, isTargetPlayer) { 
-            if(!targetPos) targetPos = data.lastKnownPlayerPosition;
-            enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z); 
-            if (now - data.lastAttackTime > data.attackCooldown) { 
-                data.lastAttackTime = now; const dist = enemy.position.distanceTo(targetPos); 
-                if (dist <= data.attackRange + 1.0) { 
-                    if (isTargetPlayer) { attackPlayer(10); } 
-                    else if (data.customTarget && data.customTarget.userData) { 
-                        const dmg = 20; data.customTarget.userData.health -= dmg; showDamage(data.customTarget.position, dmg, '#ffaa00'); 
-                    }
-                } 
-            } 
-        }
-
-        function findNearestPortalToPlayer(zombiePosition) { let nearestPortal = null; let minDistance = Infinity; portals.forEach(portal => { if (!portal.buildingId.startsWith('highrise_')) return; const distZombieToEntrance = zombiePosition.distanceTo(portal.entrance); if (distZombieToEntrance < minDistance) { minDistance = distZombieToEntrance; nearestPortal = portal; } }); if (minDistance > 50) { return null; } return nearestPortal; }
-        function checkEnemyCollision(enemy) { const enemyRadius = 0.5; const enemyBox = new THREE.Box3(new THREE.Vector3(enemy.position.x - enemyRadius, enemy.position.y, enemy.position.z - enemyRadius), new THREE.Vector3(enemy.position.x + enemyRadius, enemy.position.y + 2, enemy.position.z + enemyRadius)); for (const object of objects) { if (object.geometry.type === 'PlaneGeometry' || object.userData.type === 'roof') continue; const distSq = enemy.position.distanceToSquared(object.position); if (distSq > 100) continue; if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); const objectBox = new THREE.Box3().setFromObject(object); if (enemyBox.intersectsBox(objectBox)) { let hitSteppable = false; if (object.userData.type === 'floor') { if (enemy.position.y >= objectBox.max.y - 0.1) { continue; } hitSteppable = true; } return { collided: true, hitSteppable: hitSteppable }; } } return { collided: false, hitSteppable: false }; }
-        function applyZombieMovement(enemy, velocity) { const data = enemy.userData; const startX = enemy.position.x; enemy.position.x += velocity.x; const colX = checkEnemyCollision(enemy); if (colX.collided) { enemy.position.x = startX; } const startZ = enemy.position.z; enemy.position.z += velocity.z; const colZ = checkEnemyCollision(enemy); if (colZ.collided) { enemy.position.z = startZ; } if ((colX.collided && colX.hitSteppable) || (colZ.collided && colZ.hitSteppable)) { if (!data.isJumping) { data.isJumping = true; data.velocityY = 0.4; } } }
-        function findSimplePath(start, end) { const path = []; const mid = start.clone().lerp(end, 0.5); const offset = new THREE.Vector3((Math.random() - 0.5) * 5, 0, (Math.random() - 0.5) * 5); mid.add(offset); path.push(end.clone()); return path; }
-        function handleWanderState(enemy, data, now, delta) { if (now - data.lastMoveTime > 3000 || enemy.position.distanceTo(data.wanderTarget) < 2) { data.lastMoveTime = now; const angle = Math.random() * Math.PI * 2; const dist = 10 + Math.random() * 20; data.wanderTarget.set(enemy.position.x + Math.cos(angle) * dist, enemy.position.y, enemy.position.z + Math.sin(angle) * dist); } const direction = data.wanderTarget.clone().sub(enemy.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * 0.5 * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(data.wanderTarget.x, enemy.position.y, data.wanderTarget.z); }
-        function handleStuckState(enemy, data, delta) { if (!data.isJumping) { data.isJumping = true; data.velocityY = 0.5; } const randomDir = new THREE.Vector3(Math.random() - 0.5, 0, Math.random() - 0.5).normalize(); const velocity = randomDir.multiplyScalar(data.speed * delta * 1.5); enemy.position.add(velocity); if (Math.random() < 0.1) { data.stuckTime = 0; data.state = 'chase'; } }
-        function handlePortalState(enemy, data, now, delta) { if (!data.targetPortal) { data.state = 'chase'; return; } const portal = data.targetPortal; const distToEntrance = enemy.position.distanceTo(portal.entrance); if (distToEntrance > 1.5) { const direction = portal.entrance.clone().sub(enemy.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * delta); applyZombieMovement(enemy, velocity); enemy.lookAt(portal.entrance.x, enemy.position.y, portal.entrance.z); } else { if (now - data.lastPortalUse > data.portalCooldown) { enemy.position.copy(portal.exit); data.lastPortalUse = now; data.state = 'chase'; } } }
-        
-        // [수정] 좀비 처치 시 경험치 획득 로직 추가
-        function handleZombieDeath(enemy, index) { 
-            if (questState.status === 1 && questState.type === 'hunt_zombie') { questState.currentAmount++; if (questState.currentAmount >= questState.targetAmount) { questState.currentAmount = questState.targetAmount; questState.status = 2; showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); } updateQuestUI(); } 
-            gameStats.zombieKills++; checkAchievements(); 
-            addMoloch(Math.floor(Math.random() * 5) + 1); 
-            
-            // 경험치 획득
-            let xpGain = 10;
-            if (enemy.userData.isTroll) xpGain = 50;
-            if (enemy.userData.isOrc) xpGain = 20;
-            gainXP(xpGain);
-
-            showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
-            createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); zombies.splice(index, 1); if (Math.random() < 0.5) { const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); } 
-        }
-        
-        function checkLineOfSight(fromPos, toPos) { const eyePos = fromPos.clone().add(new THREE.Vector3(0, 2.0, 0)); const targetEyePos = toPos.clone().add(new THREE.Vector3(0, 1.0, 0)); const direction = targetEyePos.clone().sub(eyePos).normalize(); const distance = eyePos.distanceTo(targetEyePos); raycaster.set(eyePos, direction); raycaster.far = distance; const intersects = raycaster.intersectObjects(objects, true); const hit = intersects.find(i => i.object.geometry.type !== 'PlaneGeometry' && i.object.userData.type !== 'roof' && i.object.userData.type !== 'floor' && i.distance > 1.0 ); return !hit || hit.distance > distance - 1; }
-        function attackPlayer(damage) { if (isGameOver) return; if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } else { gameState.health -= damage; showPlayerDamageEffect(); updateUI(); if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } } }
-        function updateItems(delta) { 
-            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
-            items.forEach(item => { if (item.position.distanceToSquared(playerPos) > ACTIVE_RADIUS_SQ) { item.visible = false; return; } item.visible = true; if (item.userData.type !== 'weapon') { item.rotation.y += 0.02; } if (item.userData.isGrounded) return; raycaster.far = 500; raycaster.set(item.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const itemIntersects = raycaster.intersectObjects(objects, true); let targetY = item.position.y; if (itemIntersects.length > 0) { const firstHit = itemIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object'); if(firstHit) { targetY = firstHit.point.y + 0.5; } } if (Math.abs(item.position.y - targetY) < 0.05) { item.position.y = targetY; item.userData.isGrounded = true; } else { item.position.y = THREE.MathUtils.lerp(item.position.y, targetY, 0.1); } item.userData.baseY = item.position.y; });
+            setTimeout(() => {
+                warningEl.style.opacity = '0';
+                gameState.hordeActive = false;
+                gameState.lastHordeTime = gameTime;
+                showChat('시스템', '좀비 떼가 물러갔습니다...');
+            }, 30000); // 30초 지속
         }
         
         window.addEventListener('load', init);
