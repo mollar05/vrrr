@@ -825,17 +825,67 @@
             let groundColor = 0x3a5f3a; if (centerBiome === 'mountain') groundColor = 0x5a5a5a; else if (centerBiome === 'forest') groundColor = 0x1a3f1a; else if (centerBiome === 'city') groundColor = 0x222222; else if (centerBiome === 'volcano') groundColor = 0x111111; 
             const ground = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.9 })); ground.rotation.x = -Math.PI / 2; ground.position.set(chunkOriginX, 0, chunkOriginZ); ground.receiveShadow = true; scene.add(ground); objects.push(ground); structures.push(ground);
             
-            if (centerBiome === 'volcano') { 
-                const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE); 
+            // [MODIFIED] 용암 생성 로직 개선 (청크 경계 문제 해결 및 흐르는 효과)
+            // 기존: 중심 바이옴이 화산일 때만 평평한 판 생성 -> 변경: 모든 청크에서 버텍스 단위로 검사하여 지형 적응형 용암 생성
+            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 32, 32);
+            const lavaVerts = lavaGeo.attributes.position.array;
+            let hasLava = false;
+
+            for (let i = 0; i < lavaVerts.length; i += 3) {
+                const wx = lavaVerts[i] + chunkOriginX;
+                const wz = chunkOriginZ - lavaVerts[i + 1]; // Plane 회전 고려 (local Y가 world -Z)
+                
+                const tHeight = getTerrainHeight(wx, wz);
+                const biome = getBiome(wx, wz);
+                
+                let lHeight = -500; // 기본값: 지하로 숨김
+
+                // 화산 지대이거나, 낮은 지대(용암 웅덩이 가능성)
+                if (biome === 'volcano') {
+                    if (tHeight < LAVA_LEVEL) {
+                        // 1. 웅덩이: 지형이 용암 수위보다 낮으면 수위 유지
+                        lHeight = LAVA_LEVEL;
+                    } else {
+                        // 2. 흘러내림: 지형이 높아도 노이즈에 따라 용암 줄기 생성
+                        // 흐름 노이즈 생성 (크기 40 정도로 조정)
+                        const flowNoise = simplex.noise2D(wx / 40, wz / 40);
+                        // 특정 패턴(줄기)에만 용암 배치
+                        if (flowNoise > 0.3) {
+                            lHeight = tHeight + 0.2; // 지형 바로 위를 덮음
+                        } else {
+                            lHeight = tHeight - 3.0; // 나머지는 지형 바로 아래로 숨김 (수직 절벽 방지)
+                        }
+                    }
+                } else {
+                    // 화산이 아닌 곳은 지형 아래로 숨김
+                    lHeight = tHeight - 3.0; 
+                }
+
+                // PlaneGeometry는 XY 평면이므로 Z값을 높이로 사용 (회전 전 기준)
+                lavaVerts[i + 2] = lHeight;
+                
+                if (lHeight > -100) hasLava = true;
+            }
+
+            lavaGeo.computeVertexNormals();
+
+            if (hasLava) {
                 const lavaMat = new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0.8, side: THREE.DoubleSide }); 
                 const lava = new THREE.Mesh(lavaGeo, lavaMat); 
                 lava.rotation.x = -Math.PI / 2; 
-                lava.position.set(chunkOriginX, LAVA_LEVEL, chunkOriginZ); 
+                // 높이(Y)는 이미 geometry의 Z값(회전 후 Y)에 반영되었으므로 position.y는 0
+                lava.position.set(chunkOriginX, 0, chunkOriginZ); 
                 lava.userData = { type: 'lava', isSteppable: true };
                 scene.add(lava); lavaPlanes.push(lava); objects.push(lava);
                 registerChunkObject(chunkKey, lava);
-                const lavaLight = new THREE.PointLight(0xff4400, 1, 100); 
-                lavaLight.position.set(chunkOriginX, LAVA_LEVEL + 5, chunkOriginZ); lavaLight.castShadow = false; scene.add(lavaLight); 
+                
+                // 용암 조명은 화산 중심부 근처에만 추가 (성능 최적화)
+                if (centerBiome === 'volcano' && Math.random() > 0.5) {
+                    const lavaLight = new THREE.PointLight(0xff4400, 1, 80); 
+                    lavaLight.position.set(chunkOriginX, LAVA_LEVEL + 5, chunkOriginZ); 
+                    lavaLight.castShadow = false; 
+                    scene.add(lavaLight); 
+                }
             }
 
             const chunkCityGrayMatrices = []; const chunkCityBrownMatrices = []; const chunkRoofMatrices = []; const chunkCityGrayProxies = []; const chunkCityBrownProxies = []; const chunkRoofProxies = [];
