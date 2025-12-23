@@ -130,6 +130,14 @@
         #game-over-text { font-size: 64px; font-weight: bold; color: #ff4444; text-shadow: 3px 3px 10px #000; }
         #restart-button { margin-top: 40px; padding: 15px 30px; font-size: 20px; color: white; background: #ff4444; border: none; border-radius: 10px; cursor: pointer; text-transform: uppercase; transition: background 0.3s, transform 0.1s; }
         #restart-button:hover { background: #ff6666; transform: scale(1.05); }
+        
+        /* [NEW] 엔딩 화면 스타일 */
+        #ending-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(200, 240, 255, 0.9); display: none; flex-direction: column; justify-content: center; align-items: center; color: #333; z-index: 3000; animation: fadeIn 2s ease-in; }
+        #ending-title { font-size: 80px; font-weight: 900; color: #00aaff; text-shadow: 2px 2px 10px rgba(255,255,255,0.8); margin-bottom: 20px; letter-spacing: 5px; }
+        #ending-subtitle { font-size: 40px; font-weight: bold; color: #555; margin-bottom: 40px; }
+        #ending-stats { font-size: 24px; color: #444; background: rgba(255,255,255,0.6); padding: 20px; border-radius: 10px; border: 2px solid #fff; }
+        #ending-number { font-size: 20px; color: #888; margin-top: 50px; font-family: monospace; }
+        
         #trade-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(0, 0, 0, 0.9); border: 2px solid #ffd700; padding: 20px; border-radius: 10px; color: white; z-index: 2000; width: 400px; display: none; flex-direction: column; gap: 15px; box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
         #trade-modal h2 { color: #ffd700; text-align: center; margin-bottom: 10px; font-size: 24px; }
         #trade-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
@@ -312,6 +320,18 @@
             <div id="game-over-text">GAME OVER</div>
             <button id="restart-button">다시 시작</button>
         </div>
+        
+        <!-- [NEW] 엔딩 화면 -->
+        <div id="ending-screen">
+            <div id="ending-title">탈출 성공</div>
+            <div id="ending-subtitle">이 구역의 좀비를 대부분 소탕했습니다!</div>
+            <div id="ending-stats">
+                <div>처치한 좀비: <span id="end-kill-count">0</span></div>
+                <div>획득한 몰록: <span id="end-moloch-count">0</span></div>
+            </div>
+            <div id="ending-number">Ending 10</div>
+            <button id="restart-button" onclick="location.reload()" style="background:#00aaff; margin-top:20px;">새로운 시작</button>
+        </div>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -447,7 +467,8 @@
             statPoints: 0,
             level: 1,
             xp: 0,
-            xpToNextLevel: 100
+            xpToNextLevel: 100,
+            isEnding: false // [NEW] 엔딩 진행 상태
         };
 
         function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10); }
@@ -1916,6 +1937,25 @@
         }
 
         function updatePlayer(delta) {
+            // [NEW] 엔딩 시퀀스 처리 (승천)
+            if (gameState.isEnding) {
+                // 중력 무시, 조작 무시, 위로 상승
+                gameState.position.y += delta * 20.0; // 초당 20m 상승
+                
+                // 시선 강제 고정 (위쪽 혹은 아래쪽) - 여기선 아래를 내려다보게 처리
+                camera.rotation.x = -Math.PI / 2.5; 
+                
+                // 카메라 업데이트
+                camera.position.copy(gameState.position);
+                updateUI();
+                
+                // 1000m 도달 시 엔딩 화면 출력
+                if (gameState.position.y >= 1000) {
+                    showEndingScreen();
+                }
+                return; // 이후 물리/이동 로직 스킵
+            }
+
             const maxStamina = getMaxStamina();
             const maxHealth = getMaxHealth();
             if (!playerInVehicle && controls.sprint && (controls.moveForward || controls.moveBackward || controls.moveLeft || controls.moveRight)) { if (playerStamina > STAMINA_THRESHOLD) { playerStamina = Math.max(0, playerStamina - STAMINA_DRAIN_RATE * delta); } else { controls.sprint = false; } } else { playerStamina = Math.min(maxStamina, playerStamina + STAMINA_RECOVERY_RATE * delta); }
@@ -2327,7 +2367,17 @@
                 data.lastAttackTime = now; const dist = enemy.position.distanceTo(targetPos); 
                 if (dist <= data.attackRange + 1.0) { 
                     if (isTargetPlayer) { 
-                        attackPlayer(10); 
+                        // [MODIFIED] 킬 수에 따른 난이도 스케일링 (100킬당 데미지 +10)
+                        const difficultyBonus = Math.floor(gameStats.zombieKills / 100) * 10;
+                        
+                        // 몬스터 종류별 기본 데미지 설정
+                        let baseDamage = 10; // 기본 좀비
+                        if (data.isOrc) baseDamage = 15; // 오크는 좀 더 강함
+                        if (data.isTroll) baseDamage = 25; // 트롤은 훨씬 강함
+                        if (data.name && data.name.includes('워치프')) baseDamage = 30; // 워치프
+
+                        const totalDamage = baseDamage + difficultyBonus;
+                        attackPlayer(totalDamage); 
                     } else if (data.customTarget && data.customTarget.userData) { 
                         // [MODIFIED] 몬스터 간 전투 (Mob vs Mob)
                         const dmg = 20; 
@@ -2368,6 +2418,12 @@
                     updateQuestUI(); 
                 } 
                 gameStats.zombieKills++; checkAchievements(); 
+                
+                // [NEW] 1000킬 달성 시 엔딩 트리거
+                if (gameStats.zombieKills >= 1000 && !gameState.isEnding) {
+                    startEndingSequence();
+                }
+
                 addMoloch(Math.floor(Math.random() * 5) + 1); 
                 let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; 
                 gainXP(xpGain); showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
@@ -2377,6 +2433,45 @@
                     const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); 
                 } 
             }
+        }
+
+        // [NEW] 엔딩 시퀀스 함수들
+        function startEndingSequence() {
+            gameState.isEnding = true;
+            document.exitPointerLock(); // 마우스 커서 표시
+            
+            showChat('시스템', '================================');
+            showChat('시스템', '좀비 1,000마리 처치 달성!');
+            showChat('시스템', '이 구역의 위협이 대부분 제거되었습니다.');
+            
+            setTimeout(() => {
+                showChat('구조대', '여기는 구조 헬기 알파팀. 생존 신호를 포착했다!');
+                showChat('구조대', '지금 즉시 구출하겠다. 가만히 있어라!');
+            }, 1000);
+            
+            setTimeout(() => {
+                showChat('시스템', '하늘에서 내려온 견인 광선이 당신을 감쌉니다...');
+            }, 3000);
+
+            // 승천 효과를 위한 빛기둥 생성 (선택 사항)
+            const beamGeo = new THREE.CylinderGeometry(2, 2, 2000, 16);
+            const beamMat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.copy(gameState.position);
+            beam.position.y += 1000;
+            scene.add(beam);
+        }
+
+        function showEndingScreen() {
+            // 애니메이션 루프 중지 (선택 사항, 여기선 계속 돌리되 UI만 덮음)
+            // isGameOver = true; // 게임 오버 상태로 만들어 조작 완전 차단
+            
+            document.exitPointerLock();
+            const screen = document.getElementById('ending-screen');
+            document.getElementById('end-kill-count').textContent = gameStats.zombieKills;
+            document.getElementById('end-moloch-count').textContent = gameStats.totalMolochEarned;
+            
+            screen.style.display = 'flex';
         }
         
         function checkLineOfSight(fromPos, toPos) { const eyePos = fromPos.clone().add(new THREE.Vector3(0, 2.0, 0)); const targetEyePos = toPos.clone().add(new THREE.Vector3(0, 1.0, 0)); const direction = targetEyePos.clone().sub(eyePos).normalize(); const distance = eyePos.distanceTo(targetEyePos); raycaster.set(eyePos, direction); raycaster.far = distance; 
