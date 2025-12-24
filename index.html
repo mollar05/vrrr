@@ -1691,6 +1691,20 @@
         function renderTradeItems() { 
             const list = document.getElementById('trade-list'); list.innerHTML = ''; 
             
+            // [NEW] 백신 보유 시 판매 옵션 추가 (엔딩 7 트리거)
+            if (gameState.hasVaccine) {
+                const vaccineDiv = document.createElement('div');
+                vaccineDiv.className = 'trade-item';
+                vaccineDiv.style.border = '1px solid #00ff00';
+                vaccineDiv.style.marginBottom = '15px';
+                vaccineDiv.style.background = 'rgba(0, 255, 0, 0.1)';
+                vaccineDiv.innerHTML = `
+                    <span style="color:#00ff00; font-weight:bold;">[히든] 백신 판매</span> 
+                    <button class="sell-btn" style="background-color:#333; border:1px solid #00ff00;" onclick="triggerEnding7()">판매 (게임종료)</button>
+                `;
+                list.appendChild(vaccineDiv);
+            }
+
             // [NEW] 스코프 업그레이드 상점
             const scopeHeader = document.createElement('h3');
             scopeHeader.style.color = '#00ff00';
