@@ -2554,7 +2554,10 @@
             const visualDist = 2000; sunMesh.position.set(playerPos.x + cosTheta * visualDist, playerPos.y + sunHeight * visualDist, playerPos.z); moonMesh.position.set(playerPos.x - cosTheta * visualDist, playerPos.y - sunHeight * visualDist, playerPos.z); moonMesh.rotation.y += delta * 0.05; sunMesh.lookAt(playerPos); moonMesh.lookAt(playerPos);
             
             const lightIntensity = Math.max(0.05, sunHeight); sun.intensity = lightIntensity * 0.8 + 0.1; 
-            let ambientBase = Math.max(0.1, lightIntensity * 0.4);
+            
+            // [MODIFIED] 밤 최저 밝기를 0.1에서 0.2로 약 10% 상향 조정
+            let ambientBase = Math.max(0.2, lightIntensity * 0.4);
+            
             const nightVisionBonus = gameState.stats.perception * 0.005; 
             scene.ambientLight.intensity = Math.min(1.0, ambientBase + nightVisionBonus); 
             
