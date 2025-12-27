@@ -454,7 +454,8 @@
         const BASE_PLAYER_HEALTH = 1000;
         const BASE_PLAYER_STAMINA = 100;
         let playerStamina = 100; 
-        const STAMINA_RECOVERY_RATE = 1.1; const STAMINA_DRAIN_RATE = 15; const JUMP_STAMINA_COST = 15; const STAMINA_THRESHOLD = 5;
+        // [MODIFIED] 점프 스태미나 소모량을 15에서 2로 변경
+        const STAMINA_RECOVERY_RATE = 1.1; const STAMINA_DRAIN_RATE = 15; const JUMP_STAMINA_COST = 2; const STAMINA_THRESHOLD = 5;
 
         let gameState = {
             health: BASE_PLAYER_HEALTH, moloch: 0, 
