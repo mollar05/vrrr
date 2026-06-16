@@ -179,6 +179,27 @@
         .zoom-label { font-size: 12px; color: #aaa; margin-right: 5px; }
 
         @keyframes damage-float { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-50px); opacity: 0; } }
+        
+        /* NPC 이름표 스타일 */
+        .npc-nametag {
+            position: fixed;
+            pointer-events: none;
+            z-index: 500;
+            text-align: center;
+            transform: translateX(-50%);
+            white-space: nowrap;
+        }
+        .npc-nametag-inner {
+            background: rgba(0, 0, 0, 0.65);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 4px;
+            padding: 2px 8px;
+            color: #00ff99;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-size: 13px;
+            font-weight: bold;
+            text-shadow: 0 0 6px #00ff99;
+        }
     </style>
 </head>
 <body>
@@ -489,11 +510,14 @@
             if (gameState.xp >= gameState.xpToNextLevel) {
                 gameState.xp -= gameState.xpToNextLevel;
                 gameState.level++;
-                gameState.statPoints++; 
-                gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * 1.5);
+                // 레벨업 시 스탯 포인트 3점 지급
+                const pointsGained = 3;
+                gameState.statPoints += pointsGained; 
+                // 다음 레벨 필요 XP: 레벨이 오를수록 가파르게 증가
+                gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * (1.8 + gameState.level * 0.05));
                 gameState.health = getMaxHealth();
                 playerStamina = getMaxStamina();
-                showChat('시스템', `레벨 업! 현재 레벨: ${gameState.level} (스탯 포인트 +1)`);
+                showChat('시스템', `🎉 레벨 업! 현재 레벨: ${gameState.level} (스탯 포인트 +${pointsGained}, 다음 레벨까지: ${gameState.xpToNextLevel} XP)`);
                 checkLevelUp();
             }
             updateUI();
@@ -604,6 +628,42 @@
             use(entityId, currentTime) { this.lastUsedTime.set(entityId, currentTime); }
         }
         function createPortal(entrancePos, exitPos, buildingId) { const portal = new Portal(entrancePos, exitPos, buildingId); portals.push(portal); return portal; }
+
+        // ─── 방랑 상인 시스템 ─────────────────────────────────────────────────
+        let wanderingMerchantSpawned = false; // 현재 청크에 방랑 상인이 있는지
+        let currentWanderingMerchant = null;
+
+        function trySpawnWanderingMerchant(chunkX, chunkZ) {
+            // 스폰(0,0) 청크에선 이미 고정 상인이 있으므로 스킵
+            if (chunkX === 0 && chunkZ === 0) return;
+            // 이전 방랑 상인 제거
+            if (currentWanderingMerchant) {
+                if (currentWanderingMerchant.userData._nametagEl) {
+                    document.body.removeChild(currentWanderingMerchant.userData._nametagEl);
+                }
+                scene.remove(currentWanderingMerchant);
+                const idx = npcs.indexOf(currentWanderingMerchant);
+                if (idx !== -1) npcs.splice(idx, 1);
+                currentWanderingMerchant = null;
+            }
+            // 1% 확률로 방랑 상인 등장
+            if (Math.random() < 0.01) {
+                const cx = chunkX * CHUNK_SIZE;
+                const cz = chunkZ * CHUNK_SIZE;
+                const y = getTerrainHeight(cx, cz);
+                // 방랑 상인은 기존 상인과 같은 대사 사용 (NPC형 상호작용 가능)
+                createNPC(cx, cz, 0xffaa00, '방랑 상인',
+                    ["흠흠, 이런 곳에서 만나다니! 뭐라도 필요한 것이 있소?", "싸게 드리리다. 오늘 하루만 여기 있을 거요."],
+                    y
+                );
+                currentWanderingMerchant = npcs[npcs.length - 1];
+                // 방랑 상인도 거래 가능 (isWanderingMerchant 플래그)
+                currentWanderingMerchant.userData.isMerchant = true;
+                currentWanderingMerchant.userData.isWanderingMerchant = true;
+                showChat('시스템', '💼 방랑 상인이 근처에 나타났습니다!');
+            }
+        }
+        // ──────────────────────────────────────────────────────────────────────
 
         function init() { 
             if (typeof THREE !== 'undefined' && typeof SimplexNoise !== 'undefined') {
@@ -1540,7 +1600,41 @@
             npcs.forEach(npc => {
                 const data = npc.userData; const inFrustum = isPositionInView(npc.position); let isVisible = false; if (inFrustum) { isVisible = checkLineOfSight(gameState.position, npc.position); }
                 if (isVisible) { npc.lookAt(playerPos.x, npc.position.y, playerPos.z); data.wanderTarget = null; } else { if (!data.wanderTarget) { const radius = 20; const angle = Math.random() * Math.PI * 2; const dist = Math.random() * radius; data.wanderTarget = new THREE.Vector3(data.spawnPosition.x + Math.cos(angle) * dist, data.spawnPosition.y, data.spawnPosition.z + Math.sin(angle) * dist); } const distToTarget = new THREE.Vector2(npc.position.x - data.wanderTarget.x, npc.position.z - data.wanderTarget.z).length(); if (distToTarget < 0.5) { if (Math.random() < 0.02) { data.wanderTarget = null; } } else { const direction = data.wanderTarget.clone().sub(npc.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * delta); npc.position.add(velocity); npc.lookAt(data.wanderTarget.x, npc.position.y, data.wanderTarget.z); const groundY = getTerrainHeight(npc.position.x, npc.position.z); npc.position.y = groundY + 1.0; } }
+                
+                // NPC 이름표 업데이트
+                updateNPCNametag(npc);
             });
+        }
+        
+        function updateNPCNametag(npc) {
+            const data = npc.userData;
+            const dist = npc.position.distanceTo(gameState.position);
+            // 50 유닛 이내에서만 이름표 표시
+            if (dist > 50) {
+                if (data._nametagEl) { data._nametagEl.style.display = 'none'; }
+                return;
+            }
+            // 카메라 뷰에 없으면 숨김
+            const nametagPos = npc.position.clone().add(new THREE.Vector3(0, 3.2, 0));
+            nametagPos.project(camera);
+            // 화면 밖이면 숨김
+            if (nametagPos.z > 1 || nametagPos.x < -1.1 || nametagPos.x > 1.1 || nametagPos.y < -1.1 || nametagPos.y > 1.1) {
+                if (data._nametagEl) data._nametagEl.style.display = 'none';
+                return;
+            }
+            const sx = (nametagPos.x * 0.5 + 0.5) * window.innerWidth;
+            const sy = (-(nametagPos.y * 0.5) + 0.5) * window.innerHeight;
+            // 이름표 엘리먼트 생성 (최초 1회)
+            if (!data._nametagEl) {
+                const el = document.createElement('div');
+                el.className = 'npc-nametag';
+                el.innerHTML = `<div class="npc-nametag-inner">${data.name}</div>`;
+                document.body.appendChild(el);
+                data._nametagEl = el;
+            }
+            data._nametagEl.style.display = 'block';
+            data._nametagEl.style.left = sx + 'px';
+            data._nametagEl.style.top = sy + 'px';
         }
 
         function createFlare(position) { if (flares.length >= 5) { const oldFlare = flares.shift(); scene.remove(oldFlare); if (oldFlare.userData.light) scene.remove(oldFlare.userData.light); } const flareGeometry = new THREE.SphereGeometry(0.2, 8, 8); const flareMaterial = new THREE.MeshBasicMaterial({ color: 0xffffaa }); const flareMesh = new THREE.Mesh(flareGeometry, flareMaterial); flareMesh.position.copy(position); const light = new THREE.PointLight(0xffaa00, 2, 50); light.position.copy(position); light.position.y += 0.5; light.castShadow = false; scene.add(light); flareMesh.userData = { light: light, lifespan: 10.0 }; scene.add(flareMesh); flares.push(flareMesh); showChat('시스템', '섬광탄이 설치되었습니다.'); }
@@ -2955,7 +3049,9 @@
                 }
 
                 addMoloch(Math.floor(Math.random() * 5) + 1); 
-                let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; 
+                // 좀비 1마리 = 100 XP (오크/트롤은 더 많이)
+                let xpGain = 100; if (enemy.userData.isTroll) xpGain = 350; if (enemy.userData.isOrc) xpGain = 180;
+                if (enemy.userData.name && enemy.userData.name.includes('워치프')) xpGain = 500;
                 gainXP(xpGain); showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
                 
                 if (Math.random() < 0.5) { 
@@ -3112,7 +3208,7 @@
             const currentChunkX = Math.round(gameState.position.x / CHUNK_SIZE);
             const currentChunkZ = Math.round(gameState.position.z / CHUNK_SIZE);
             const newChunkKey = `${currentChunkX},${currentChunkZ}`;
-            if (newChunkKey !== currentPlayerChunkKey) { currentPlayerChunkKey = newChunkKey; updateWorldChunks(); }
+            if (newChunkKey !== currentPlayerChunkKey) { currentPlayerChunkKey = newChunkKey; updateWorldChunks(); trySpawnWanderingMerchant(currentChunkX, currentChunkZ); }
 
             renderer.render(scene, camera);
         }
