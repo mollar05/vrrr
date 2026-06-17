@@ -108,6 +108,14 @@
         #weapon-name { font-size: 16px; font-weight: normal; margin-top: 5px; }
         #reload-prompt { font-size: 14px; color: #ffcc00; display: none; margin-top: 5px; }
         #interaction-prompt { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 16px; background: rgba(0, 0, 0, 0.7); padding: 12px 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); display: none; }
+        /* [NEW] NPC/보스/퀘스트 몹 머리 위 이름표 */
+        .npc-nameplate { position: absolute; pointer-events: none; transform: translate(-50%, -100%); white-space: nowrap; font-family: 'Noto Sans KR', sans-serif; font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-shadow: 1px 1px 2px #000; z-index: 50; }
+        .npc-nameplate.npc    { color: #00ffff; background: rgba(0,0,0,0.55); border: 1px solid #00ffff44; }
+        .npc-nameplate.boss   { color: #ff4444; background: rgba(0,0,0,0.65); border: 1px solid #ff444466; animation: boss-pulse 1.2s infinite alternate; }
+        .npc-nameplate.quest  { color: #ffd700; background: rgba(0,0,0,0.65); border: 1px solid #ffd70066; }
+        .npc-nameplate.wandering { color: #ffaa00; background: rgba(0,0,0,0.6); border: 1px solid #ffaa0055; }
+        @keyframes boss-pulse { from { text-shadow: 0 0 4px #f00; } to { text-shadow: 0 0 12px #f00; } }
+        #nameplate-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 50; overflow: hidden; }
         #interaction-key { font-weight: bold; background: #fff; color: #000; padding: 2px 6px; border-radius: 4px; margin-right: 8px; }
         .muzzle-flash { position: fixed; width: 100px; height: 100px; transform: translate(-50%, -50%); background: radial-gradient(circle, #ffff00 0%, #ff8800 30%, transparent 70%); border-radius: 50%; opacity: 0; pointer-events: none; z-index: 999; }
         #chat-box { position: absolute; top: 250px; right: 50px; left: auto; width: 350px; max-height: 300px; background: rgba(0, 0, 0, 0.0); border: none; padding: 0; overflow-y: hidden; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
@@ -179,27 +187,6 @@
         .zoom-label { font-size: 12px; color: #aaa; margin-right: 5px; }
 
         @keyframes damage-float { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-50px); opacity: 0; } }
-        
-        /* NPC 이름표 스타일 */
-        .npc-nametag {
-            position: fixed;
-            pointer-events: none;
-            z-index: 500;
-            text-align: center;
-            transform: translateX(-50%);
-            white-space: nowrap;
-        }
-        .npc-nametag-inner {
-            background: rgba(0, 0, 0, 0.65);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: 4px;
-            padding: 2px 8px;
-            color: #00ff99;
-            font-family: 'Noto Sans KR', sans-serif;
-            font-size: 13px;
-            font-weight: bold;
-            text-shadow: 0 0 6px #00ff99;
-        }
     </style>
 </head>
 <body>
@@ -429,6 +416,9 @@
         
         let currentPlayerChunkKey = "";
         let frameCount = 0;
+        // [NEW] 비동기 청크 로딩 큐 — 매 프레임 최대 1청크씩 처리해서 프레임 드랍 방지
+        const chunkLoadQueue = [];
+        let chunkLoadBudgetMs = 8; // 프레임당 최대 청크 처리 시간(ms)
         const COLLISION_CHECK_DISTANCE_SQ = 50 * 50; 
         const BULLET_CHECK_DISTANCE_SQ = 50 * 50;
         const ACTIVE_RADIUS = 230;
@@ -510,14 +500,11 @@
             if (gameState.xp >= gameState.xpToNextLevel) {
                 gameState.xp -= gameState.xpToNextLevel;
                 gameState.level++;
-                // 레벨업 시 스탯 포인트 3점 지급
-                const pointsGained = 3;
-                gameState.statPoints += pointsGained; 
-                // 다음 레벨 필요 XP: 레벨이 오를수록 가파르게 증가
-                gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * (1.8 + gameState.level * 0.05));
+                gameState.statPoints++; 
+                gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * 1.5);
                 gameState.health = getMaxHealth();
                 playerStamina = getMaxStamina();
-                showChat('시스템', `🎉 레벨 업! 현재 레벨: ${gameState.level} (스탯 포인트 +${pointsGained}, 다음 레벨까지: ${gameState.xpToNextLevel} XP)`);
+                showChat('시스템', `레벨 업! 현재 레벨: ${gameState.level} (스탯 포인트 +1)`);
                 checkLevelUp();
             }
             updateUI();
@@ -629,42 +616,6 @@
         }
         function createPortal(entrancePos, exitPos, buildingId) { const portal = new Portal(entrancePos, exitPos, buildingId); portals.push(portal); return portal; }
 
-        // ─── 방랑 상인 시스템 ─────────────────────────────────────────────────
-        let wanderingMerchantSpawned = false; // 현재 청크에 방랑 상인이 있는지
-        let currentWanderingMerchant = null;
-
-        function trySpawnWanderingMerchant(chunkX, chunkZ) {
-            // 스폰(0,0) 청크에선 이미 고정 상인이 있으므로 스킵
-            if (chunkX === 0 && chunkZ === 0) return;
-            // 이전 방랑 상인 제거
-            if (currentWanderingMerchant) {
-                if (currentWanderingMerchant.userData._nametagEl) {
-                    document.body.removeChild(currentWanderingMerchant.userData._nametagEl);
-                }
-                scene.remove(currentWanderingMerchant);
-                const idx = npcs.indexOf(currentWanderingMerchant);
-                if (idx !== -1) npcs.splice(idx, 1);
-                currentWanderingMerchant = null;
-            }
-            // 1% 확률로 방랑 상인 등장
-            if (Math.random() < 0.01) {
-                const cx = chunkX * CHUNK_SIZE;
-                const cz = chunkZ * CHUNK_SIZE;
-                const y = getTerrainHeight(cx, cz);
-                // 방랑 상인은 기존 상인과 같은 대사 사용 (NPC형 상호작용 가능)
-                createNPC(cx, cz, 0xffaa00, '방랑 상인',
-                    ["흠흠, 이런 곳에서 만나다니! 뭐라도 필요한 것이 있소?", "싸게 드리리다. 오늘 하루만 여기 있을 거요."],
-                    y
-                );
-                currentWanderingMerchant = npcs[npcs.length - 1];
-                // 방랑 상인도 거래 가능 (isWanderingMerchant 플래그)
-                currentWanderingMerchant.userData.isMerchant = true;
-                currentWanderingMerchant.userData.isWanderingMerchant = true;
-                showChat('시스템', '💼 방랑 상인이 근처에 나타났습니다!');
-            }
-        }
-        // ──────────────────────────────────────────────────────────────────────
-
         function init() { 
             if (typeof THREE !== 'undefined' && typeof SimplexNoise !== 'undefined') {
                 simplex = new SimplexNoise(); 
@@ -759,7 +710,38 @@
         
         function switchWeapon(index) { if (index >= gameState.weapons.length) index = 0; if (index < 0) index = gameState.weapons.length - 1; gameState.currentWeaponIndex = index; if (playerGun) camera.remove(playerGun); const weaponObj = gameState.weapons[index]; const weaponData = WEAPON_DATABASE[weaponObj.key]; playerGun = weaponData.model(); playerGun.position.set(0.4, -0.3, -0.8); playerGun.rotation.set(0, -0.1, 0); camera.add(playerGun); muzzle = playerGun.getObjectByName('muzzle'); updateUI(); }
         
-        function updateWorldChunks() { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); for (let x = playerChunkX - RENDER_DISTANCE; x <= playerChunkX + RENDER_DISTANCE; x++) { for (let z = playerChunkZ - RENDER_DISTANCE; z <= playerChunkZ + RENDER_DISTANCE; z++) { const chunkKey = `${x},${z}`; if (!generatedChunks.has(chunkKey)) { generateChunk(x, z); generatedChunks.add(chunkKey); } } } }
+        function updateWorldChunks() {
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE);
+            const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE);
+            // 가까운 순서대로 큐에 추가
+            const candidates = [];
+            for (let x = playerChunkX - RENDER_DISTANCE; x <= playerChunkX + RENDER_DISTANCE; x++) {
+                for (let z = playerChunkZ - RENDER_DISTANCE; z <= playerChunkZ + RENDER_DISTANCE; z++) {
+                    const chunkKey = `${x},${z}`;
+                    if (!generatedChunks.has(chunkKey)) {
+                        const dx = x - playerChunkX, dz = z - playerChunkZ;
+                        candidates.push({ x, z, key: chunkKey, dist: dx*dx + dz*dz });
+                        generatedChunks.add(chunkKey); // 미리 등록해서 중복 추가 방지
+                    }
+                }
+            }
+            // 가까운 청크 먼저 처리
+            candidates.sort((a, b) => a.dist - b.dist);
+            for (const c of candidates) chunkLoadQueue.push(c);
+        }
+
+        // 매 프레임 호출: 시간 예산 내에서 큐 처리
+        function processChunkQueue() {
+            if (chunkLoadQueue.length === 0) return;
+            const start = performance.now();
+            while (chunkLoadQueue.length > 0) {
+                const c = chunkLoadQueue[0];
+                generateChunk(c.x, c.z);
+                chunkLoadQueue.shift();
+                if (performance.now() - start > chunkLoadBudgetMs) break; // 예산 초과시 다음 프레임으로
+            }
+        }
         
         function getBiome(x, z) { 
             const scale = 3000; 
@@ -936,9 +918,9 @@
             let objectDensityMultiplier = 1.0; let buildingChance = 0.1;
             if (centerBiome === 'forest') objectDensityMultiplier = 4.5; else if (centerBiome === 'mountain') objectDensityMultiplier = 0.7; else if (centerBiome === 'volcano') objectDensityMultiplier = 0.1; else if (centerBiome === 'city') { objectDensityMultiplier = 0.2; buildingChance = 0.9; } else if (centerBiome === 'plain') { buildingChance = 0.3; objectDensityMultiplier = 1.2; }
 
-            const objectCount = Math.floor((chunkRand() * 15 + 20) * objectDensityMultiplier);
+            const objectCount = Math.floor((chunkRand() * 8 + 10) * objectDensityMultiplier); // [OPT] 나무/오브젝트 수 절반으로
             if (centerBiome === 'city') {
-                const cityGridSize = 40; for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.3) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
+                const cityGridSize = 55; for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.4) { const isHighrise = chunkRand() > 0.5; const size = isHighrise ? { w: 25, d: 25 } : { w: 12, d: 12 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
             } else if (chunkRand() > (1 - buildingChance)) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); if (type > 0.9) { const isHighrise = chunkRand() > 0.8; const size = isHighrise ? { w: 30, d: 40 } : { w: 12, d: 12 }; const y = getTerrainHeight(x, z); buildingsInChunk.push({ x, z, y, size, isHighrise }); } } }
             
             if (centerBiome === 'forest') {
@@ -954,7 +936,7 @@
                 }
             }
             
-            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 100, 100); 
+            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 50, 50); 
             const vertices = terrainGeo.attributes.position.array; 
             for (let i = 0, j = 0; i < vertices.length; i += 3, j++) { 
                 const wx = vertices[i] + chunkOriginX; 
@@ -969,7 +951,7 @@
             
             // [MODIFIED] 용암 생성 로직 개선 (청크 경계 문제 해결 및 흐르는 효과)
             // 기존: 중심 바이옴이 화산일 때만 평평한 판 생성 -> 변경: 모든 청크에서 버텍스 단위로 검사하여 지형 적응형 용암 생성
-            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 32, 32);
+            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 16, 16);
             const lavaVerts = lavaGeo.attributes.position.array;
             let hasLava = false;
 
@@ -1045,7 +1027,7 @@
             buildingsInChunk.forEach(b => { if (b.isHighrise) { collectHighriseData(b.x, b.z, b.y, chunkCityGrayMatrices, chunkCityGrayProxies); } else { collectBuildingData(b.x, b.z, b.y, chunkCityBrownMatrices, chunkCityBrownProxies, chunkRoofMatrices, chunkRoofProxies); } });
             createChunkInstancedMeshes(chunkCityGrayMatrices, sharedBoxGeo, sharedCityMatGray, chunkCityGrayProxies, chunkKey); createChunkInstancedMeshes(chunkCityBrownMatrices, sharedBoxGeo, sharedCityMatBrown, chunkCityBrownProxies, chunkKey); createChunkInstancedMeshes(chunkRoofMatrices, sharedConeGeo, sharedRoofMat, chunkRoofProxies, chunkKey);
             const chunkTrunkMatrices = []; const chunkLeafMatrices = []; const chunkRockMatrices = []; const chunkTrunkProxies = []; const chunkLeafProxies = []; const chunkRockProxies = [];
-            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies); } else if (type < 0.9 || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
+            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.38; if (centerBiome === 'forest') treeChance = 0.46; if (centerBiome === 'mountain') treeChance = 0.18; if (centerBiome === 'volcano') treeChance = 0.025; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies); } else if (type < 0.9 || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
             createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
             
             if (chunkRand() > 0.68) { 
@@ -1600,41 +1582,7 @@
             npcs.forEach(npc => {
                 const data = npc.userData; const inFrustum = isPositionInView(npc.position); let isVisible = false; if (inFrustum) { isVisible = checkLineOfSight(gameState.position, npc.position); }
                 if (isVisible) { npc.lookAt(playerPos.x, npc.position.y, playerPos.z); data.wanderTarget = null; } else { if (!data.wanderTarget) { const radius = 20; const angle = Math.random() * Math.PI * 2; const dist = Math.random() * radius; data.wanderTarget = new THREE.Vector3(data.spawnPosition.x + Math.cos(angle) * dist, data.spawnPosition.y, data.spawnPosition.z + Math.sin(angle) * dist); } const distToTarget = new THREE.Vector2(npc.position.x - data.wanderTarget.x, npc.position.z - data.wanderTarget.z).length(); if (distToTarget < 0.5) { if (Math.random() < 0.02) { data.wanderTarget = null; } } else { const direction = data.wanderTarget.clone().sub(npc.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * delta); npc.position.add(velocity); npc.lookAt(data.wanderTarget.x, npc.position.y, data.wanderTarget.z); const groundY = getTerrainHeight(npc.position.x, npc.position.z); npc.position.y = groundY + 1.0; } }
-                
-                // NPC 이름표 업데이트
-                updateNPCNametag(npc);
             });
-        }
-        
-        function updateNPCNametag(npc) {
-            const data = npc.userData;
-            const dist = npc.position.distanceTo(gameState.position);
-            // 50 유닛 이내에서만 이름표 표시
-            if (dist > 50) {
-                if (data._nametagEl) { data._nametagEl.style.display = 'none'; }
-                return;
-            }
-            // 카메라 뷰에 없으면 숨김
-            const nametagPos = npc.position.clone().add(new THREE.Vector3(0, 3.2, 0));
-            nametagPos.project(camera);
-            // 화면 밖이면 숨김
-            if (nametagPos.z > 1 || nametagPos.x < -1.1 || nametagPos.x > 1.1 || nametagPos.y < -1.1 || nametagPos.y > 1.1) {
-                if (data._nametagEl) data._nametagEl.style.display = 'none';
-                return;
-            }
-            const sx = (nametagPos.x * 0.5 + 0.5) * window.innerWidth;
-            const sy = (-(nametagPos.y * 0.5) + 0.5) * window.innerHeight;
-            // 이름표 엘리먼트 생성 (최초 1회)
-            if (!data._nametagEl) {
-                const el = document.createElement('div');
-                el.className = 'npc-nametag';
-                el.innerHTML = `<div class="npc-nametag-inner">${data.name}</div>`;
-                document.body.appendChild(el);
-                data._nametagEl = el;
-            }
-            data._nametagEl.style.display = 'block';
-            data._nametagEl.style.left = sx + 'px';
-            data._nametagEl.style.top = sy + 'px';
         }
 
         function createFlare(position) { if (flares.length >= 5) { const oldFlare = flares.shift(); scene.remove(oldFlare); if (oldFlare.userData.light) scene.remove(oldFlare.userData.light); } const flareGeometry = new THREE.SphereGeometry(0.2, 8, 8); const flareMaterial = new THREE.MeshBasicMaterial({ color: 0xffffaa }); const flareMesh = new THREE.Mesh(flareGeometry, flareMaterial); flareMesh.position.copy(position); const light = new THREE.PointLight(0xffaa00, 2, 50); light.position.copy(position); light.position.y += 0.5; light.castShadow = false; scene.add(light); flareMesh.userData = { light: light, lifespan: 10.0 }; scene.add(flareMesh); flares.push(flareMesh); showChat('시스템', '섬광탄이 설치되었습니다.'); }
@@ -1654,7 +1602,7 @@
                 if (distToPlayerSq > 90000) { enemy.visible = false; continue; } else { enemy.visible = true; }
 
                 const isClose = distToPlayerSq < 2500; 
-                const updateRate = isClose ? 1 : 3;
+                const updateRate = isClose ? 1 : (distToPlayerSq < 10000 ? 2 : (distToPlayerSq < 40000 ? 4 : 8)); // [OPT] 거리별 세분화
                 
                 if ((frameCount + index) % updateRate !== 0) {
                      if (data.isJumping) {
@@ -3049,9 +2997,7 @@
                 }
 
                 addMoloch(Math.floor(Math.random() * 5) + 1); 
-                // 좀비 1마리 = 100 XP (오크/트롤은 더 많이)
-                let xpGain = 100; if (enemy.userData.isTroll) xpGain = 350; if (enemy.userData.isOrc) xpGain = 180;
-                if (enemy.userData.name && enemy.userData.name.includes('워치프')) xpGain = 500;
+                let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; 
                 gainXP(xpGain); showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
                 
                 if (Math.random() < 0.5) { 
@@ -3121,10 +3067,11 @@
                 if (enemy.userData.health <= 0) return;
                 const distSq = enemy.position.distanceToSquared(gameState.position);
                 
-                // [OPTIMIZATION] AI 쓰로틀링 강화 (먼 적일수록 업데이트 덜 함)
-                if (distSq > 40000 && (frameCount + index) % 8 !== 0) return; // 200m+ 
-                if (distSq > 10000 && (frameCount + index) % 4 !== 0) return; // 100m+
-                if (distSq > 2500 && (frameCount + index) % 2 !== 0) return;  // 50m+
+                // [OPT] AI 쓰로틀링 강화 (거리 5단계)
+                if (distSq > 90000 && (frameCount + index) % 12 !== 0) return; // 300m+
+                if (distSq > 40000 && (frameCount + index) % 8 !== 0) return;  // 200m+
+                if (distSq > 10000 && (frameCount + index) % 4 !== 0) return;  // 100m+
+                if (distSq > 2500  && (frameCount + index) % 2 !== 0) return;  // 50m+
 
                 if (distSq > ACTIVE_RADIUS_SQ) { enemy.visible = false; return; }
                 enemy.visible = true;
@@ -3208,7 +3155,8 @@
             const currentChunkX = Math.round(gameState.position.x / CHUNK_SIZE);
             const currentChunkZ = Math.round(gameState.position.z / CHUNK_SIZE);
             const newChunkKey = `${currentChunkX},${currentChunkZ}`;
-            if (newChunkKey !== currentPlayerChunkKey) { currentPlayerChunkKey = newChunkKey; updateWorldChunks(); trySpawnWanderingMerchant(currentChunkX, currentChunkZ); }
+            if (newChunkKey !== currentPlayerChunkKey) { currentPlayerChunkKey = newChunkKey; updateWorldChunks(); }
+            processChunkQueue(); // [NEW] 매 프레임 큐에서 1~2개 청크 처리 (분산 로딩)
 
             renderer.render(scene, camera);
         }
