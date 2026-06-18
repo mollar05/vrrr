@@ -439,7 +439,11 @@
         // [MODIFIED] 첫 퀘스트 보상을 10몰록으로 변경
         let questState = { status: 1, type: 'talk_survivor', targetAmount: 1, currentAmount: 0, rewardMoloch: 10 };
         let elfQuestActive = false, elfQuestDone = false;
+        let elfQuestStage = 0; // 0=미시작 1=강도두목처치 2=드래곤조각수집 3=완료
+        let elfQuestDragonFragments = 0; // 2단계 수집 수량
         let dwarfQuestActive = false, dwarfQuestDone = false;
+        let dwarfQuestStage = 0; // 0=미시작 1=골렘처치 2=광석운반 3=완료
+        let dwarfQuestOresDelivered = 0;
         
         const WEAPON_DATABASE = {
             "M416": { name: "M416", type: "AR", ammoType: "5.56mm", damage: 41, fireRate: 90, magSize: 30, bulletSpeed: 880, reloadTime: 2500, model: createMachineGunModel, effectiveRange: 60, maxRange: 450, minDamageMultiplier: 0.4 },
@@ -827,6 +831,9 @@
                 if (data.name === '의료키트') { color = 0xffffff; geo = new THREE.BoxGeometry(0.5, 0.3, 0.4); }
                 if (data.name === '에너지드링크') { color = 0x00ffff; geo = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 8); }
                 if (data.name === '음식') { color = 0xffa500; }
+                // [NEW] 퀘스트 아이템: 빛나는 색상
+                if (data.name === '마법 광석') { color = 0x00aaff; geo = new THREE.DodecahedronGeometry(0.25, 0); }
+                if (data.name === '고대 용 파편') { color = 0xffd700; geo = new THREE.TetrahedronGeometry(0.3, 0); }
                 mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color }));
                 if (data.name === '의료키트') {
                     const v = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), new THREE.MeshBasicMaterial({color: 0xff0000}));
@@ -1027,13 +1034,15 @@
             buildingsInChunk.forEach(b => { if (b.isHighrise) { collectHighriseData(b.x, b.z, b.y, chunkCityGrayMatrices, chunkCityGrayProxies); } else { collectBuildingData(b.x, b.z, b.y, chunkCityBrownMatrices, chunkCityBrownProxies, chunkRoofMatrices, chunkRoofProxies); } });
             createChunkInstancedMeshes(chunkCityGrayMatrices, sharedBoxGeo, sharedCityMatGray, chunkCityGrayProxies, chunkKey); createChunkInstancedMeshes(chunkCityBrownMatrices, sharedBoxGeo, sharedCityMatBrown, chunkCityBrownProxies, chunkKey); createChunkInstancedMeshes(chunkRoofMatrices, sharedConeGeo, sharedRoofMat, chunkRoofProxies, chunkKey);
             const chunkTrunkMatrices = []; const chunkLeafMatrices = []; const chunkRockMatrices = []; const chunkTrunkProxies = []; const chunkLeafProxies = []; const chunkRockProxies = [];
-            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.38; if (centerBiome === 'forest') treeChance = 0.46; if (centerBiome === 'mountain') treeChance = 0.18; if (centerBiome === 'volcano') treeChance = 0.025; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies); } else if (type < 0.9 || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
+            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.38; if (centerBiome === 'forest') treeChance = 0.46; if (centerBiome === 'mountain') treeChance = 0.18; if (centerBiome === 'volcano') treeChance = 0.025; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies); } else { // 숲에서는 돌 빈도 1/3로 제한
+                    const rockThreshold = centerBiome === 'forest' ? treeChance + (0.9 - treeChance) / 3 : 0.9;
+                    if (type < rockThreshold || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } } }
             createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
             
             if (chunkRand() > 0.68) { 
                 const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); 
                 if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRangedEnemy(x, z, 500 + chunkRand() * 500, yBase); }
-                const zombieCount = Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano' || zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
+                const zombieCount = Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano' || zy > LAVA_LEVEL) { createZombie(zx, zz, 167, zy); } }
             }
 
             if (centerBiome === 'city') {
@@ -1061,6 +1070,21 @@
 
             if (chunkRand() > 0.93) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRandomLoot(x, z, yBase + 0.5); } }
             if (chunkRand() > 0.68 && centerBiome !== 'volcano') { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); createVehicle(x, z, yBase); }
+            // [NEW] 퀘스트 아이템 스폰: 마법 광석(화산), 고대 용 파편(화산/산)
+            if (centerBiome === 'volcano' && chunkRand() > 0.75) {
+                for (let qi = 0; qi < 2; qi++) {
+                    const qx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
+                    const qz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
+                    const qy = getTerrainHeight(qx, qz);
+                    if (qy > LAVA_LEVEL) spawnItem({ type: 'item', name: '마법 광석', amount: 1, questItem: true }, qx, qy + 0.5, qz);
+                }
+            }
+            if ((centerBiome === 'volcano' || centerBiome === 'mountain') && chunkRand() > 0.88) {
+                const qx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
+                const qz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
+                const qy = getTerrainHeight(qx, qz);
+                spawnItem({ type: 'item', name: '고대 용 파편', amount: 1, questItem: true }, qx, qy + 0.5, qz);
+            }
             
             // 강도 캠프 (어느 바이옴에나 낮은 확률)
             if (chunkRand() > 0.93 && centerBiome !== 'volcano') {
@@ -1172,7 +1196,7 @@
         function createBoss(type, x, z, yBase) {
             let bossMesh, bossHealth, bossName, scale, speed, color;
             if (type === 'witch') {
-                bossHealth = 5000; bossName = "저주받은 마녀"; scale = 1.2; speed = 20.0; color = 0x800080; 
+            bossHealth = 5000; bossName = "저주받은 마녀"; scale = 1.2; speed = 20.0; color = 0x800080; 
                 const mat = new THREE.MeshLambertMaterial({ color: color }); bossMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * scale, 0.5 * scale, 1.8 * scale, 8), mat);
                 const hat = new THREE.Mesh(new THREE.ConeGeometry(0.4 * scale, 1.0 * scale, 16), new THREE.MeshLambertMaterial({ color: 0x220022 })); hat.position.y = 1.2 * scale; hat.castShadow = false; bossMesh.add(hat);
                 const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.5, 8), new THREE.MeshLambertMaterial({ color: 0x4a2e16 })); staff.position.set(0.6, 0.5, 0.4); staff.rotation.x = Math.PI / 4; staff.castShadow = false; bossMesh.add(staff);
@@ -1201,7 +1225,7 @@
             }
             bossMesh.position.set(x, yBase + (0.9 * scale), z); bossMesh.castShadow = false;
             const skillCooldowns = { fireball: 0, shockwave: 0, summon: 0, smash: 0, boulderThrow: 0, teleport: 0, darkPulse: 0, massRaise: 0 };
-            bossMesh.userData = { type: 'boss', bossType: type, name: bossName, health: bossHealth, maxHealth: bossHealth, scale: scale, speed: speed, state: 'idle', lastAttackTime: 0, attackCooldown: type === 'witch' ? 2000 : type === 'golem' ? 4000 : 2500, attackRange: type === 'witch' ? 40 : type === 'golem' ? 12 : type === 'fire_demon' ? 10 : 45, detectionRange: 300, lastTeleportTime: 0, teleportCooldown: 8000, originalColor: new THREE.Color(color), skillCooldowns };
+            bossMesh.userData = { type: 'boss', bossType: type, name: bossName, health: bossHealth, maxHealth: bossHealth, scale: scale, speed: speed, state: 'idle', lastAttackTime: 0, attackCooldown: type === 'witch' ? 3500 : type === 'golem' ? 4000 : 2500, attackRange: type === 'witch' ? 40 : type === 'golem' ? 12 : type === 'fire_demon' ? 10 : 45, detectionRange: 300, lastTeleportTime: 0, teleportCooldown: 10000, originalColor: new THREE.Color(color), skillCooldowns };
             scene.add(bossMesh); bosses.push(bossMesh); objects.push(bossMesh); 
         }
 
@@ -1214,6 +1238,8 @@
                 const dist = boss.position.distanceTo(playerPos);
                 if (isSafeZone && boss.userData.health >= boss.userData.maxHealth) return;
                 if (dist < minDst) { minDst = dist; activeBoss = boss; }
+                // [OPT] 보스도 거리별 쓰로틀: 150m 이상은 4프레임에 1번
+                if (dist > 150 && frameCount % 4 !== 0) return;
                 if (dist < boss.userData.detectionRange) {
                     boss.lookAt(playerPos.x, boss.position.y, playerPos.z);
                     const direction = playerPos.clone().sub(boss.position).normalize(); direction.y = 0;
@@ -1280,7 +1306,7 @@
                     const sx = boss.position.x + Math.cos(a) * r; const sz = boss.position.z + Math.sin(a) * r;
                     const sy = getTerrainHeight(sx, sz);
                     createDebrisEffect(new THREE.Vector3(sx, sy, sz), new THREE.Color(0xff4400), 10);
-                    createZombie(sx, sz, 500, sy);
+                    createZombie(sx, sz, 167, sy);
                     const minion = zombies[zombies.length - 1];
                     minion.material.color.set(0xff2200);
                     minion.userData.state = 'chase'; minion.userData.lastKnownPlayerPosition.copy(playerPos);
@@ -1363,7 +1389,7 @@
                     const a = Math.random() * Math.PI * 2; const r = 8 + Math.random() * 15;
                     const sx = boss.position.x + Math.cos(a)*r; const sz = boss.position.z + Math.sin(a)*r;
                     const sy = getTerrainHeight(sx, sz);
-                    createZombie(sx, sz, 800, sy);
+                    createZombie(sx, sz, 267, sy);
                     const undead = zombies[zombies.length-1];
                     undead.material.color.set(0x550055);
                     undead.userData.state = 'chase'; undead.userData.lastKnownPlayerPosition.copy(playerPos);
@@ -1399,7 +1425,7 @@
         }
         
         function handleWitchAI(boss, playerPos, dist, now, delta, direction) {
-            if ((dist < 8 || Math.random() < 0.005) && now - boss.userData.lastTeleportTime > boss.userData.teleportCooldown) { castWitchTeleport(boss, playerPos); boss.userData.lastTeleportTime = now; return; }
+            if ((dist < 8 || Math.random() < 0.003) && now - boss.userData.lastTeleportTime > boss.userData.teleportCooldown) { castWitchTeleport(boss, playerPos); boss.userData.lastTeleportTime = now; return; }
             if (dist > boss.userData.attackRange) { boss.position.add(direction.multiplyScalar(boss.userData.speed * delta)); const groundY = getTerrainHeight(boss.position.x, boss.position.z); boss.position.y = groundY + (0.9 * boss.userData.scale); }
             if (now - boss.userData.lastAttackTime > boss.userData.attackCooldown) {
                 boss.userData.lastAttackTime = now; const rand = Math.random();
@@ -1408,20 +1434,24 @@
         }
 
         function castWitchTeleport(boss, playerPos) {
-            createDebrisEffect(boss.position, new THREE.Color(0x800080), 20); const angle = Math.random() * Math.PI * 2; const radius = 15 + Math.random() * 10; const newX = playerPos.x + Math.cos(angle) * radius; const newZ = playerPos.z + Math.sin(angle) * radius; const newY = getTerrainHeight(newX, newZ); boss.position.set(newX, newY + (0.9 * boss.userData.scale), newZ); createDebrisEffect(boss.position, new THREE.Color(0x800080), 20); showChat('저주받은 마녀', '어딜 보는 거냐? 흐흐흐...');
+            // [OPT] debris 파티클 절반으로
+            createDebrisEffect(boss.position, new THREE.Color(0x800080), 10); const angle = Math.random() * Math.PI * 2; const radius = 15 + Math.random() * 10; const newX = playerPos.x + Math.cos(angle) * radius; const newZ = playerPos.z + Math.sin(angle) * radius; const newY = getTerrainHeight(newX, newZ); boss.position.set(newX, newY + (0.9 * boss.userData.scale), newZ); createDebrisEffect(boss.position, new THREE.Color(0x800080), 10); showChat('저주받은 마녀', '어딜 보는 거냐? 흐흐흐...');
         }
         function castWitchSummon(boss) {
-            showChat('저주받은 마녀', '일어나라, 나의 종들이여!'); createDebrisEffect(boss.position, new THREE.Color(0x00ff00), 15);
-            for(let i=0; i<2; i++) { const angle = (Math.PI * 2 / 2) * i; const r = 3; const zx = boss.position.x + Math.cos(angle) * r; const zz = boss.position.z + Math.sin(angle) * r; const zy = getTerrainHeight(zx, zz); createZombie(zx, zz, 300, zy); const newZombie = zombies[zombies.length - 1]; newZombie.userData.state = 'chase'; newZombie.userData.lastKnownPlayerPosition.copy(playerInVehicle ? playerInVehicle.position : gameState.position); createDebrisEffect(new THREE.Vector3(zx, zy, zz), new THREE.Color(0x00ff00), 5); }
+            // [OPT] 소환 수 2→1
+            showChat('저주받은 마녀', '일어나라, 나의 종들이여!'); createDebrisEffect(boss.position, new THREE.Color(0x00ff00), 8);
+            const angle = Math.random() * Math.PI * 2; const r = 3; const zx = boss.position.x + Math.cos(angle) * r; const zz = boss.position.z + Math.sin(angle) * r; const zy = getTerrainHeight(zx, zz); createZombie(zx, zz, 100, zy); const newZombie = zombies[zombies.length - 1]; newZombie.userData.state = 'chase'; newZombie.userData.lastKnownPlayerPosition.copy(playerInVehicle ? playerInVehicle.position : gameState.position); createDebrisEffect(new THREE.Vector3(zx, zy, zz), new THREE.Color(0x00ff00), 4);
         }
         function castWitchExplosion(boss, playerPos) { showChat('저주받은 마녀', '불타올라라!'); createHazardZone(playerPos.x, playerPos.y, playerPos.z, 5.0, 2000, 30); }
         function castWitchMultiShot(boss, targetPos) {
-            const baseDir = targetPos.clone().sub(boss.position).normalize(); const angles = [-0.3, 0, 0.3];
+            // [OPT] 3발 → 2발
+            const baseDir = targetPos.clone().sub(boss.position).normalize(); const angles = [-0.25, 0.25];
             angles.forEach(angle => { const bullet = new THREE.Mesh(sharedBulletGeo, new THREE.MeshBasicMaterial({ color: 0x800080 })); bullet.position.copy(boss.position); bullet.position.y += 2; const dir = baseDir.clone(); dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle); bullet.userData = { velocity: dir, speed: 25, owner: 'enemy', damage: 15, spawnPosition: bullet.position.clone() }; scene.add(bullet); bullets.push(bullet); });
         }
 
         function createHazardZone(x, y, z, radius, duration, damage) {
-            const geometry = new THREE.CylinderGeometry(radius, radius, 0.2, 32); const material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3 }); const zone = new THREE.Mesh(geometry, material); const groundY = getTerrainHeight(x, z); zone.position.set(x, groundY + 0.1, z); scene.add(zone); const hazard = { mesh: zone, expiry: Date.now() + duration, damage: damage, radius: radius, triggered: false }; hazardZones.push(hazard);
+            const geometry = new THREE.CylinderGeometry(radius, radius, 0.2, 12); // [OPT] 32→12 세그먼트
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3 }); const zone = new THREE.Mesh(geometry, material); const groundY = getTerrainHeight(x, z); zone.position.set(x, groundY + 0.1, z); scene.add(zone); const hazard = { mesh: zone, expiry: Date.now() + duration, damage: damage, radius: radius, triggered: false }; hazardZones.push(hazard);
         }
         function updateHazardZones(now) {
             for (let i = hazardZones.length - 1; i >= 0; i--) {
@@ -1436,7 +1466,7 @@
             // 드워프 퀘스트: 골렘 처치 시 완료
             if (boss.userData.bossType === 'golem' && dwarfQuestActive && !dwarfQuestDone) {
                 dwarfQuestDone = true;
-                showChat('시스템', '⛏️ [드워프 퀘스트] 골렘을 처치했습니다! 드워프 대장장이에게 돌아가세요.');
+                showChat('시스템', '⛏️ [드워프 1단계] 골렘을 처치했습니다! 드워프 대장장이에게 돌아가세요.');
             }
             createDebrisEffect(boss.position, boss.userData.originalColor, 50); scene.remove(boss); bosses.splice(index, 1); objects = objects.filter(o => o !== boss); document.getElementById('boss-container').style.display = 'none'; 
         }
@@ -2264,50 +2294,81 @@
         function interact() {
             if (playerInVehicle) { toggleVehicle(playerInVehicle); return; }
             if (interactableObject) { const { type } = interactableObject.userData; if (type === 'item' || type === 'weapon' || type === 'scope') { pickupItem(interactableObject); } else if (type === 'npc') { const data = interactableObject.userData; if (data.name === '상인') { openTradeModal(); } else if (data.name === '엘프 장로') {
-                    // 엘프 장로 대화 + 퀘스트
-                    if (!data.questGiven) {
+                    // ─── 엘프 퀘스트 2단계 ───
+                    if (elfQuestStage === 0) {
+                        // 아직 퀘스트 안 받음: 대화 진행
                         showChat('엘프 장로', data.dialogue[data.dialogueIndex % data.dialogue.length]);
                         data.dialogueIndex++;
                         if (data.dialogueIndex >= data.dialogue.length) {
-                            data.questGiven = true;
+                            elfQuestStage = 1; elfQuestActive = true; elfQuestDone = false;
                             setTimeout(() => {
-                                showChat('엘프 장로', '부탁이 하나 있소. 강도들이 우리 숲 근처에서 행패를 부리고 있소. 강도 두목 하나만 처치해 준다면 사례하겠소.');
-                                setTimeout(() => { showChat('시스템', '📜 [엘프 퀘스트] 강도 두목 처치 (0/1) — 보상: 300 몰록 + 경험치 150'); elfQuestActive = true; elfQuestDone = false; updateQuestUI(); }, 1500);
+                                showChat('엘프 장로', '부탁이 하나 있소. 강도 두목이 우리 숲 경계에서 행패를 부리고 있소. 처치해 준다면 사례하겠소.');
+                                setTimeout(() => { showChat('시스템', '📜 [엘프 1단계] 강도 두목 처치 (0/1) — 강도 캠프를 찾아 두목을 처치하세요.'); updateQuestUI(); }, 1500);
                             }, 1200);
                         }
-                    } else if (elfQuestActive && !elfQuestDone) {
+                    } else if (elfQuestStage === 1 && !elfQuestDone) {
                         showChat('엘프 장로', '강도 두목을 아직 처치하지 못했소. 조심히 다녀오시오.');
-                    } else if (elfQuestDone) {
-                        if (!data.rewardGiven) {
-                            data.rewardGiven = true; elfQuestActive = false;
-                            showChat('엘프 장로', '오! 강도 두목을 처치했군요. 숲의 정령들이 당신을 축복하리다.');
-                            addMoloch(300); gainXP(150);
-                            showChat('시스템', '🌿 엘프 퀘스트 완료! (+300 몰록, +150 XP)');
-                        } else { showChat('엘프 장로', '숲의 평화를 지켜주어 감사하오, 이방인이여.'); }
-                    } else { showChat('엘프 장로', data.dialogue[data.dialogueIndex % data.dialogue.length]); data.dialogueIndex++; }
+                    } else if (elfQuestStage === 1 && elfQuestDone) {
+                        // 1단계 완료 → 보상 + 2단계 시작
+                        elfQuestStage = 2; elfQuestDragonFragments = 0; elfQuestDone = false;
+                        addMoloch(300); gainXP(150);
+                        showChat('엘프 장로', '오! 강도 두목을 처치했군요. 숲의 정령들이 감사히 여기오. 그런데... 더 큰 위협이 있소. 고대 용의 파편이 산 어딘가에 흩어져 있소. 파편 3개를 가져다 주시오.');
+                        setTimeout(() => { showChat('시스템', '🌿 [엘프 1단계 완료] +300 몰록 +150 XP\n📜 [엘프 2단계] 고대 용 파편 수집 (' + elfQuestDragonFragments + '/3) — 보상: 800 몰록 + 무기 지급'); updateQuestUI(); }, 1500);
+                    } else if (elfQuestStage === 2 && !elfQuestDone) {
+                        if (elfQuestDragonFragments >= 3) {
+                            elfQuestDone = true;
+                            showChat('엘프 장로', '모두 모았소! 이 파편으로 고대 결계를 복원할 수 있소. 당신의 도움에 깊이 감사드리오!');
+                        } else {
+                            showChat('엘프 장로', '고대 용 파편이 아직 ' + (3 - elfQuestDragonFragments) + '개 더 필요하오. 화산 근처에서 빛나는 돌을 찾아보시오.');
+                        }
+                    } else if (elfQuestStage === 2 && elfQuestDone) {
+                        if (!data.reward2Given) {
+                            data.reward2Given = true; elfQuestStage = 3; elfQuestActive = false;
+                            addMoloch(800); gainXP(300);
+                            const weaponKeys = Object.keys(WEAPON_DATABASE).filter(k => k !== 'Fist');
+                            const giftKey = weaponKeys[Math.floor(Math.random() * weaponKeys.length)];
+                            if (!gameState.weapons.find(w => w.key === giftKey)) { gameState.weapons.push({ key: giftKey, magAmmo: WEAPON_DATABASE[giftKey].magSize }); }
+                            showChat('시스템', '🏆 [엘프 퀘스트 전체 완료] +800 몰록 +300 XP + ' + WEAPON_DATABASE[giftKey].name + ' 지급!');
+                            updateQuestUI();
+                        } else { showChat('엘프 장로', '숲의 정령들이 영원히 당신을 보호할 것이오, 영웅이여.'); }
+                    } else { showChat('엘프 장로', '숲의 평화를 지켜주어 감사하오, 이방인이여.'); }
                 } else if (data.name === '드워프 대장장이') {
-                    // 드워프 대장장이 대화 + 퀘스트
-                    if (!data.questGiven) {
+                    // ─── 드워프 퀘스트 2단계 ───
+                    if (dwarfQuestStage === 0) {
                         showChat('드워프 대장장이', data.dialogue[data.dialogueIndex % data.dialogue.length]);
                         data.dialogueIndex++;
                         if (data.dialogueIndex >= data.dialogue.length) {
-                            data.questGiven = true;
+                            dwarfQuestStage = 1; dwarfQuestActive = true; dwarfQuestDone = false;
                             setTimeout(() => {
-                                showChat('드워프 대장장이', '한 가지 부탁이 있소. 이 근처 산에 골렘이 나타났소. 우리 광산을 위협하고 있는데, 처치해 준다면 특별 보상을 드리겠소!');
-                                setTimeout(() => { showChat('시스템', '📜 [드워프 퀘스트] 골렘 처치 (0/1) — 보상: 500 몰록 + 경험치 200'); dwarfQuestActive = true; dwarfQuestDone = false; updateQuestUI(); }, 1500);
+                                showChat('드워프 대장장이', '한 가지 부탁이 있소. 이 근처 산에 골렘이 나타났소. 광산을 위협하고 있는데, 처치해 준다면 특별 보상을 드리겠소!');
+                                setTimeout(() => { showChat('시스템', '📜 [드워프 1단계] 골렘 처치 (0/1) — 산 지역에서 골렘을 처치하세요.'); updateQuestUI(); }, 1500);
                             }, 1200);
                         }
-                    } else if (dwarfQuestActive && !dwarfQuestDone) {
+                    } else if (dwarfQuestStage === 1 && !dwarfQuestDone) {
                         showChat('드워프 대장장이', '아직 골렘을 처치하지 못했소? 조심하시오, 매우 강하다오.');
-                    } else if (dwarfQuestDone) {
-                        if (!data.rewardGiven) {
-                            data.rewardGiven = true; dwarfQuestActive = false;
-                            showChat('드워프 대장장이', '골렘을 해치웠소?! 대단하군! 약속한 대로 보상을 드리겠소!');
-                            addMoloch(500); gainXP(200);
-                            createRandomLoot(gameState.position.x + 2, gameState.position.z + 2, gameState.position.y);
-                            showChat('시스템', '⛏️ 드워프 퀘스트 완료! (+500 몰록, +200 XP, 아이템 지급!)');
-                        } else { showChat('드워프 대장장이', '덕분에 광산이 평화롭소. 언제든 또 오시오!'); }
-                    } else { showChat('드워프 대장장이', data.dialogue[data.dialogueIndex % data.dialogue.length]); data.dialogueIndex++; }
+                    } else if (dwarfQuestStage === 1 && dwarfQuestDone) {
+                        // 1단계 완료 → 보상 + 2단계
+                        dwarfQuestStage = 2; dwarfQuestOresDelivered = 0; dwarfQuestDone = false;
+                        addMoloch(500); gainXP(200);
+                        createRandomLoot(gameState.position.x + 2, gameState.position.z + 2, gameState.position.y);
+                        showChat('드워프 대장장이', '골렘을 해치웠소?! 대단하군! 약속한 보상이오. 그리고 하나 더 — 화산 지대에 마법 광석이 묻혀 있소. 그 광석 5개를 가져오면 전설 무기를 만들어 주겠소!');
+                        setTimeout(() => { showChat('시스템', '⛏️ [드워프 1단계 완료] +500 몰록 +200 XP\n📜 [드워프 2단계] 마법 광석 수집 (' + dwarfQuestOresDelivered + '/5) — 화산 지대 탐색'); updateQuestUI(); }, 1500);
+                    } else if (dwarfQuestStage === 2 && !dwarfQuestDone) {
+                        if (dwarfQuestOresDelivered >= 5) {
+                            dwarfQuestDone = true;
+                            showChat('드워프 대장장이', '오오! 마법 광석 5개를 모두 가져왔소! 이제 전설의 무기를 벼릴 수 있소!');
+                        } else {
+                            showChat('드워프 대장장이', '마법 광석이 아직 ' + (5 - dwarfQuestOresDelivered) + '개 더 필요하오. 화산 지대 용암 가까이에서 빛나는 광석을 찾아보시오.');
+                        }
+                    } else if (dwarfQuestStage === 2 && dwarfQuestDone) {
+                        if (!data.reward2Given) {
+                            data.reward2Given = true; dwarfQuestStage = 3; dwarfQuestActive = false;
+                            addMoloch(1200); gainXP(400);
+                            if (!gameState.weapons.find(w => w.key === 'Mk14_EBR')) { gameState.weapons.push({ key: 'Mk14_EBR', magAmmo: WEAPON_DATABASE['Mk14_EBR']?.magSize || 20 }); }
+                            showChat('시스템', '🏆 [드워프 퀘스트 전체 완료] +1200 몰록 +400 XP + 전설 무기 지급!');
+                            updateQuestUI();
+                        } else { showChat('드워프 대장장이', '광산이 평화롭소. 언제든 또 오시오, 용사!'); }
+                    } else { showChat('드워프 대장장이', '덕분에 광산이 평화롭소. 언제든 또 오시오!'); }
                 } else if (data.name === '생존자') { const claimable = achievements.filter(ach => ach.unlocked && !ach.claimed); if (claimable.length > 0) { const ach = claimable[0]; ach.claimed = true; addMoloch(ach.reward); showChat('생존자', `오! '${ach.title}' 업적을 달성했군. 여기 보상일세.`); showChat('시스템', `도전과제 보상: ${ach.reward} 몰록 획득!`); return; } 
             
             // [MODIFIED] 첫 번째 퀘스트 완료 및 설명 대화 추가
@@ -2362,29 +2423,45 @@
             const objective = document.getElementById('quest-objective'); 
             
             // 엘프/드워프 사이드 퀘스트 우선 표시
-            if (elfQuestActive && !elfQuestDone) {
+            if (elfQuestActive && elfQuestStage === 1 && !elfQuestDone) {
                 display.style.display = 'block';
-                objective.innerHTML = '🌿 [엘프 퀘스트] 강도 두목 처치 후 장로에게 보고';
-                objective.className = '';
-                return;
+                objective.innerHTML = '🌿 [엘프 1단계] 강도 두목 처치 → 장로에게 보고';
+                objective.className = ''; return;
             }
-            if (elfQuestActive && elfQuestDone) {
+            if (elfQuestActive && elfQuestStage === 1 && elfQuestDone) {
                 display.style.display = 'block';
-                objective.innerHTML = '🌿 [엘프 퀘스트] 엘프 장로에게 보고하세요!';
-                objective.className = 'quest-ready';
-                return;
+                objective.innerHTML = '🌿 [엘프 1단계 완료] 엘프 장로에게 보고!';
+                objective.className = 'quest-ready'; return;
             }
-            if (dwarfQuestActive && !dwarfQuestDone) {
+            if (elfQuestActive && elfQuestStage === 2 && !elfQuestDone) {
                 display.style.display = 'block';
-                objective.innerHTML = '⛏️ [드워프 퀘스트] 골렘(보스) 처치 후 대장장이에게 보고';
-                objective.className = '';
-                return;
+                objective.innerHTML = `🌿 [엘프 2단계] 고대 용 파편 수집 (${elfQuestDragonFragments}/3)`;
+                objective.className = ''; return;
             }
-            if (dwarfQuestActive && dwarfQuestDone) {
+            if (elfQuestActive && elfQuestStage === 2 && elfQuestDone) {
                 display.style.display = 'block';
-                objective.innerHTML = '⛏️ [드워프 퀘스트] 드워프 대장장이에게 보고하세요!';
-                objective.className = 'quest-ready';
-                return;
+                objective.innerHTML = '🌿 [엘프 2단계 완료] 엘프 장로에게 보고!';
+                objective.className = 'quest-ready'; return;
+            }
+            if (dwarfQuestActive && dwarfQuestStage === 1 && !dwarfQuestDone) {
+                display.style.display = 'block';
+                objective.innerHTML = '⛏️ [드워프 1단계] 골렘(보스) 처치 → 대장장이에게 보고';
+                objective.className = ''; return;
+            }
+            if (dwarfQuestActive && dwarfQuestStage === 1 && dwarfQuestDone) {
+                display.style.display = 'block';
+                objective.innerHTML = '⛏️ [드워프 1단계 완료] 드워프 대장장이에게 보고!';
+                objective.className = 'quest-ready'; return;
+            }
+            if (dwarfQuestActive && dwarfQuestStage === 2 && !dwarfQuestDone) {
+                display.style.display = 'block';
+                objective.innerHTML = `⛏️ [드워프 2단계] 마법 광석 수집 (${dwarfQuestOresDelivered}/5)`;
+                objective.className = ''; return;
+            }
+            if (dwarfQuestActive && dwarfQuestStage === 2 && dwarfQuestDone) {
+                display.style.display = 'block';
+                objective.innerHTML = '⛏️ [드워프 2단계 완료] 드워프 대장장이에게 보고!';
+                objective.className = 'quest-ready'; return;
             }
             
             if (questState.status === 0 || questState.status === 3) { 
@@ -2422,7 +2499,24 @@
             } else if (data.name === '탄약') { if (gameState.ammoInventory.hasOwnProperty(data.subtype)) { gameState.ammoInventory[data.subtype] += data.amount; showChat('시스템', `<span class="item-name">${data.subtype}</span> ${data.amount}발을 획득했습니다.`); } } 
             else if (data.name === '의료키트') { gameState.health = Math.min(getMaxHealth(), gameState.health + 500); showChat('시스템', `체력이 회복되었습니다!`); } 
             else if (data.name === '음식') { playerStamina = Math.min(getMaxStamina(), playerStamina + 50); showChat('시스템', `<span class="item-name">음식</span>으로 스태미나를 회복했습니다!`); } 
-            else if (data.name === '에너지드링크') { playerStamina = Math.min(getMaxStamina(), playerStamina + 40); showChat('시스템', `<span class="item-name" style="color:#00ffff">에너지드링크</span>를 마셔 활력을 되찾았습니다!`); } 
+            else if (data.name === '에너지드링크') { playerStamina = Math.min(getMaxStamina(), playerStamina + 40); showChat('시스템', `<span class="item-name" style="color:#00ffff">에너지드링크</span>를 마셔 활력을 되찾았습니다!`); }
+            // [NEW] 퀘스트 아이템 처리
+            else if (data.name === '고대 용 파편') {
+                if (elfQuestStage === 2 && !elfQuestDone) {
+                    elfQuestDragonFragments = Math.min(3, elfQuestDragonFragments + 1);
+                    showChat('시스템', `🌿 고대 용 파편 수집 (${elfQuestDragonFragments}/3)`);
+                    if (elfQuestDragonFragments >= 3) { elfQuestDone = true; showChat('시스템', '🌿 [엘프 2단계] 파편을 모두 모았습니다! 엘프 장로에게 보고하세요.'); }
+                    updateQuestUI();
+                } else { showChat('시스템', '아름다운 결정입니다. 언젠가 쓸모 있을지도...'); }
+            }
+            else if (data.name === '마법 광석') {
+                if (dwarfQuestStage === 2 && !dwarfQuestDone) {
+                    dwarfQuestOresDelivered = Math.min(5, dwarfQuestOresDelivered + 1);
+                    showChat('시스템', `⛏️ 마법 광석 수집 (${dwarfQuestOresDelivered}/5)`);
+                    if (dwarfQuestOresDelivered >= 5) { dwarfQuestDone = true; showChat('시스템', '⛏️ [드워프 2단계] 광석을 모두 모았습니다! 드워프 대장장이에게 보고하세요.'); }
+                    updateQuestUI();
+                } else { showChat('시스템', '이상하게 빛나는 광석입니다.'); }
+            } 
             scene.remove(item); items = items.filter(i => i !== item); updateUI(); 
         }
         function showChat(name, message) { const chatBox = document.getElementById('chat-box'); const messageDiv = document.createElement('div'); messageDiv.className = 'chat-message'; let nameSpan; 
@@ -2895,6 +2989,7 @@
                             // 엘프 퀘스트: 강도 두목 처치 시 완료
                             if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) {
                                 elfQuestDone = true;
+                                showChat('시스템', '🌿 [엘프 1단계] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.');
                                 showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.');
                             }
                             createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
@@ -3155,8 +3250,13 @@
             const currentChunkX = Math.round(gameState.position.x / CHUNK_SIZE);
             const currentChunkZ = Math.round(gameState.position.z / CHUNK_SIZE);
             const newChunkKey = `${currentChunkX},${currentChunkZ}`;
-            if (newChunkKey !== currentPlayerChunkKey) { currentPlayerChunkKey = newChunkKey; updateWorldChunks(); }
-            processChunkQueue(); // [NEW] 매 프레임 큐에서 1~2개 청크 처리 (분산 로딩)
+            // [OPT] 청크 경계가 아니더라도 80유닛 이내 접근 시 미리 로딩 트리거
+            const playerPos2 = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const localX = ((playerPos2.x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+            const localZ = ((playerPos2.z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+            const nearEdge = localX < 80 || localX > CHUNK_SIZE - 80 || localZ < 80 || localZ > CHUNK_SIZE - 80;
+            if (newChunkKey !== currentPlayerChunkKey || nearEdge) { currentPlayerChunkKey = newChunkKey; updateWorldChunks(); }
+            processChunkQueue(); // [NEW] 매 프레임 큐에서 청크 처리 (분산 로딩)
 
             renderer.render(scene, camera);
         }
@@ -3193,7 +3293,7 @@
             
             const playerPos = gameState.position;
             for(let i=0; i<15; i++) {
-                const angle = Math.random() * Math.PI * 2; const dist = 30 + Math.random() * 20; const x = playerPos.x + Math.cos(angle) * dist; const z = playerPos.z + Math.sin(angle) * dist; const y = getTerrainHeight(x, z); createZombie(x, z, 300, y);
+                const angle = Math.random() * Math.PI * 2; const dist = 30 + Math.random() * 20; const x = playerPos.x + Math.cos(angle) * dist; const z = playerPos.z + Math.sin(angle) * dist; const y = getTerrainHeight(x, z); createZombie(x, z, 100, y);
                 const zomb = zombies[zombies.length-1]; zomb.userData.state = 'chase'; zomb.userData.lastKnownPlayerPosition.copy(playerPos);
             }
 
