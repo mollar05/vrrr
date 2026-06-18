@@ -1649,7 +1649,7 @@
                 
                 const effectiveDelta = delta * updateRate;
 
-                if (isDayTime && !data.isTroll && !data.isOrc && data.health > 0) {
+                if (isDayTime && !data.isTroll && !data.isOrc && !data.isElf && data.health > 0) {
                     if ((frameCount + index) % 60 === 0) {
                         const damagePerSec = 100; 
                         data.health -= damagePerSec;
@@ -1681,7 +1681,7 @@
                     }
                 }
 
-                let heightOffset = 0.9; if (data.isTroll) heightOffset = 1.35; if (data.isOrc) heightOffset = data.name.includes('워치프') ? 1.35 : 1.0;
+                let heightOffset = 0.9; if (data.isTroll) heightOffset = 1.35; if (data.isOrc) heightOffset = data.name.includes('워치프') ? 1.35 : 1.0; if (data.isElf) heightOffset = 0.88;
                 if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03 * updateRate; if (enemy.position.y <= zombieGroundY + heightOffset && data.velocityY < 0) { enemy.position.y = zombieGroundY + heightOffset; data.isJumping = false; data.velocityY = 0; } } else { if (biome !== 'city' || validGroundHit) { enemy.position.y = zombieGroundY + heightOffset; } }
                 
                 let currentTargetPos = targetPos; let isTargetPlayer = true;
@@ -1707,9 +1707,10 @@
                 
                 const moved = enemy.position.distanceTo(data.lastPosition); if (!data.isJumping && moved < 0.1 * effectiveDelta && (data.state === 'chase' || data.state === 'portal')) { data.stuckTime += effectiveDelta * 1000; } else { data.stuckTime = 0; } data.lastPosition.copy(enemy.position);
                 
-                if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && !data.isTroll && !data.isOrc) { data.state = 'portal'; } 
-                else if (((!data.isOrc && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
-                else if (isProvoked || (!data.isOrc && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
+                if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && !data.isTroll && !data.isOrc && !data.isElf) { data.state = 'portal'; } 
+                else if (((!data.isOrc && !data.isElf && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
+                else if (isProvoked || (!data.isOrc && !data.isElf && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; }
+                else if (data.isElf && isProvoked) { data.state = distToTarget <= data.attackRange ? 'attack' : 'chase'; }
                 else if (data.stuckTime > data.stuckThreshold) { data.state = 'stuck'; } else { data.state = 'wander'; }
                 
                 switch (data.state) { case 'portal': handlePortalState(enemy, data, now, effectiveDelta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': handleChaseState(enemy, data, now, effectiveDelta, hasLineOfSight, currentTargetPos); break; case 'stuck': handleStuckState(enemy, data, effectiveDelta); break; case 'wander': handleWanderState(enemy, data, now, effectiveDelta); break; case 'knockback': handleKnockbackState(enemy, data, effectiveDelta); break; }
@@ -1738,6 +1739,36 @@
             const direction = targetPos.clone().sub(enemy.position).normalize(); direction.y = 0;
             if (data.stuckTime > 500) { direction.x += (Math.random() - 0.5); direction.z += (Math.random() - 0.5); direction.normalize(); }
 
+            // [엘프 특성] 카이팅(원거리 유지): 최적 거리 10~18에 머물며 접근하면 뒤로 물러남
+            if (data.isElf) {
+                const dist = enemy.position.distanceTo(targetPos);
+                const optimalMin = 10, optimalMax = 18;
+                if (dist < optimalMin) {
+                    // 너무 가까우면 뒤로 물러남
+                    const away = direction.clone().negate();
+                    enemy.position.add(away.multiplyScalar(data.speed * delta * 1.1));
+                } else if (dist > optimalMax) {
+                    // 너무 멀면 접근
+                    enemy.position.add(direction.multiplyScalar(data.speed * delta * 0.7));
+                } else {
+                    // [엘프 특성] 최적 거리에서 횡이동 (strafing)
+                    const strafe = new THREE.Vector3(-direction.z, 0, direction.x);
+                    const side = (Math.sin(now * 0.002 + enemy.position.x) > 0) ? 1 : -1;
+                    enemy.position.add(strafe.multiplyScalar(side * data.speed * delta * 0.55));
+                }
+                enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
+
+                // [엘프 특성] 회피 도약: 쿨다운마다 옆으로 점프
+                if (!data.isJumping && now - data.lastDodgeTime > data.dodgeCooldown && dist < 15) {
+                    data.lastDodgeTime = now;
+                    data.velocityY = 0.28;
+                    data.isJumping = true;
+                    const dodgeDir = new THREE.Vector3(-direction.z, 0, direction.x).multiplyScalar((Math.random() > 0.5 ? 1 : -1) * 3);
+                    enemy.position.add(dodgeDir);
+                }
+                return;
+            }
+
             const velocity = direction.multiplyScalar(data.speed * delta);
             enemy.position.add(velocity);
             enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
@@ -1746,16 +1777,35 @@
         }
 
         function handleWanderState(enemy, data, now, delta) {
+            // [엘프 특성] 마을 순찰: spawnPosition 중심 patrolRadius 안에서만 이동
+            const isElf = data.isElf;
+            const center = (isElf && data.spawnPosition) ? data.spawnPosition : null;
+            const maxDist = isElf ? (data.patrolRadius || 35) : Infinity;
+
             if (!data.wanderTarget) {
-                const angle = Math.random() * Math.PI * 2;
-                const dist = 5 + Math.random() * 10;
-                data.wanderTarget = new THREE.Vector3(enemy.position.x + Math.cos(angle) * dist, enemy.position.y, enemy.position.z + Math.sin(angle) * dist);
+                let tries = 0, px, pz;
+                do {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = (isElf ? 5 : 5) + Math.random() * (isElf ? 15 : 10);
+                    px = enemy.position.x + Math.cos(angle) * dist;
+                    pz = enemy.position.z + Math.sin(angle) * dist;
+                    tries++;
+                } while (isElf && center && new THREE.Vector2(px - center.x, pz - center.z).length() > maxDist && tries < 8);
+                data.wanderTarget = new THREE.Vector3(px, enemy.position.y, pz);
             }
             const dist = new THREE.Vector2(enemy.position.x - data.wanderTarget.x, enemy.position.z - data.wanderTarget.z).length();
             if (dist < 1) { data.wanderTarget = null; return; }
             
+            // 엘프는 마을 경계 밖으로 나가면 안으로 돌아옴
+            if (isElf && center) {
+                const fromCenter = new THREE.Vector2(enemy.position.x - center.x, enemy.position.z - center.z).length();
+                if (fromCenter > maxDist) {
+                    data.wanderTarget = new THREE.Vector3(center.x + (Math.random()-0.5)*10, enemy.position.y, center.z + (Math.random()-0.5)*10);
+                }
+            }
+
             const direction = data.wanderTarget.clone().sub(enemy.position).normalize(); direction.y = 0;
-            enemy.position.add(direction.multiplyScalar(data.speed * 0.5 * delta));
+            enemy.position.add(direction.multiplyScalar(data.speed * 0.45 * delta));
             enemy.lookAt(data.wanderTarget.x, enemy.position.y, data.wanderTarget.z);
         }
 
@@ -1873,14 +1923,12 @@
                 const angle = (Math.PI * 2 * i) / houseCount + randFunc() * 0.5;
                 const dist = 12 + randFunc() * 10;
                 const hx = centerX + Math.cos(angle) * dist; const hz = centerZ + Math.sin(angle) * dist; const hy = getTerrainHeight(hx, hz);
-                // 엘프 집: 나무 위 + 밝은 색
                 const houseMat = new THREE.MeshLambertMaterial({ color: 0x90ee90 });
                 const house = new THREE.Mesh(new THREE.CylinderGeometry(3, 3.5, 4, 8), houseMat);
                 house.position.set(hx, hy + 2, hz); house.castShadow = false; scene.add(house);
                 const roofMat = new THREE.MeshLambertMaterial({ color: 0x228b22 });
                 const roof = new THREE.Mesh(new THREE.ConeGeometry(4.5, 3, 8), roofMat);
                 roof.position.set(hx, hy + 5.5, hz); roof.castShadow = false; scene.add(roof);
-                // 요정 빛
                 const elfLight = new THREE.PointLight(0x88ff88, 0.8, 25);
                 elfLight.position.set(hx, hy + 3, hz); scene.add(elfLight);
             }
@@ -1889,20 +1937,32 @@
             sacredTrunk.position.set(centerX, centerY + 7.5, centerZ); sacredTrunk.castShadow = false; scene.add(sacredTrunk);
             const sacredLeaves = new THREE.Mesh(new THREE.SphereGeometry(10, 8, 6), new THREE.MeshLambertMaterial({ color: 0x00cc44 }));
             sacredLeaves.position.set(centerX, centerY + 20, centerZ); sacredLeaves.castShadow = false; scene.add(sacredLeaves);
-            // 엘프 NPC - 1명은 대화 가능한 장로, 나머지는 장식
+
             const elfCount = 3 + Math.floor(randFunc() * 3);
             for (let i = 0; i < elfCount; i++) {
                 const angle = Math.random() * Math.PI * 2; const dist = 5 + Math.random() * 20;
                 const ex = centerX + Math.cos(angle) * dist; const ez = centerZ + Math.sin(angle) * dist; const ey = getTerrainHeight(ex, ez);
-                const elfMat = new THREE.MeshLambertMaterial({ color: i === 0 ? 0x80cbc4 : 0xc8e6c9 });
-                const elf = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.6, 8), elfMat);
-                elf.position.set(ex, ey + 0.8, ez); elf.castShadow = false;
-                const earMat = new THREE.MeshLambertMaterial({ color: elfMat.color });
-                const earL = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 4), earMat); earL.position.set(-0.25, 0.9, 0); elf.add(earL);
-                const earR = earL.clone(); earR.position.set(0.25, 0.9, 0); elf.add(earR);
-                if (i === 0) {
-                    // 장로: 상호작용 NPC
+                const isElder = (i === 0);
+                const elfColor = isElder ? 0x80cbc4 : (Math.random() < 0.5 ? 0xc8e6c9 : 0xa5d6a7);
+                const elfMat = new THREE.MeshLambertMaterial({ color: elfColor });
+                // 엘프는 오크보다 날씬하고 키가 큼
+                const elf = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.28, 1.75, 8), elfMat);
+                elf.position.set(ex, ey + 0.88, ez); elf.castShadow = false;
+                // 뾰족한 귀 (엘프 특징)
+                const earMat = new THREE.MeshLambertMaterial({ color: elfColor });
+                const earL = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.45, 4), earMat); earL.position.set(-0.24, 0.95, 0); earL.rotation.z = -0.5; elf.add(earL);
+                const earR = earL.clone(); earR.position.set(0.24, 0.95, 0); earR.rotation.z = 0.5; elf.add(earR);
+                // 머리
+                const headMat = new THREE.MeshLambertMaterial({ color: elfColor });
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 7, 7), headMat); head.position.y = 1.05; elf.add(head);
+
+                if (isElder) {
+                    // ─── 장로: NPC (상호작용, 이동 안 함) ───
                     const elfDialogue = ['우리 숲에 온 것을 환영하오. 이방인이여...', '이 숲은 고대의 정령들이 깃든 곳이오.', '강도들이 우리 숲을 침범하고 있소. 조심하시오!'];
+                    // 지팡이
+                    const staffMat = new THREE.MeshLambertMaterial({ color: 0x4a2e16 });
+                    const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.6, 5), staffMat); staff.position.set(0.35, 0.5, 0.3); staff.rotation.x = 0.15; elf.add(staff);
+                    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.1, 0), new THREE.MeshBasicMaterial({ color: 0x00ffcc })); gem.position.set(0.35, 1.32, 0.3); elf.add(gem);
                     elf.userData = {
                         type: 'npc', name: '엘프 장로', isElf: true,
                         dialogue: elfDialogue, dialogueIndex: 0,
@@ -1910,9 +1970,53 @@
                         questGiven: false, questType: 'elf_bandit',
                         health: 9999, maxHealth: 9999
                     };
-                    npcs.push(elf);
+                    npcs.push(elf); scene.add(elf);
+                } else {
+                    // ─── 엘프 전사: 오크처럼 zombies 배열에 추가, 엘프 특성 부여 ───
+                    // 활 (엘프 특징 — 원거리 공격 AI용 표시)
+                    const bowMat = new THREE.MeshLambertMaterial({ color: 0x5c3d11 });
+                    const bowBody = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.03, 5, 10, Math.PI), bowMat);
+                    bowBody.position.set(0.4, 0.4, 0.3); bowBody.rotation.x = Math.PI / 2; elf.add(bowBody);
+                    const arrowMat = new THREE.MeshLambertMaterial({ color: 0xaaaaaa });
+                    const arrowShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.55, 4), arrowMat);
+                    arrowShaft.position.set(0.4, 0.4, 0.02); arrowShaft.rotation.x = Math.PI / 2; elf.add(arrowShaft);
+
+                    elf.userData = {
+                        health: 600, maxHealth: 600,
+                        speed: 14,          // 오크보다 빠름 (민첩한 엘프)
+                        originalSpeed: 14,
+                        type: 'zombie',     // updateZombies에서 처리
+                        isElf: true,        // 엘프 식별
+                        isOrc: false,
+                        name: '엘프 전사',
+                        originalColor: elfMat.color.clone(),
+                        state: 'idle',
+                        lastAttackTime: 0,
+                        attackCooldown: 1200,   // 오크(1500)보다 빠른 공격
+                        attackRange: 20,        // [엘프 특성] 원거리 공격 (활)
+                        detectionRange: 250,    // [엘프 특성] 시야 오크보다 넓음
+                        lastMoveTime: 0,
+                        wanderTarget: null,
+                        spawnPosition: elf.position.clone(),
+                        // 순찰 반경: 마을 주변을 벗어나지 않음
+                        patrolRadius: 35,
+                        path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
+                        stuckTime: 0, stuckThreshold: 1000,
+                        lastPosition: elf.position.clone(),
+                        targetPortal: null, isUsingPortal: false, portalCooldown: 1000, lastPortalUse: 0,
+                        portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false,
+                        targetHeight: 0, playerElevated: false,
+                        lastKnownPlayerPosition: new THREE.Vector3(),
+                        velocityY: 0, isJumping: false, isProvoked: false,
+                        // [엘프 특성] 회피 기동: 공격 직후 옆으로 도약
+                        lastDodgeTime: 0, dodgeCooldown: 3000,
+                        // [엘프 특성] 엄폐 후 사격 (나무/건물 뒤에 숨으려 함)
+                        lastArrowTime: 0, arrowCooldown: 2500,
+                        // [엘프 특성] 야간에도 활동 (어둠에 익숙)
+                        isTroll: false,
+                    };
+                    scene.add(elf); zombies.push(elf);
                 }
-                scene.add(elf);
             }
             showChat('시스템', '🌿 엘프 군락이 있습니다. [E]키로 장로와 대화해보세요.');
         }
@@ -3034,40 +3138,46 @@
                 data.lastAttackTime = now; const dist = enemy.position.distanceTo(targetPos); 
                 if (dist <= data.attackRange + 1.0) { 
                     if (isTargetPlayer) { 
-                        // [MODIFIED] 킬 수에 따른 난이도 스케일링 (100킬당 데미지 +10)
                         const difficultyBonus = Math.floor(gameStats.zombieKills / 100) * 10;
-                        
-                        // 몬스터 종류별 기본 데미지 설정
-                        let baseDamage = 10; // 기본 좀비
-                        if (data.isOrc) baseDamage = 15; // 오크는 좀 더 강함
-                        if (data.isTroll) baseDamage = 25; // 트롤은 훨씬 강함
-                        if (data.name && data.name.includes('워치프')) baseDamage = 30; // 워치프
-
+                        let baseDamage = 10;
+                        if (data.isOrc) baseDamage = 15;
+                        if (data.isTroll) baseDamage = 25;
+                        if (data.isElf) baseDamage = 18;
+                        if (data.name && data.name.includes('워치프')) baseDamage = 30;
                         const totalDamage = baseDamage + difficultyBonus;
-                        attackPlayer(totalDamage); 
+
+                        if (data.isElf) {
+                            // [엘프 특성] 화살 발사 — 시각적 투사체
+                            const arrowDir = targetPos.clone().sub(enemy.position).normalize();
+                            arrowDir.y += 0.04; // 포물선 보정
+                            const arrow = new THREE.Mesh(
+                                new THREE.CylinderGeometry(0.04, 0.04, 0.6, 4),
+                                new THREE.MeshBasicMaterial({ color: 0xc8a06e })
+                            );
+                            arrow.position.copy(enemy.position); arrow.position.y += 1.0;
+                            // 화살 방향으로 회전
+                            arrow.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), arrowDir);
+                            arrow.userData = { velocity: arrowDir, speed: 28, owner: 'enemy', damage: totalDamage, spawnPosition: arrow.position.clone(), isArrow: true };
+                            scene.add(arrow); bullets.push(arrow);
+                            // 발사 멘트 (낮은 확률)
+                            if (Math.random() < 0.2) showChat('엘프 전사', ['두 번은 없다.', '빗나갈 리 없지.', '숲이 너를 거부한다!'][Math.floor(Math.random()*3)]);
+                        } else {
+                            attackPlayer(totalDamage);
+                        }
                     } else if (data.customTarget && data.customTarget.userData) { 
-                        // [MODIFIED] 몬스터 간 전투 (Mob vs Mob)
-                        const dmg = 20; 
+                        const dmg = data.isElf ? 22 : 20; 
                         const victim = data.customTarget;
                         victim.userData.health -= dmg; 
                         showDamage(victim.position, dmg, '#ffaa00'); 
-                        
-                        // 맞은 놈도 때린 놈을 타겟팅 (반격 메커니즘)
-                        // 피해자가 타겟이 없거나 플레이어를 쫓던 중이었다면, 자신을 때린 놈으로 타겟 변경
                         if (victim.userData.health > 0 && (!victim.userData.customTarget || victim.userData.customTarget !== enemy)) {
-                            // 오크나 좀비라면 반격
                             if (victim.userData.type === 'zombie' || victim.userData.type === 'enemy') {
                                 victim.userData.customTarget = enemy;
                                 victim.userData.state = 'chase';
                                 victim.userData.isProvoked = true;
                             }
                         }
-
                         if (victim.userData.health <= 0) {
-                            // 타겟 죽음 -> 승리 -> 타겟 초기화 (플레이어로 복귀하거나 배회)
-                            data.customTarget = null;
-                            data.state = 'idle';
-                            // 죽은 놈 처리 (좀비면 handleZombieDeath 호출 필요하지만 여기선 약식)
+                            data.customTarget = null; data.state = 'idle';
                             if (victim.userData.type === 'zombie') handleZombieDeath(victim, zombies.indexOf(victim), false);
                             else if (victim.userData.type === 'enemy') { scene.remove(victim); rangedEnemies.splice(rangedEnemies.indexOf(victim), 1); }
                         }
@@ -3092,7 +3202,7 @@
                 }
 
                 addMoloch(Math.floor(Math.random() * 5) + 1); 
-                let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; 
+                let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; if (enemy.userData.isElf) xpGain = 25;
                 gainXP(xpGain); showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
                 
                 if (Math.random() < 0.5) { 
