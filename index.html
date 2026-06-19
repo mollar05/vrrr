@@ -501,11 +501,14 @@
             if (gameState.xp >= gameState.xpToNextLevel) {
                 gameState.xp -= gameState.xpToNextLevel;
                 gameState.level++;
-                gameState.statPoints++; 
-                gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * 1.5);
+                // 레벨이 오를수록 더 많은 스탯 포인트 지급 (5레벨마다 +1 추가)
+                const bonusPoints = 2 + Math.floor(gameState.level / 5);
+                gameState.statPoints += bonusPoints; 
+                // 다음 레벨일수록 더 많은 경험치 필요 (1.5 → 1.65배 증가율)
+                gameState.xpToNextLevel = Math.floor(gameState.xpToNextLevel * 1.65);
                 gameState.health = getMaxHealth();
                 playerStamina = getMaxStamina();
-                showChat('시스템', `레벨 업! 현재 레벨: ${gameState.level} (스탯 포인트 +1)`);
+                showChat('시스템', `레벨 업! 현재 레벨: ${gameState.level} (스탯 포인트 +${bonusPoints})`);
                 checkLevelUp();
             }
             updateUI();
@@ -848,11 +851,12 @@
             const light = new THREE.PointLight(0x00ff00, 2, 60); light.position.set(x, yBase + 10, z); scene.add(light);
         }
 
-        function collectTreeData(x, z, yBase, trunkMatrices, leafMatrices, trunkProxies, leafProxies) {
-            dummy.position.set(x, yBase + 3.75, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); trunkMatrices.push(dummy.matrix.clone());
-            const trunkProxy = new THREE.Mesh(sharedTrunkGeo, invisibleMat); trunkProxy.position.copy(dummy.position); trunkProxy.visible = true; trunkProxy.userData = { health: 20000, maxHealth: 20000, type: 'object', originalColor: sharedTrunkMat.color.clone() }; scene.add(trunkProxy); objects.push(trunkProxy); trunkProxies.push(trunkProxy);
-            dummy.position.set(x, yBase + 10, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); leafMatrices.push(dummy.matrix.clone());
-            const leafProxy = new THREE.Mesh(sharedLeafGeo, invisibleMat); leafProxy.position.copy(dummy.position); leafProxy.visible = true; leafProxy.userData = { health: 10000, maxHealth: 10000, type: 'object', originalColor: sharedLeafMat.color.clone() }; scene.add(leafProxy); objects.push(leafProxy); leafProxies.push(leafProxy);
+        function collectTreeData(x, z, yBase, trunkMatrices, leafMatrices, trunkProxies, leafProxies, scaleMult) {
+            const s = scaleMult || 1.0;
+            dummy.position.set(x, yBase + 3.75 * s, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(s, s, s); dummy.updateMatrix(); trunkMatrices.push(dummy.matrix.clone());
+            const trunkProxy = new THREE.Mesh(sharedTrunkGeo, invisibleMat); trunkProxy.position.copy(dummy.position); trunkProxy.scale.set(s, s, s); trunkProxy.visible = true; trunkProxy.userData = { health: 20000, maxHealth: 20000, type: 'object', originalColor: sharedTrunkMat.color.clone() }; scene.add(trunkProxy); objects.push(trunkProxy); trunkProxies.push(trunkProxy);
+            dummy.position.set(x, yBase + 10 * s, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(s, s, s); dummy.updateMatrix(); leafMatrices.push(dummy.matrix.clone());
+            const leafProxy = new THREE.Mesh(sharedLeafGeo, invisibleMat); leafProxy.position.copy(dummy.position); leafProxy.scale.set(s, s, s); leafProxy.visible = true; leafProxy.userData = { health: 10000, maxHealth: 10000, type: 'object', originalColor: sharedLeafMat.color.clone() }; scene.add(leafProxy); objects.push(leafProxy); leafProxies.push(leafProxy);
         }
 
         function collectRockData(x, z, yBase, rockMatrices, rockProxies) {
@@ -997,7 +1001,7 @@
             buildingsInChunk.forEach(b => { if (b.isHighrise) { collectHighriseData(b.x, b.z, b.y, chunkCityGrayMatrices, chunkCityGrayProxies); } else { collectBuildingData(b.x, b.z, b.y, chunkCityBrownMatrices, chunkCityBrownProxies, chunkRoofMatrices, chunkRoofProxies); } });
             createChunkInstancedMeshes(chunkCityGrayMatrices, sharedBoxGeo, sharedCityMatGray, chunkCityGrayProxies, chunkKey); createChunkInstancedMeshes(chunkCityBrownMatrices, sharedBoxGeo, sharedCityMatBrown, chunkCityBrownProxies, chunkKey); createChunkInstancedMeshes(chunkRoofMatrices, sharedConeGeo, sharedRoofMat, chunkRoofProxies, chunkKey);
             const chunkTrunkMatrices = []; const chunkLeafMatrices = []; const chunkRockMatrices = []; const chunkTrunkProxies = []; const chunkLeafProxies = []; const chunkRockProxies = [];
-            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies); } else if (type < 0.9 || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
+            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) : 0.9; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
             createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
             
             if (chunkRand() > 0.68) { 
@@ -1270,10 +1274,14 @@
             const sc = boss.userData.skillCooldowns;
             const groundY = getTerrainHeight(boss.position.x, boss.position.z);
             if (dist > boss.userData.attackRange) { boss.position.add(direction.multiplyScalar(boss.userData.speed * delta)); boss.position.y = groundY + (0.9 * boss.userData.scale); }
-            if (now - boss.userData.lastAttackTime < boss.userData.attackCooldown) return;
+            // 근접 거리(공격범위의 절반 이내)에 있으면 공격 쿨다운 대폭 단축 (더 빠르게 연타)
+            const effectiveCooldown = dist < boss.userData.attackRange * 0.5 ? boss.userData.attackCooldown * 0.4 : boss.userData.attackCooldown;
+            if (now - boss.userData.lastAttackTime < effectiveCooldown) return;
             boss.userData.lastAttackTime = now;
+            const isVeryClose = dist < boss.userData.attackRange * 0.5;
             const rand = Math.random();
-            if (rand < 0.3 && now - sc.boulderThrow > 5000) {
+            // 너무 가까이 있으면 바위 투척(원거리용) 대신 근접 강타를 우선 사용
+            if (!isVeryClose && rand < 0.3 && now - sc.boulderThrow > 5000) {
                 // 스킬: 바위 투척 (포물선 궤도)
                 sc.boulderThrow = now;
                 showChat('산의 골렘 크라그', '⛰️ 바위 투척!!');
@@ -1725,9 +1733,10 @@
                 
                 const moved = enemy.position.distanceTo(data.lastPosition); if (!data.isJumping && moved < 0.1 * effectiveDelta && (data.state === 'chase' || data.state === 'portal')) { data.stuckTime += effectiveDelta * 1000; } else { data.stuckTime = 0; } data.lastPosition.copy(enemy.position);
                 
+                const isPassiveByDefault = data.isOrc || data.isPeaceful;
                 if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && !data.isTroll && !data.isOrc) { data.state = 'portal'; } 
-                else if (((!data.isOrc && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
-                else if (isProvoked || (!data.isOrc && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
+                else if (((!isPassiveByDefault && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
+                else if (isProvoked || (!isPassiveByDefault && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
                 else if (data.stuckTime > data.stuckThreshold) { data.state = 'stuck'; } else { data.state = 'wander'; }
                 
                 switch (data.state) { case 'portal': handlePortalState(enemy, data, now, effectiveDelta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': handleChaseState(enemy, data, now, effectiveDelta, hasLineOfSight, currentTargetPos); break; case 'stuck': handleStuckState(enemy, data, effectiveDelta); break; case 'wander': handleWanderState(enemy, data, now, effectiveDelta); break; case 'knockback': handleKnockbackState(enemy, data, effectiveDelta); break; }
@@ -1986,7 +1995,7 @@
                 const beard = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.6, 5), new THREE.MeshLambertMaterial({ color: 0xc8a06e }));
                 beard.position.set(0, 0.7, 0.35); beard.rotation.x = Math.PI; dwarf.add(beard);
                 if (i === 0) {
-                    // 대장장이: 상호작용 NPC
+                    // 대장장이: 상호작용 NPC (공격 불가)
                     const dwarfDialogue = ['어서 오소! 대장장이 그롬이라고 하오.', '광산에서 귀한 광석을 캐고 있소. 필요한 거 있소?', '이 산에는 골렘이 산다오. 조심하시오.'];
                     dwarf.userData = {
                         type: 'npc', name: '드워프 대장장이', isDwarf: true,
@@ -1996,6 +2005,18 @@
                         health: 9999, maxHealth: 9999
                     };
                     npcs.push(dwarf);
+                } else {
+                    // 일반 드워프 광부: 공격 가능 (좀비 시스템 재사용, 평화적 시작)
+                    dwarf.userData = { 
+                        health: 450, maxHealth: 450, speed: 6.0, originalSpeed: 6.0, type: 'zombie', isDwarfVillager: true, name: '드워프',
+                        originalColor: new THREE.Color(dCol), state: 'idle', lastAttackTime: 0, attackCooldown: 1500, attackRange: 2.5, detectionRange: 55,
+                        lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
+                        stuckTime: 0, stuckThreshold: 1000, lastPosition: dwarf.position.clone(), targetPortal: null, isUsingPortal: false,
+                        portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false,
+                        targetHeight: 0, playerElevated: false, lastKnownPlayerPosition: new THREE.Vector3(), velocityY: 0, isJumping: false,
+                        isProvoked: false, isPeaceful: true, customTarget: null
+                    };
+                    zombies.push(dwarf);
                 }
                 scene.add(dwarf);
             }
@@ -2673,7 +2694,7 @@
                     const vehicleBox = vehicleA.userData.collisionBox.clone().translate(vehicleA.position); const oldSpeed = data.speed; 
                     const speedAbs = Math.abs(data.speed);
                     if (speedAbs > 2.0) { 
-                        const enemies = [...zombies, ...rangedEnemies];
+                        const enemies = [...zombies, ...rangedEnemies, ...bosses];
                         for (let k = enemies.length - 1; k >= 0; k--) {
                             const enemy = enemies[k];
                             if (!enemy.parent || enemy.userData.health <= 0) continue;
@@ -2681,8 +2702,28 @@
                             const enemyBox = new THREE.Box3().setFromObject(enemy);
                             if (vehicleBox.intersectsBox(enemyBox)) {
                                 const damage = speedAbs * 80; createDebrisEffect(enemy.position, new THREE.Color(0xaa0000), 10); showDamage(enemy.position, damage, '#ff0000'); gameStats.roadKills++; checkAchievements();
-                                if (enemy.userData.type === 'zombie') { hitZombie(enemy, damage); if (enemy.userData.health <= 0) showChat('시스템', '로드킬! (좀비 처치)'); } else if (enemy.userData.type === 'enemy') { enemy.userData.health -= damage; if (enemy.userData.health <= 0) { showChat('시스템', '로드킬! (적 처치)'); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); addMoloch(20); } else { enemy.userData.state = 'chase'; } }
-                                data.speed *= 0.8; vehicleA.userData.health -= 10;
+                                // 차량 내구도는 가한 피해량의 3/5 비율로 차감 (보스 등 매우 단단한 적을 들이받을 때 차량이 덜 망가지도록)
+                                const vehicleSelfDamage = damage * 0.6;
+                                if (enemy.userData.type === 'zombie') { 
+                                    hitZombie(enemy, damage); 
+                                    if (enemy.userData.health <= 0) showChat('시스템', `로드킬! (${enemy.userData.name || '좀비'} 처치)`); 
+                                } else if (enemy.userData.type === 'enemy' || enemy.userData.type === 'bandit') { 
+                                    enemy.userData.health -= damage; 
+                                    if (enemy.userData.health <= 0) { 
+                                        const isBandit = enemy.userData.type === 'bandit';
+                                        showChat('시스템', `로드킬! (${enemy.userData.name || '적'} 처치)`); 
+                                        createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); 
+                                        addMoloch(isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20); 
+                                        if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) { elfQuestDone = true; showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.'); }
+                                    } else { enemy.userData.state = 'chase'; } 
+                                } else if (enemy.userData.type === 'boss') {
+                                    enemy.userData.health -= damage;
+                                    if (enemy.userData.health <= 0) {
+                                        showChat('시스템', `로드킬! (${enemy.userData.name} 처치!)`);
+                                        handleBossDeath(enemy, bosses.indexOf(enemy));
+                                    }
+                                }
+                                data.speed *= 0.8; vehicleA.userData.health -= vehicleSelfDamage;
                             }
                         }
                     }
@@ -2774,11 +2815,12 @@
                     bullet.position.z += data.vz * delta;
                     bullet.rotation.x += delta * 2; bullet.rotation.z += delta * 1.5;
                     data.maxLife -= delta;
-                    // 땅에 닿으면 폭발
+                    // 플레이어에게 직접 부딪히면 즉시 "낙하 충돌" 처리
+                    const distToPlayer = bullet.position.distanceTo(gameState.position);
                     const groundY = getTerrainHeight(bullet.position.x, bullet.position.z);
-                    if (bullet.position.y <= groundY + 1.5 || data.maxLife <= 0) {
-                        // 폭발 피해
-                        const splashDist = bullet.position.distanceTo(gameState.position);
+                    if (distToPlayer < 2.2 || bullet.position.y <= groundY + 1.5 || data.maxLife <= 0) {
+                        // 폭발 피해 (직격 시 만피해, 스플래시는 거리 비례)
+                        const splashDist = distToPlayer < 2.2 ? 0 : bullet.position.distanceTo(gameState.position);
                         if (splashDist < 8) { attackPlayer(data.damage * (1 - splashDist / 8)); }
                         createDebrisEffect(bullet.position, new THREE.Color(0x776655), 20);
                         createHazardZone(bullet.position.x, 0, bullet.position.z, 5, 800, 15);
@@ -3034,7 +3076,7 @@
                             data.state = 'idle';
                             // 죽은 놈 처리 (좀비면 handleZombieDeath 호출 필요하지만 여기선 약식)
                             if (victim.userData.type === 'zombie') handleZombieDeath(victim, zombies.indexOf(victim), false);
-                            else if (victim.userData.type === 'enemy') { scene.remove(victim); rangedEnemies.splice(rangedEnemies.indexOf(victim), 1); }
+                            else if (victim.userData.type === 'enemy' || victim.userData.type === 'bandit') { scene.remove(victim); rangedEnemies.splice(rangedEnemies.indexOf(victim), 1); }
                         }
                     } 
                 } 
@@ -3059,6 +3101,13 @@
                 addMoloch(Math.floor(Math.random() * 5) + 1); 
                 let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; 
                 gainXP(xpGain); showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
+                
+                // 처치 시 즉시 스킬 포인트 지급 (일반 좀비 1, 더 강한 개체는 더 많이)
+                let directSkillPoint = 1;
+                if (enemy.userData.isTroll) directSkillPoint = 4;
+                else if (enemy.userData.isOrc) directSkillPoint = 2;
+                else if (enemy.userData.isElfVillager || enemy.userData.isDwarfVillager) directSkillPoint = 1;
+                gameState.statPoints += directSkillPoint;
                 
                 if (Math.random() < 0.5) { 
                     const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; 
@@ -3161,23 +3210,54 @@
                             else if (data.tactic === 'retreat') showChat(data.name, ['물러라!', '포위해!'][Math.floor(Math.random()*2)]);
                         }
                         
-                        // 강도가 엘프/드워프 NPC 근처에 있으면 공격 (NPC들이 반격)
+                        // 강도가 엘프/드워프 마을주민(공격 가능 개체) 근처에 있으면 실제로 공격
+                        let closestVillagerDist = Infinity, closestVillager = null;
+                        for (const z of zombies) {
+                            if (z.userData.health <= 0) continue;
+                            if (!z.userData.isElfVillager && !z.userData.isDwarfVillager) continue;
+                            const d = enemy.position.distanceTo(z.position);
+                            if (d < closestVillagerDist) { closestVillagerDist = d; closestVillager = z; }
+                        }
+                        if (closestVillager && closestVillagerDist < 35) {
+                            data.customTarget = closestVillager;
+                            // 근접 시 실제 피해 + 마을주민 반격 활성화
+                            if (closestVillagerDist < 2.5 && now - (data.lastNPCAttackTime||0) > 1200) {
+                                data.lastNPCAttackTime = now;
+                                closestVillager.userData.health -= 60;
+                                closestVillager.userData.isProvoked = true;
+                                closestVillager.userData.customTarget = enemy; // 마을주민이 강도를 반격
+                                createDebrisEffect(closestVillager.position, closestVillager.userData.originalColor, 5);
+                                if (closestVillager.userData.health <= 0) {
+                                    showChat('시스템', `💀 강도가 ${closestVillager.userData.name}을(를) 살해했습니다!`);
+                                    scene.remove(closestVillager); zombies.splice(zombies.indexOf(closestVillager), 1);
+                                } else if (Math.random() < 0.3) {
+                                    showChat(closestVillager.userData.name, '감히 이 도적놈이!');
+                                }
+                            }
+                        } else {
+                            data.customTarget = null;
+                        }
+                        
+                        // 강도가 엘프/드워프 상호작용 NPC(장로/대장장이) 근처에 있을 때 경고 대사
                         let closestNPCDist = Infinity, closestNPC = null;
                         for (const npc of npcs) {
                             if (!npc.userData.isElf && !npc.userData.isDwarf) continue;
                             const d = enemy.position.distanceTo(npc.position);
                             if (d < closestNPCDist) { closestNPCDist = d; closestNPC = npc; }
                         }
-                        if (closestNPC && closestNPCDist < 30) {
-                            // 강도가 NPC 공격 → NPC가 플레이어에게 알림 + 강도를 적대
-                            if (closestNPCDist < 3 && now - (data.lastNPCAttackTime||0) > 2000) {
-                                data.lastNPCAttackTime = now;
-                                showChat(closestNPC.userData.name, '이 악당들! 당신도 도와주시오!');
-                                data.state = 'chase'; // 강도는 NPC에게도 달려감
-                            }
+                        if (closestNPC && closestNPCDist < 15 && Math.random() < 0.002) {
+                            showChat(closestNPC.userData.name, '이 악당들! 우리 마을에서 나가라!');
                         }
                         
-                        if (dist <= data.attackRange) {
+                        // 마을주민을 공격 대상으로 삼았으면 그쪽으로 이동, 아니면 플레이어 추격
+                        if (data.customTarget && data.customTarget.userData.health > 0) {
+                            const targetEntity = data.customTarget;
+                            const distToVillager = enemy.position.distanceTo(targetEntity.position);
+                            if (distToVillager > 2.5) {
+                                const dir = targetEntity.position.clone().sub(enemy.position).normalize(); dir.y = 0;
+                                enemy.position.add(dir.multiplyScalar(data.speed * delta * 0.8));
+                            }
+                        } else if (dist <= data.attackRange) {
                             if (now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); }
                             if (data.tactic === 'retreat') {
                                 const awayDir = enemy.position.clone().sub(playerPos).normalize(); awayDir.y = 0;
@@ -3233,8 +3313,8 @@
             
             const lightIntensity = Math.max(0.05, sunHeight); sun.intensity = lightIntensity * 0.8 + 0.1; 
             
-            // [MODIFIED] 밤 최저 밝기를 0.1에서 0.2로 약 10% 상향 조정
-            let ambientBase = Math.max(0.2, lightIntensity * 0.4);
+            // [MODIFIED] 밤 최저 밝기를 기존 0.2에서 2배(0.4)로 상향 조정 (너무 어두워서 개선)
+            let ambientBase = Math.max(0.4, lightIntensity * 0.4);
             
             const nightVisionBonus = gameState.stats.perception * 0.005; 
             scene.ambientLight.intensity = Math.min(1.0, ambientBase + nightVisionBonus); 
