@@ -1675,7 +1675,7 @@
                 
                 const effectiveDelta = delta * updateRate;
 
-                if (isDayTime && !data.isTroll && !data.isOrc && data.health > 0) {
+                if (isDayTime && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager && data.health > 0) {
                     if ((frameCount + index) % 60 === 0) {
                         const damagePerSec = 100; 
                         data.health -= damagePerSec;
@@ -1734,7 +1734,7 @@
                 const moved = enemy.position.distanceTo(data.lastPosition); if (!data.isJumping && moved < 0.1 * effectiveDelta && (data.state === 'chase' || data.state === 'portal')) { data.stuckTime += effectiveDelta * 1000; } else { data.stuckTime = 0; } data.lastPosition.copy(enemy.position);
                 
                 const isPassiveByDefault = data.isOrc || data.isPeaceful;
-                if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && !data.isTroll && !data.isOrc) { data.state = 'portal'; } 
+                if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager) { data.state = 'portal'; } 
                 else if (((!isPassiveByDefault && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
                 else if (isProvoked || (!isPassiveByDefault && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
                 else if (data.stuckTime > data.stuckThreshold) { data.state = 'stuck'; } else { data.state = 'wander'; }
@@ -2198,8 +2198,8 @@
             if (weaponData.type !== 'Melee' && weaponData.type !== 'Special') {
                 const noiseRangeSq = 50 * 50; 
                 zombies.forEach(z => {
-                    // 오크는 이제 소리에 반응하지 않음 (Hit 판정에서만 반응)
-                    if (!z.userData.isOrc && z.userData.health > 0) {
+                    // 오크/엘프/드워프는 소리에 반응하지 않음 (Hit 판정에서만 반응)
+                    if (!z.userData.isOrc && !z.userData.isElfVillager && !z.userData.isDwarfVillager && z.userData.health > 0) {
                         if (z.position.distanceToSquared(gameState.position) < noiseRangeSq) {
                             if (z.userData.state !== 'chase' && z.userData.state !== 'attack') { z.userData.state = 'chase'; z.userData.lastKnownPlayerPosition.copy(gameState.position); z.userData.isProvoked = true; } else { z.userData.lastKnownPlayerPosition.copy(gameState.position); }
                         }
@@ -3047,6 +3047,7 @@
                         // 몬스터 종류별 기본 데미지 설정
                         let baseDamage = 10; // 기본 좀비
                         if (data.isOrc) baseDamage = 15; // 오크는 좀 더 강함
+                        if (data.isElfVillager || data.isDwarfVillager) baseDamage = 15; // 엘프/드워프도 오크와 동일하게 강함
                         if (data.isTroll) baseDamage = 25; // 트롤은 훨씬 강함
                         if (data.name && data.name.includes('워치프')) baseDamage = 30; // 워치프
 
@@ -3099,14 +3100,13 @@
                 }
 
                 addMoloch(Math.floor(Math.random() * 5) + 1); 
-                let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc) xpGain = 20; 
+                let xpGain = 10; if (enemy.userData.isTroll) xpGain = 50; if (enemy.userData.isOrc || enemy.userData.isElfVillager || enemy.userData.isDwarfVillager) xpGain = 20; 
                 gainXP(xpGain); showChat('시스템', `✓ 적을 처치했습니다! (+${xpGain} XP)`); 
                 
                 // 처치 시 즉시 스킬 포인트 지급 (일반 좀비 1, 더 강한 개체는 더 많이)
                 let directSkillPoint = 1;
                 if (enemy.userData.isTroll) directSkillPoint = 4;
-                else if (enemy.userData.isOrc) directSkillPoint = 2;
-                else if (enemy.userData.isElfVillager || enemy.userData.isDwarfVillager) directSkillPoint = 1;
+                else if (enemy.userData.isOrc || enemy.userData.isElfVillager || enemy.userData.isDwarfVillager) directSkillPoint = 2;
                 gameState.statPoints += directSkillPoint;
                 
                 if (Math.random() < 0.5) { 
