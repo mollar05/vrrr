@@ -111,6 +111,7 @@
         #ammo-display { font-size: 32px; font-weight: 700; line-height: 1; }
         #ammo-total { font-size: 20px; color: #ccc; }
         #weapon-name { font-size: 16px; font-weight: normal; margin-top: 5px; }
+        #weapon-ammo-type { font-size: 12px; color: #aaccff; margin-top: 4px; letter-spacing: 0.5px; }
         #reload-prompt { font-size: 14px; color: #ffcc00; display: none; margin-top: 5px; }
         #interaction-prompt { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 16px; background: rgba(0, 0, 0, 0.7); padding: 12px 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); display: none; }
         #interaction-key { font-weight: bold; background: #fff; color: #000; padding: 2px 6px; border-radius: 4px; margin-right: 8px; }
@@ -202,6 +203,39 @@
         #pause-resume-btn { background: #444; }
         #pause-status-msg { text-align: center; font-size: 13px; color: #aaffcc; min-height: 16px; }
 
+        /* [NEW] 장비창 (E키) */
+        #equipment-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 15, 25, 0.97); border: 2px solid #ffd700; padding: 25px; border-radius: 15px; color: white; z-index: 2100; width: 640px; max-height: 80vh; display: none; flex-direction: column; box-shadow: 0 0 30px rgba(255, 215, 0, 0.3); }
+        #equipment-modal h2 { color: #ffd700; text-align: center; margin: 0 0 16px 0; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #ffd700; }
+        #equip-slots-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+        .equip-slot-box { background: #1c1c2e; border: 2px solid #444; border-radius: 10px; padding: 10px; text-align: center; min-height: 110px; display: flex; flex-direction: column; justify-content: space-between; }
+        .equip-slot-box .slot-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .equip-slot-box .slot-key { font-size: 11px; color: #ffd700; margin-top: 2px; }
+        .equip-slot-box .slot-item-name { font-size: 14px; font-weight: bold; margin: 6px 0 2px 0; min-height: 18px; }
+        .equip-slot-box .slot-item-defense { font-size: 12px; color: #88ff88; }
+        .equip-slot-box .slot-item-enchant { font-size: 11px; color: #ffd700; margin-top: 2px; }
+        .equip-slot-box .slot-empty-text { font-size: 13px; color: #555; margin: 20px 0; }
+        .equip-unequip-btn { background: #553333; color: #fff; border: none; border-radius: 5px; padding: 5px; font-size: 11px; cursor: pointer; margin-top: 6px; }
+        .equip-unequip-btn:hover { background: #774444; }
+        #bag-section h3 { color: #ddd; font-size: 15px; border-bottom: 1px solid #444; padding-bottom: 6px; margin-bottom: 8px; }
+        #bag-list { overflow-y: auto; max-height: 280px; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+        .bag-item-row { display: flex; align-items: center; justify-content: space-between; background: #232336; border-radius: 8px; padding: 8px 12px; border-left: 4px solid #888; }
+        .bag-item-info { font-size: 14px; }
+        .bag-item-info .bag-item-stats { font-size: 12px; color: #aaa; display: block; }
+        .bag-item-enchant { font-size: 12px; color: #ffd700; display: block; }
+        .bag-equip-btn { background: #2d6a4f; color: white; border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .bag-equip-btn:hover { background: #38815f; }
+        .bag-empty-text { color: #666; font-size: 13px; text-align: center; padding: 20px; }
+        #close-equip-btn { background: #555; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 14px; }
+        #close-equip-btn:hover { background: #777; }
+        /* [NEW] 화면 상단 시계 옆 착용 장비 표시 */
+        #equipped-armor-display { position: fixed; top: 65px; left: 200px; display: flex; gap: 6px; z-index: 102; pointer-events: none; }
+        .equipped-armor-tag { font-size: 12px; padding: 4px 8px; border-radius: 5px; background: rgba(0,0,0,0.5); border: 1px solid; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); white-space: nowrap; }
+        /* [NEW] 액티브 스킬 쿨다운 표시 */
+        #armor-skill-bar { position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 101; pointer-events: none; }
+        .armor-skill-icon { width: 46px; height: 46px; border-radius: 8px; background: rgba(0,0,0,0.6); border: 2px solid #ffd700; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: white; position: relative; overflow: hidden; }
+        .armor-skill-icon .cd-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.75); transition: height 0.1s linear; }
+        .armor-skill-icon .key-label { position: absolute; top: 2px; left: 4px; font-size: 10px; color: #ffd700; }
+
         /* [NEW] 스코프 UI */
         #scope-display-container { position: fixed; bottom: 80px; right: 50px; display: flex; flex-direction: column; align-items: flex-end; z-index: 101; pointer-events: none; }
         .scope-row { display: flex; gap: 5px; margin-top: 5px; pointer-events: auto; }
@@ -237,6 +271,7 @@
         
         <div id="coord-display">X: 0, Y: 0 <span style="font-size:0.8em; color:#ccc; margin-left:10px;" id="biome-display"></span></div>
         <div id="time-display">00:00</div>
+        <div id="equipped-armor-display"></div>
         <div id="moloch-display">몰록 / <span id="moloch-count">0</span></div>
 
         <div id="achievement-popup">
@@ -293,7 +328,20 @@
             <input type="file" id="pause-load-input" accept="application/json,.json" style="display:none;">
         </div>
 
-        <!-- [NEW] 스탯창 모달 -->
+        <!-- [NEW] 장비창 (E키) -->
+        <div id="equipment-modal">
+            <h2>🎽 장비창</h2>
+            <div id="equip-slots-row"></div>
+            <div id="bag-section">
+                <h3>가방 (보관 중인 방어구)</h3>
+                <div id="bag-list"></div>
+            </div>
+            <button id="close-equip-btn">닫기 (E)</button>
+        </div>
+
+        <!-- [NEW] 방어구 인첸트 액티브 스킬 쿨다운 표시줄 -->
+        <div id="armor-skill-bar"></div>
+
         <div id="stats-modal">
             <h2>능력치</h2>
             <div id="stat-points-display">남은 포인트: <span id="stat-points-val">0</span></div>
@@ -359,6 +407,7 @@
                 <div id="ammo-display-group">
                     <div id="ammo-display"><span id="current-ammo">0</span> / <span id="ammo-total">0</span></div>
                 </div>
+                <div id="weapon-ammo-type"></div>
                 <div id="weapon-name">맨손</div>
                 <div id="reload-prompt">[R] 재장전 필요</div>
             </div>
@@ -435,6 +484,9 @@
         
         let isPointerLocked = false, isNight = false, sun, isGameOver = false;
         let worldSeed = null; // [NEW] 저장/불러오기 시 지형 재현을 위한 월드 시드
+        // [NEW] 방어구 인첸트 액티브 스킬 상태: 쿨다운 및 지속시간 추적
+        let armorSkillCooldowns = { helmet: 0, chest: 0, pants: 0, boots: 0 };
+        let activeSkillEffects = { damageShieldUntil: 0, speedBurstUntil: 0, revealEnemiesUntil: 0 };
         let isAiming = false;
         
         // [NEW] 줌 시스템 변수 & 업그레이드
@@ -563,6 +615,94 @@
             "Fist": { name: "맨손", type: "Melee", damage: 5, fireRate: 500, range: 5.0, model: () => { const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 })); fistMesh.position.set(0, 0, -0.3); const group = new THREE.Group(); group.add(fistMesh); const dummyMuzzle = new THREE.Object3D(); dummyMuzzle.name = 'muzzle'; dummyMuzzle.position.set(0, 0, -0.4); group.add(dummyMuzzle); group.userData = { isAnimating: false, type: 'Melee' }; return group; } }
         };
 
+        // ─── [NEW] 방어구 시스템 ────────────────────────────────────────────────
+        // 티어가 높을수록: 방어력 높음 / 스폰 확률 낮음 / 상점 가격 높음 / 인첸트 부여 확률 높음
+        const ARMOR_TIERS = [
+            { id: 'bronze',   name: '브론즈',  color: 0xcd7f32, spawnWeight: 100, priceMult: 1.0, enchantChance: 0.15 },
+            { id: 'iron',     name: '아이언',  color: 0xb0b0b8, spawnWeight: 55,  priceMult: 2.2, enchantChance: 0.30 },
+            { id: 'steel',    name: '스틸',    color: 0x6e8fa3, spawnWeight: 28,  priceMult: 4.0, enchantChance: 0.50 },
+            { id: 'mythril',  name: '미스릴',  color: 0x4fd6c8, spawnWeight: 12,  priceMult: 7.5, enchantChance: 0.75 },
+            { id: 'legendary',name: '레전더리', color: 0xffd700, spawnWeight: 4,   priceMult: 14.0, enchantChance: 1.0 }
+        ];
+        // 부위별 기본 방어력(데미지 경감량) 범위 - 흉갑이 가장 많이 막고, 부츠가 가장 적게 막음
+        const ARMOR_SLOTS = {
+            helmet: { name: '모자', icon: '🪖', baseDefenseMin: 1.5, baseDefenseMax: 3.0, keyLabel: 'Q', keyCode: 'KeyQ' },
+            chest:  { name: '흉갑', icon: '🛡️', baseDefenseMin: 4.0, baseDefenseMax: 7.0, keyLabel: 'Z', keyCode: 'KeyZ' },
+            pants:  { name: '바지', icon: '👖', baseDefenseMin: 2.5, baseDefenseMax: 4.5, keyLabel: 'X', keyCode: 'KeyX' },
+            boots:  { name: '부츠', icon: '🥾', baseDefenseMin: 1.0, baseDefenseMax: 2.0, keyLabel: 'C', keyCode: 'KeyC' }
+        };
+        // 인첸트 풀: 일부는 특정 부위에만 등장. 스탯 강화형과 액티브 스킬 부여형 두 종류.
+        const ENCHANT_DATABASE = [
+            // ── 부위 제한 없음 (모든 슬롯에 등장 가능) ──
+            { id: 'vitality_boost', name: '활력의', desc: '체력 +20', slots: null, type: 'stat', stat: 'vitalityBonus', value: 20 },
+            { id: 'endurance_boost', name: '인내의', desc: '스태미나 +25', slots: null, type: 'stat', stat: 'enduranceBonus', value: 25 },
+            { id: 'perception_boost', name: '명료한', desc: '인지력 +3 (야간 시야 개선)', slots: null, type: 'stat', stat: 'perceptionBonus', value: 3 },
+            // ── 모자 전용 ──
+            { id: 'eagle_eye', name: '매의 눈', desc: '액티브: 5초간 모든 적 위치를 비춤', slots: ['helmet'], type: 'skill', skillId: 'reveal_enemies', cooldown: 30000 },
+            { id: 'clarity', name: '총명한', desc: '경험치 획득 +15%', slots: ['helmet'], type: 'stat', stat: 'xpBonusPercent', value: 15 },
+            // ── 흉갑 전용 ──
+            { id: 'fortify', name: '철벽의', desc: '액티브: 8초간 받는 피해 50% 감소', slots: ['chest'], type: 'skill', skillId: 'damage_shield', cooldown: 45000 },
+            { id: 'strength_boost', name: '강인한', desc: '힘 +3 (근접 데미지 증가)', slots: ['chest'], type: 'stat', stat: 'strengthBonus', value: 3 },
+            // ── 바지 전용 ──
+            { id: 'haste', name: '신속의', desc: '액티브: 6초간 이동속도 60% 증가', slots: ['pants'], type: 'skill', skillId: 'speed_burst', cooldown: 25000 },
+            { id: 'agility_boost', name: '날렵한', desc: '민첩 +3 (이동속도 증가)', slots: ['pants'], type: 'stat', stat: 'agilityBonus', value: 3 },
+            // ── 부츠 전용 ──
+            { id: 'blink', name: '도약의', desc: '액티브: 바라보는 방향으로 순간이동(8m)', slots: ['boots'], type: 'skill', skillId: 'blink_dash', cooldown: 18000 },
+            { id: 'featherfall', name: '불씨막이', desc: '용암 피해 70% 감소', slots: ['boots'], type: 'stat', stat: 'lavaResist', value: 0.7 }
+        ];
+
+        function rollArmorTier() {
+            const totalWeight = ARMOR_TIERS.reduce((sum, t) => sum + t.spawnWeight, 0);
+            let roll = Math.random() * totalWeight;
+            for (const tier of ARMOR_TIERS) {
+                if (roll < tier.spawnWeight) return tier;
+                roll -= tier.spawnWeight;
+            }
+            return ARMOR_TIERS[0];
+        }
+
+        // 새 방어구 아이템을 생성 (슬롯, 티어를 지정하거나 무작위로 굴림)
+        function generateArmorPiece(slotKey, tier) {
+            slotKey = slotKey || Object.keys(ARMOR_SLOTS)[Math.floor(Math.random() * 4)];
+            tier = tier || rollArmorTier();
+            const slotData = ARMOR_SLOTS[slotKey];
+            const tierIndex = ARMOR_TIERS.indexOf(tier);
+            const baseDefense = slotData.baseDefenseMin + Math.random() * (slotData.baseDefenseMax - slotData.baseDefenseMin);
+            const defense = baseDefense * (1 + tierIndex * 0.6);
+            let enchant = null;
+            if (Math.random() < tier.enchantChance) {
+                const pool = ENCHANT_DATABASE.filter(e => !e.slots || e.slots.includes(slotKey));
+                enchant = pool[Math.floor(Math.random() * pool.length)].id;
+            }
+            return {
+                instanceId: 'armor_' + Date.now() + '_' + Math.floor(Math.random() * 1000000),
+                slot: slotKey,
+                tierId: tier.id,
+                defense: +defense.toFixed(1),
+                enchantId: enchant
+            };
+        }
+
+        function getArmorPieceLabel(piece) {
+            const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+            const slotData = ARMOR_SLOTS[piece.slot];
+            return `${tier.name} ${slotData.name}`;
+        }
+
+        function getArmorPiecePrice(piece) {
+            const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+            let price = Math.floor(40 * tier.priceMult + piece.defense * 8);
+            if (piece.enchantId) price = Math.floor(price * 1.6);
+            return price;
+        }
+
+        // [NEW] 상점의 방어구 진열 목록 (방문할 때마다 새로 채워지진 않고, 다 팔리면 보충됨)
+        let shopArmorStock = [];
+        function refreshShopArmorStock() {
+            shopArmorStock = [];
+            for (let i = 0; i < 4; i++) shopArmorStock.push(generateArmorPiece());
+        }
+
         function calculateEconomy() {
             const ammoDamageSums = {}; const ammoCounts = {};
             for (const key in WEAPON_DATABASE) {
@@ -597,12 +737,134 @@
             xpToNextLevel: 100,
             isEnding: false, // [NEW] 엔딩 진행 상태
             wasInLava: false,
-            wasNearDeath: false
+            wasNearDeath: false,
+            // [NEW] 방어구: 4부위 장착 슬롯 + 보관 가방
+            armor: { helmet: null, chest: null, pants: null, boots: null },
+            bag: []
         };
 
-        function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10); }
-        function getMaxStamina() { return BASE_PLAYER_STAMINA + (gameState.stats.endurance * 20); }
-        function getMoveSpeed() { return 10 * (1 + gameState.stats.agility * 0.05); }
+        // [NEW] 장착한 방어구의 합산 효과 계산
+        function getEquippedArmorBonuses() {
+            const bonus = { defense: 0, vitalityBonus: 0, enduranceBonus: 0, perceptionBonus: 0, strengthBonus: 0, agilityBonus: 0, xpBonusPercent: 0, lavaResist: 0 };
+            for (const slotKey in gameState.armor) {
+                const piece = gameState.armor[slotKey];
+                if (!piece) continue;
+                bonus.defense += piece.defense;
+                if (piece.enchantId) {
+                    const ench = ENCHANT_DATABASE.find(e => e.id === piece.enchantId);
+                    if (ench && ench.type === 'stat') {
+                        if (ench.stat === 'lavaResist') bonus.lavaResist = Math.max(bonus.lavaResist, ench.value);
+                        else bonus[ench.stat] = (bonus[ench.stat] || 0) + ench.value;
+                    }
+                }
+            }
+            return bonus;
+        }
+        // 현재 장착 중인 부위 중 액티브 스킬을 가진 부위 목록 (슬롯키 -> enchant 객체)
+        function getEquippedSkills() {
+            const skills = {};
+            for (const slotKey in gameState.armor) {
+                const piece = gameState.armor[slotKey];
+                if (!piece || !piece.enchantId) continue;
+                const ench = ENCHANT_DATABASE.find(e => e.id === piece.enchantId);
+                if (ench && ench.type === 'skill') skills[slotKey] = ench;
+            }
+            return skills;
+        }
+
+        // [NEW] 방어구 인첸트 액티브 스킬 발동 (Q/Z/X/C 키)
+        function activateArmorSkill(slotKey) {
+            if (isPaused || isTrading || isStatsOpen || isEquipOpen || isGameOver || isRespawning) return;
+            const piece = gameState.armor[slotKey];
+            if (!piece || !piece.enchantId) return;
+            const ench = ENCHANT_DATABASE.find(e => e.id === piece.enchantId);
+            if (!ench || ench.type !== 'skill') return;
+
+            const now = Date.now();
+            if (armorSkillCooldowns[slotKey] > now) {
+                const remain = ((armorSkillCooldowns[slotKey] - now) / 1000).toFixed(1);
+                showChat('시스템', `⏳ ${ench.name} 스킬 재사용 대기 중... (${remain}초)`);
+                return;
+            }
+
+            armorSkillCooldowns[slotKey] = now + ench.cooldown;
+
+            if (ench.skillId === 'damage_shield') {
+                activeSkillEffects.damageShieldUntil = now + 8000;
+                showChat('시스템', `🛡️ <span style="color:#ffd700">${ench.name}</span> 발동! 8초간 받는 피해가 절반으로 줄어듭니다.`);
+            } else if (ench.skillId === 'speed_burst') {
+                activeSkillEffects.speedBurstUntil = now + 6000;
+                showChat('시스템', `💨 <span style="color:#ffd700">${ench.name}</span> 발동! 6초간 이동속도가 크게 증가합니다.`);
+            } else if (ench.skillId === 'reveal_enemies') {
+                activeSkillEffects.revealEnemiesUntil = now + 5000;
+                revealNearbyEnemies();
+                showChat('시스템', `👁️ <span style="color:#ffd700">${ench.name}</span> 발동! 주변 적의 위치가 5초간 드러납니다.`);
+            } else if (ench.skillId === 'blink_dash') {
+                performBlinkDash();
+                showChat('시스템', `⚡ <span style="color:#ffd700">${ench.name}</span> 발동!`);
+            }
+            updateArmorSkillBar();
+        }
+
+        // '매의 눈': 근처 적들 머리 위에 5초간 빛나는 마커를 띄움
+        function revealNearbyEnemies() {
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const allEnemies = [...zombies, ...rangedEnemies, ...bosses];
+            allEnemies.forEach(enemy => {
+                if (!enemy || !enemy.parent || enemy.userData.health <= 0) return;
+                if (enemy.position.distanceToSquared(playerPos) > 150 * 150) return;
+                const markerGeo = new THREE.RingGeometry(0.4, 0.55, 16);
+                const markerMat = new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+                const marker = new THREE.Mesh(markerGeo, markerMat);
+                marker.position.set(0, 2.6, 0);
+                marker.rotation.x = -Math.PI / 2;
+                marker.userData.isRevealMarker = true;
+                enemy.add(marker);
+                const markerLight = new THREE.PointLight(0xff3333, 1.5, 6);
+                markerLight.position.set(0, 2.6, 0);
+                marker.userData.light = markerLight;
+                enemy.add(markerLight);
+                setTimeout(() => {
+                    if (marker.parent) marker.parent.remove(marker);
+                    if (markerLight.parent) markerLight.parent.remove(markerLight);
+                }, 5000);
+            });
+        }
+
+        // '도약의': 바라보는 방향으로 8m 순간이동 (지형 충돌은 다음 프레임 물리에서 자연 보정됨)
+        function performBlinkDash() {
+            if (playerInVehicle) return;
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            dir.y = 0; dir.normalize();
+            gameState.position.addScaledVector(dir, 8);
+            camera.position.copy(gameState.position);
+        }
+
+        // 화면 하단의 방어구 스킬 쿨다운 바 갱신
+        function updateArmorSkillBar() {
+            const bar = document.getElementById('armor-skill-bar');
+            if (!bar) return;
+            const skills = getEquippedSkills();
+            const slotKeys = Object.keys(skills);
+            if (slotKeys.length === 0) { bar.innerHTML = ''; return; }
+            const now = Date.now();
+            bar.innerHTML = slotKeys.map(slotKey => {
+                const ench = skills[slotKey];
+                const slotData = ARMOR_SLOTS[slotKey];
+                const cdEnd = armorSkillCooldowns[slotKey] || 0;
+                const remainRatio = cdEnd > now ? Math.min(1, (cdEnd - now) / ench.cooldown) : 0;
+                return `<div class="armor-skill-icon" title="${ench.name}: ${ench.desc}">
+                    <span class="key-label">${slotData.keyLabel}</span>
+                    ${slotData.icon}
+                    <div class="cd-overlay" style="height:${remainRatio * 100}%"></div>
+                </div>`;
+            }).join('');
+        }
+
+        function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10) + getEquippedArmorBonuses().vitalityBonus; }
+        function getMaxStamina() { return BASE_PLAYER_STAMINA + (gameState.stats.endurance * 20) + getEquippedArmorBonuses().enduranceBonus; }
+        function getMoveSpeed() { return 10 * (1 + (gameState.stats.agility + getEquippedArmorBonuses().agilityBonus) * 0.05) * (activeSkillEffects.speedBurstUntil > Date.now() ? 1.6 : 1); }
 
         function checkLevelUp() {
             if (gameState.xp >= gameState.xpToNextLevel) {
@@ -622,6 +884,8 @@
         }
 
         function gainXP(amount) {
+            const xpBonus = getEquippedArmorBonuses().xpBonusPercent;
+            if (xpBonus > 0) amount = Math.round(amount * (1 + xpBonus / 100));
             gameState.xp += amount;
             checkLevelUp();
         }
@@ -629,7 +893,7 @@
         let isStatsOpen = false;
         let isPaused = false; // [NEW] ESC 일시정지 메뉴 상태
         function togglePauseModal() {
-            if (isTrading || isStatsOpen) return; // 다른 모달이 떠있으면 ESC는 그쪽을 닫는 데 사용 (아래 keydown 핸들러에서 처리)
+            if (isTrading || isStatsOpen || isEquipOpen) return; // 다른 모달이 떠있으면 ESC는 그쪽을 닫는 데 사용 (아래 keydown 핸들러에서 처리)
             isPaused = !isPaused;
             const modal = document.getElementById('pause-modal');
             if (isPaused) {
@@ -674,7 +938,9 @@
                     xp: gameState.xp,
                     xpToNextLevel: gameState.xpToNextLevel,
                     lastHordeTime: gameState.lastHordeTime,
-                    hordeCooldown: gameState.hordeCooldown
+                    hordeCooldown: gameState.hordeCooldown,
+                    armor: gameState.armor,
+                    bag: gameState.bag
                 },
                 playerStamina: playerStamina,
                 unlockedScopeIndex: unlockedScopeIndex,
@@ -682,7 +948,8 @@
                 questState: questState,
                 elfQuestActive: elfQuestActive, elfQuestDone: elfQuestDone,
                 dwarfQuestActive: dwarfQuestActive, dwarfQuestDone: dwarfQuestDone,
-                achievements: achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed }))
+                achievements: achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed })),
+                shopArmorStock: shopArmorStock
             };
         }
 
@@ -735,6 +1002,8 @@
                 if (typeof gs.xpToNextLevel === 'number') gameState.xpToNextLevel = gs.xpToNextLevel;
                 if (typeof gs.lastHordeTime === 'number') gameState.lastHordeTime = gs.lastHordeTime;
                 if (typeof gs.hordeCooldown === 'number') gameState.hordeCooldown = gs.hordeCooldown;
+                if (gs.armor) gameState.armor = Object.assign({ helmet: null, chest: null, pants: null, boots: null }, gs.armor);
+                if (Array.isArray(gs.bag)) gameState.bag = gs.bag;
                 gameState.velocityY = 0; gameState.onGround = true; gameState.isReloading = false;
 
                 if (typeof data.playerStamina === 'number') playerStamina = data.playerStamina;
@@ -743,6 +1012,7 @@
                 if (data.questState) questState = data.questState;
                 elfQuestActive = !!data.elfQuestActive; elfQuestDone = !!data.elfQuestDone;
                 dwarfQuestActive = !!data.dwarfQuestActive; dwarfQuestDone = !!data.dwarfQuestDone;
+                if (Array.isArray(data.shopArmorStock)) shopArmorStock = data.shopArmorStock;
 
                 if (Array.isArray(data.achievements)) {
                     data.achievements.forEach(saved => {
@@ -793,8 +1063,135 @@
             location.reload();
         }
 
+        // ─── [NEW] 장비창 시스템 ──────────────────────────────────────────────
+        let isEquipOpen = false;
+        function toggleEquipmentModal() {
+            if (isTrading || isStatsOpen || isPaused) return;
+            isEquipOpen = !isEquipOpen;
+            const modal = document.getElementById('equipment-modal');
+            if (isEquipOpen) {
+                document.exitPointerLock();
+                modal.style.display = 'flex';
+                renderEquipmentUI();
+            } else {
+                modal.style.display = 'none';
+                document.body.requestPointerLock();
+            }
+        }
+        function closeEquipmentModal() {
+            isEquipOpen = false;
+            document.getElementById('equipment-modal').style.display = 'none';
+            document.body.requestPointerLock();
+        }
+
+        function tierColorHex(tierId) {
+            const tier = ARMOR_TIERS.find(t => t.id === tierId);
+            return '#' + tier.color.toString(16).padStart(6, '0');
+        }
+
+        function renderEquipmentUI() {
+            const slotsRow = document.getElementById('equip-slots-row');
+            slotsRow.innerHTML = '';
+            for (const slotKey in ARMOR_SLOTS) {
+                const slotData = ARMOR_SLOTS[slotKey];
+                const piece = gameState.armor[slotKey];
+                const box = document.createElement('div');
+                box.className = 'equip-slot-box';
+                if (piece) {
+                    const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                    box.style.borderColor = tierColorHex(piece.tierId);
+                    const enchant = piece.enchantId ? ENCHANT_DATABASE.find(e => e.id === piece.enchantId) : null;
+                    box.innerHTML = `
+                        <div><div class="slot-label">${slotData.icon} ${slotData.name}</div><div class="slot-key">발동키: ${slotData.keyLabel}</div></div>
+                        <div>
+                            <div class="slot-item-name" style="color:${tierColorHex(piece.tierId)}">${tier.name}</div>
+                            <div class="slot-item-defense">방어력 +${piece.defense}</div>
+                            ${enchant ? `<div class="slot-item-enchant">✨ ${enchant.name} ${enchant.desc}</div>` : ''}
+                        </div>
+                        <button class="equip-unequip-btn" data-slot="${slotKey}">해제</button>
+                    `;
+                } else {
+                    box.innerHTML = `
+                        <div><div class="slot-label">${slotData.icon} ${slotData.name}</div><div class="slot-key">발동키: ${slotData.keyLabel}</div></div>
+                        <div class="slot-empty-text">비어있음</div>
+                        <div></div>
+                    `;
+                }
+                slotsRow.appendChild(box);
+            }
+            slotsRow.querySelectorAll('.equip-unequip-btn').forEach(btn => {
+                btn.addEventListener('click', () => unequipArmorPiece(btn.dataset.slot));
+            });
+
+            const bagList = document.getElementById('bag-list');
+            bagList.innerHTML = '';
+            if (gameState.bag.length === 0) {
+                bagList.innerHTML = `<div class="bag-empty-text">가방이 비어있습니다. 필드에서 방어구를 주워보세요.</div>`;
+            } else {
+                gameState.bag.forEach((piece, idx) => {
+                    const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                    const slotData = ARMOR_SLOTS[piece.slot];
+                    const enchant = piece.enchantId ? ENCHANT_DATABASE.find(e => e.id === piece.enchantId) : null;
+                    const row = document.createElement('div');
+                    row.className = 'bag-item-row';
+                    row.style.borderLeftColor = tierColorHex(piece.tierId);
+                    row.innerHTML = `
+                        <div class="bag-item-info">
+                            <span style="color:${tierColorHex(piece.tierId)}; font-weight:bold;">${slotData.icon} ${tier.name} ${slotData.name}</span>
+                            <span class="bag-item-stats">방어력 +${piece.defense}</span>
+                            ${enchant ? `<span class="bag-item-enchant">✨ ${enchant.name} ${enchant.desc}</span>` : ''}
+                        </div>
+                        <button class="bag-equip-btn" data-idx="${idx}">장착</button>
+                    `;
+                    bagList.appendChild(row);
+                });
+                bagList.querySelectorAll('.bag-equip-btn').forEach(btn => {
+                    btn.addEventListener('click', () => equipArmorPiece(parseInt(btn.dataset.idx)));
+                });
+            }
+        }
+
+        function equipArmorPiece(bagIndex) {
+            const piece = gameState.bag[bagIndex];
+            if (!piece) return;
+            const currentlyEquipped = gameState.armor[piece.slot];
+            gameState.armor[piece.slot] = piece;
+            gameState.bag.splice(bagIndex, 1);
+            if (currentlyEquipped) gameState.bag.push(currentlyEquipped); // 기존 장비는 가방으로
+            showChat('시스템', `<span style="color:${tierColorHex(piece.tierId)}; font-weight:bold;">${getArmorPieceLabel(piece)}</span>을(를) 장착했습니다.`);
+            renderEquipmentUI();
+            updateEquippedArmorDisplay();
+            updateUI();
+        }
+
+        function unequipArmorPiece(slotKey) {
+            const piece = gameState.armor[slotKey];
+            if (!piece) return;
+            gameState.armor[slotKey] = null;
+            gameState.bag.push(piece);
+            showChat('시스템', `${getArmorPieceLabel(piece)}을(를) 해제했습니다.`);
+            renderEquipmentUI();
+            updateEquippedArmorDisplay();
+            updateUI();
+        }
+
+        // 시계 옆에 현재 착용 중인 장비 목록 표시
+        function updateEquippedArmorDisplay() {
+            const el = document.getElementById('equipped-armor-display');
+            if (!el) return;
+            const tags = [];
+            for (const slotKey in ARMOR_SLOTS) {
+                const piece = gameState.armor[slotKey];
+                if (!piece) continue;
+                const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                const slotData = ARMOR_SLOTS[slotKey];
+                tags.push(`<div class="equipped-armor-tag" style="color:${tierColorHex(piece.tierId)}; border-color:${tierColorHex(piece.tierId)}">${slotData.icon} ${tier.name} ${slotData.name}</div>`);
+            }
+            el.innerHTML = tags.join('');
+        }
+
         function toggleStatsModal() {
-            if (isTrading) return;
+            if (isTrading || isPaused || isEquipOpen) return;
             isStatsOpen = !isStatsOpen;
             const modal = document.getElementById('stats-modal');
             if (isStatsOpen) {
@@ -970,6 +1367,7 @@
             animate(); 
             updateScopeUI(); 
             updateQuestUI(); 
+            updateEquippedArmorDisplay(); // [NEW] 착용 장비 표시 초기화 (불러오기 시 복원된 장비 반영)
             if (loadedFromSave) { updateUI(); showChat('시스템', '📂 저장된 게임을 불러왔습니다.'); }
         }
         function showError(msg) { document.getElementById('loading-screen').innerHTML = `<div class="loading-text" style="color: #ff6666;">오류</div><div style="color:#fff;margin-top:20px;">${msg}</div>`; }
@@ -1182,6 +1580,26 @@
                 const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.02, 8), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
                 lens.position.y = 0.16;
                 mesh.add(lens);
+            } else if (data.type === 'armor') {
+                // [NEW] 방어구 아이템 모델: 부위별로 다른 형태, 티어 색상으로 도색되어 한눈에 등급 구분 가능
+                const tier = ARMOR_TIERS.find(t => t.id === data.armorData.tierId);
+                const armorMat = new THREE.MeshStandardMaterial({ color: tier.color, metalness: 0.6, roughness: 0.35, emissive: tier.color, emissiveIntensity: 0.15 });
+                const slot = data.armorData.slot;
+                if (slot === 'helmet') {
+                    mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), armorMat);
+                } else if (slot === 'chest') {
+                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.5, 0.25), armorMat);
+                } else if (slot === 'pants') {
+                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.22), armorMat);
+                } else {
+                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.4), armorMat);
+                }
+                // 인첸트가 있으면 은은한 빛 파티클(포인트라이트)로 강조
+                if (data.armorData.enchantId) {
+                    const glow = new THREE.PointLight(tier.color, 1.2, 3);
+                    glow.position.set(0, 0.3, 0);
+                    mesh.add(glow);
+                }
             } else {
                 let color = 0xffffff;
                 let geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
@@ -1227,6 +1645,10 @@
                 else if (scopeRoll > 0.4) level = 1; // 2x
                 
                 spawnItem({ type: 'scope', level: level, name: `${SCOPE_LEVELS[level]}배율 스코프` }, x, y, z);
+            } else if (rand < 0.88) {
+                // [NEW] 방어구 드랍 (티어가 높을수록 희귀)
+                const piece = generateArmorPiece();
+                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, x, y, z);
             }
         }
 
@@ -2578,12 +3000,15 @@
                 if (file) { loadGameFromFile(file); }
                 pauseLoadInput.value = ''; // 같은 파일을 다시 선택해도 change가 발생하도록 초기화
             });
+
+            // [NEW] 장비창 닫기 버튼
+            document.getElementById('close-equip-btn').addEventListener('click', () => { closeEquipmentModal(); });
             document.addEventListener('keydown', (e) => { 
                 if(isGameOver || gameState.isReloading) return; 
                 if (playerInVehicle) { 
                     switch(e.code) { case 'KeyW': vehicleAcceleration = -1; break; case 'KeyS': vehicleAcceleration = 1; break; case 'KeyA': vehicleSteering = -1; break; case 'KeyD': vehicleSteering = 1; break; } 
                 } else { 
-                    if (!isTrading && !isStatsOpen && !isPaused) { 
+                    if (!isTrading && !isStatsOpen && !isPaused && !isEquipOpen) { 
                         switch (e.code) { case 'KeyW': controls.moveForward = true; break; case 'KeyA': controls.moveLeft = true; break; case 'KeyS': controls.moveBackward = true; break; case 'KeyD': controls.moveRight = true; break; case 'Space': controls.jump = true; break; case 'ShiftLeft': controls.sprint = true; break; } 
                     } 
                 } 
@@ -2597,9 +3022,16 @@
                     case 'KeyF': interact(); break; 
                     case 'KeyP': toggleStatsModal(); break;
                     case 'KeyT': cycleScope(); break; // [NEW] 스코프 교체 키
+                    case 'KeyE': toggleEquipmentModal(); break; // [NEW] 장비창 토글
+                    // [NEW] 방어구 인첸트 액티브 스킬: 부위별로 다른 키
+                    case 'KeyQ': activateArmorSkill('helmet'); break;
+                    case 'KeyZ': activateArmorSkill('chest'); break;
+                    case 'KeyX': activateArmorSkill('pants'); break;
+                    case 'KeyC': activateArmorSkill('boots'); break;
                     case 'Escape': // [NEW] ESC: 다른 모달이 열려있으면 그것부터 닫고, 아니면 일시정지 메뉴 토글
                         if (isTrading) { closeTradeModal(); }
                         else if (isStatsOpen) { closeStatsModal(); }
+                        else if (isEquipOpen) { closeEquipmentModal(); }
                         else { togglePauseModal(); }
                         break;
                 } 
@@ -2609,9 +3041,9 @@
             // [FIX] WrongDocumentError Fix
             document.addEventListener('click', (event) => { 
                 // UI 클릭 시 포인터 잠금 방지
-                if (event.target.closest('button') || event.target.closest('#trade-modal') || event.target.closest('#stats-modal') || event.target.closest('#pause-modal')) return;
+                if (event.target.closest('button') || event.target.closest('#trade-modal') || event.target.closest('#stats-modal') || event.target.closest('#pause-modal') || event.target.closest('#equipment-modal')) return;
 
-                if (!isPointerLocked && !isTrading && !isStatsOpen && !isPaused) { 
+                if (!isPointerLocked && !isTrading && !isStatsOpen && !isPaused && !isEquipOpen) { 
                     // document.body 대신 renderer.domElement 사용 시도
                     const target = renderer ? renderer.domElement : document.body;
                     if(target && target.requestPointerLock) {
@@ -2630,6 +3062,7 @@
                 document.getElementById('crosshair').style.display = isPointerLocked ? 'block' : 'none'; 
                 document.body.style.cursor = isPointerLocked ? 'none' : 'default'; 
                 if (isPointerLocked && (isTrading || isStatsOpen)) { closeTradeModal(); closeStatsModal(); } 
+                if (isPointerLocked && isEquipOpen) { closeEquipmentModal(); }
             });
             
             document.addEventListener('mousemove', (e) => { if (isPointerLocked) { const sensitivity = 0.0015; if (!playerInVehicle) { gameState.rotation.y -= e.movementX * sensitivity; } gameState.rotation.x -= e.movementY * sensitivity; gameState.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gameState.rotation.x)); } });
@@ -2813,12 +3246,48 @@
             list.appendChild(scopeRow);
 
 
-            const ammoHeader = document.createElement('h3'); ammoHeader.style.color = '#ff6b6b'; ammoHeader.style.fontSize = '16px'; ammoHeader.style.marginTop = '20px'; ammoHeader.style.borderBottom = '1px solid #555'; ammoHeader.style.paddingBottom = '5px'; ammoHeader.textContent = '탄약 판매 (내 물건 팔기)'; list.appendChild(ammoHeader); for (const [type, amount] of Object.entries(gameState.ammoInventory)) { const price = ammoPrices[type] || 10; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type}: ${amount}발 보유`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.textContent = `10발 판매 (+${price} 몰록)`; if (amount < 10) { btn.disabled = true; btn.textContent = '수량 부족'; } btn.onclick = () => { if (gameState.ammoInventory[type] >= 10) { gameState.ammoInventory[type] -= 10; addMoloch(price); showChat('상인', `${type} 10발을 ${price} 몰록에 샀네.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const ammoBuyHeader = document.createElement('h3'); ammoBuyHeader.style.color = '#4ecdc4'; ammoBuyHeader.style.fontSize = '16px'; ammoBuyHeader.style.marginTop = '20px'; ammoBuyHeader.style.borderBottom = '1px solid #555'; ammoBuyHeader.style.paddingBottom = '5px'; ammoBuyHeader.textContent = '탄약 구매 (상인 물건 사기)'; list.appendChild(ammoBuyHeader); for (const type of Object.keys(gameState.ammoInventory)) { const sellPrice = ammoPrices[type] || 10; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type} (10발)`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); gameState.ammoInventory[type] += 10; showChat('상인', `여기 ${type} 10발일세. 아껴 쓰게나.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const weaponHeader = document.createElement('h3'); weaponHeader.style.color = '#ff6b6b'; weaponHeader.style.fontSize = '16px'; weaponHeader.style.marginTop = '20px'; weaponHeader.style.borderBottom = '1px solid #555'; weaponHeader.style.paddingBottom = '5px'; weaponHeader.textContent = '무기 판매'; list.appendChild(weaponHeader); let sellableWeaponsCount = 0; gameState.weapons.forEach((weapon, index) => { if (weapon.key === 'Fist') return; sellableWeaponsCount++; const weaponData = WEAPON_DATABASE[weapon.key]; const price = weaponPrices[weapon.key] || 100; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; let nameText = `${weaponData.name}`; if (index === gameState.currentWeaponIndex) { nameText += ` (장착 중)`; info.style.color = '#ffff00'; } info.textContent = nameText; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#ff9800'; btn.textContent = `판매 (+${price} 몰록)`; btn.onclick = () => { addMoloch(price); showChat('상인', `${weaponData.name}을(를) ${price} 몰록에 매입하지.`); if (index === gameState.currentWeaponIndex) { switchWeapon(0); } else if (index < gameState.currentWeaponIndex) { gameState.currentWeaponIndex--; } gameState.weapons.splice(index, 1); renderTradeItems(); updateUI(); }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); }); if (sellableWeaponsCount === 0) { const emptyMsg = document.createElement('div'); emptyMsg.style.padding = '10px'; emptyMsg.style.color = '#aaa'; emptyMsg.style.fontSize = '14px'; emptyMsg.textContent = '판매할 무기가 없습니다.'; list.appendChild(emptyMsg); } const weaponBuyHeader = document.createElement('h3'); weaponBuyHeader.style.color = '#4ecdc4'; weaponBuyHeader.style.fontSize = '16px'; weaponBuyHeader.style.marginTop = '20px'; weaponBuyHeader.style.borderBottom = '1px solid #555'; weaponBuyHeader.style.paddingBottom = '5px'; weaponBuyHeader.textContent = '무기 구매'; list.appendChild(weaponBuyHeader); for (const key in WEAPON_DATABASE) { if (key === 'Fist') continue; const weaponData = WEAPON_DATABASE[key]; const sellPrice = weaponPrices[key] || 100; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const isOwned = gameState.weapons.find(w => w.key === key); const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = weaponData.name; if (isOwned) { info.textContent += " (보유중)"; info.style.color = "#aaa"; } const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); if (isOwned) { showChat('상인', `이미 ${weaponData.name}이 있구만. 탄약만 챙겨주지.`); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } else { showChat('상인', `좋은 선택이야. ${weaponData.name}은(는) 아주 쓸만하지.`); gameState.weapons.push({ key: key, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } }
+            const ammoHeader = document.createElement('h3'); ammoHeader.style.color = '#ff6b6b'; ammoHeader.style.fontSize = '16px'; ammoHeader.style.marginTop = '20px'; ammoHeader.style.borderBottom = '1px solid #555'; ammoHeader.style.paddingBottom = '5px'; ammoHeader.textContent = '탄약 판매 (내 물건 팔기)'; list.appendChild(ammoHeader); for (const [type, amount] of Object.entries(gameState.ammoInventory)) { const price = ammoPrices[type] || 10; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type}: ${amount}발 보유`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.textContent = `10발 판매 (+${price} 몰록)`; if (amount < 10) { btn.disabled = true; btn.textContent = '수량 부족'; } btn.onclick = () => { if (gameState.ammoInventory[type] >= 10) { gameState.ammoInventory[type] -= 10; addMoloch(price); showChat('상인', `${type} 10발을 ${price} 몰록에 샀네.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const ammoBuyHeader = document.createElement('h3'); ammoBuyHeader.style.color = '#4ecdc4'; ammoBuyHeader.style.fontSize = '16px'; ammoBuyHeader.style.marginTop = '20px'; ammoBuyHeader.style.borderBottom = '1px solid #555'; ammoBuyHeader.style.paddingBottom = '5px'; ammoBuyHeader.textContent = '탄약 구매 (상인 물건 사기)'; list.appendChild(ammoBuyHeader); for (const type of Object.keys(gameState.ammoInventory)) { const sellPrice = ammoPrices[type] || 10; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type} (10발)`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); gameState.ammoInventory[type] += 10; showChat('상인', `여기 ${type} 10발일세. 아껴 쓰게나.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const weaponHeader = document.createElement('h3'); weaponHeader.style.color = '#ff6b6b'; weaponHeader.style.fontSize = '16px'; weaponHeader.style.marginTop = '20px'; weaponHeader.style.borderBottom = '1px solid #555'; weaponHeader.style.paddingBottom = '5px'; weaponHeader.textContent = '무기 판매'; list.appendChild(weaponHeader); let sellableWeaponsCount = 0; gameState.weapons.forEach((weapon, index) => { if (weapon.key === 'Fist') return; sellableWeaponsCount++; const weaponData = WEAPON_DATABASE[weapon.key]; const price = weaponPrices[weapon.key] || 100; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; let nameText = `${weaponData.name}`; if (index === gameState.currentWeaponIndex) { nameText += ` (장착 중)`; info.style.color = '#ffff00'; } info.textContent = nameText; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#ff9800'; btn.textContent = `판매 (+${price} 몰록)`; btn.onclick = () => { addMoloch(price); showChat('상인', `${weaponData.name}을(를) ${price} 몰록에 매입하지.`); if (index === gameState.currentWeaponIndex) { switchWeapon(0); } else if (index < gameState.currentWeaponIndex) { gameState.currentWeaponIndex--; } gameState.weapons.splice(index, 1); renderTradeItems(); updateUI(); }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); }); if (sellableWeaponsCount === 0) { const emptyMsg = document.createElement('div'); emptyMsg.style.padding = '10px'; emptyMsg.style.color = '#aaa'; emptyMsg.style.fontSize = '14px'; emptyMsg.textContent = '판매할 무기가 없습니다.'; list.appendChild(emptyMsg); } const weaponBuyHeader = document.createElement('h3'); weaponBuyHeader.style.color = '#4ecdc4'; weaponBuyHeader.style.fontSize = '16px'; weaponBuyHeader.style.marginTop = '20px'; weaponBuyHeader.style.borderBottom = '1px solid #555'; weaponBuyHeader.style.paddingBottom = '5px'; weaponBuyHeader.textContent = '무기 구매'; list.appendChild(weaponBuyHeader); for (const key in WEAPON_DATABASE) { if (key === 'Fist') continue; const weaponData = WEAPON_DATABASE[key]; const sellPrice = weaponPrices[key] || 100; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const isOwned = gameState.weapons.find(w => w.key === key); const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = weaponData.name; if (isOwned) { info.textContent += " (보유중)"; info.style.color = "#aaa"; } const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); if (isOwned) { showChat('상인', `이미 ${weaponData.name}이 있구만. 탄약만 챙겨주지.`); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } else { showChat('상인', `좋은 선택이야. ${weaponData.name}은(는) 아주 쓸만하지.`); gameState.weapons.push({ key: key, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); }
+
+            // [NEW] 방어구 판매 (가방에 있는 것만)
+            const armorSellHeader = document.createElement('h3'); armorSellHeader.style.color = '#ff6b6b'; armorSellHeader.style.fontSize = '16px'; armorSellHeader.style.marginTop = '20px'; armorSellHeader.style.borderBottom = '1px solid #555'; armorSellHeader.style.paddingBottom = '5px'; armorSellHeader.textContent = '방어구 판매 (가방)'; list.appendChild(armorSellHeader);
+            if (gameState.bag.length === 0) {
+                const emptyMsg = document.createElement('div'); emptyMsg.style.padding = '10px'; emptyMsg.style.color = '#aaa'; emptyMsg.style.fontSize = '14px'; emptyMsg.textContent = '판매할 방어구가 가방에 없습니다.'; list.appendChild(emptyMsg);
+            } else {
+                gameState.bag.forEach((piece, idx) => {
+                    const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                    const slotData = ARMOR_SLOTS[piece.slot];
+                    const sellPrice = Math.floor(getArmorPiecePrice(piece) * 0.4);
+                    const row = document.createElement('div'); row.className = 'trade-item';
+                    const info = document.createElement('span'); info.className = 'trade-item-info';
+                    info.innerHTML = `<span style="color:${tierColorHex(piece.tierId)}">${tier.name} ${slotData.name}</span> (방어력 +${piece.defense}${piece.enchantId ? ', 인첸트' : ''})`;
+                    const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.textContent = `판매 (+${sellPrice} 몰록)`;
+                    btn.onclick = () => { addMoloch(sellPrice); showChat('상인', `${tier.name} ${slotData.name}을(를) ${sellPrice} 몰록에 매입하지.`); gameState.bag.splice(idx, 1); renderTradeItems(); updateUI(); };
+                    row.appendChild(info); row.appendChild(btn); list.appendChild(row);
+                });
+            }
+
+            // [NEW] 방어구 구매 (티어가 높을수록 비쌈, 무작위 부위/인첸트로 생성되어 진열됨)
+            const armorBuyHeader = document.createElement('h3'); armorBuyHeader.style.color = '#4ecdc4'; armorBuyHeader.style.fontSize = '16px'; armorBuyHeader.style.marginTop = '20px'; armorBuyHeader.style.borderBottom = '1px solid #555'; armorBuyHeader.style.paddingBottom = '5px'; armorBuyHeader.textContent = '방어구 구매'; list.appendChild(armorBuyHeader);
+            if (!shopArmorStock || shopArmorStock.length === 0) refreshShopArmorStock();
+            shopArmorStock.forEach((piece, idx) => {
+                const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                const slotData = ARMOR_SLOTS[piece.slot];
+                const buyPrice = getArmorPiecePrice(piece);
+                const row = document.createElement('div'); row.className = 'trade-item';
+                const info = document.createElement('span'); info.className = 'trade-item-info';
+                const enchant = piece.enchantId ? ENCHANT_DATABASE.find(e => e.id === piece.enchantId) : null;
+                info.innerHTML = `<span style="color:${tierColorHex(piece.tierId)}; font-weight:bold;">${tier.name} ${slotData.name}</span> 방어력 +${piece.defense}${enchant ? `<br><span style="color:#ffd700; font-size:12px;">✨ ${enchant.name} ${enchant.desc}</span>` : ''}`;
+                const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`;
+                if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; }
+                btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); gameState.bag.push(piece); showChat('상인', `${tier.name} ${slotData.name}일세. 잘 챙겨 입게나.`); shopArmorStock.splice(idx, 1); renderTradeItems(); updateUI(); } };
+                row.appendChild(info); row.appendChild(btn); list.appendChild(row);
+            });
+        }
 
         function performPunch(weaponData) {
             let damage = weaponData.damage; 
             if (weaponData.type === 'Melee') {
-                damage += (gameState.stats.strength * 2);
+                damage += ((gameState.stats.strength + getEquippedArmorBonuses().strengthBonus) * 2);
             }
             
             const range = weaponData.range; const direction = new THREE.Vector3(); camera.getWorldDirection(direction); raycaster.set(gameState.position, direction); raycaster.far = range; const allHits = raycaster.intersectObjects([...rangedEnemies, ...zombies, ...bosses], true); if (allHits.length === 0) return; let closestHit = null; for (const hit of allHits) { if (!closestHit || hit.distance < closestHit.distance) { closestHit = hit; } } if (!closestHit) return; if (playerGun && playerGun.userData.type === 'Melee') { if (playerGun.userData.isAnimating) return; playerGun.userData.isAnimating = true; const originalPos = { y: -0.3, z: -0.8 }; const punchY = originalPos.y + 0.1; const punchZ = originalPos.z - 0.2; playerGun.position.y = punchY; setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.z = punchZ; } setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.y = originalPos.y; playerGun.position.z = originalPos.z; playerGun.userData.isAnimating = false; } }, 50); }, 100); }
@@ -3021,6 +3490,12 @@
                 } else {
                     showChat('시스템', '이미 더 좋은 스코프를 가지고 있습니다.');
                 }
+            } else if (data.type === 'armor') {
+                // [NEW] 방어구는 자동 장착되지 않고 가방에 보관됨 (E키로 장비창을 열어 장착)
+                gameState.bag.push(data.armorData);
+                const tier = ARMOR_TIERS.find(t => t.id === data.armorData.tierId);
+                const enchantTxt = data.armorData.enchantId ? ` <span style="color:#ffd700">[인첸트 있음]</span>` : '';
+                showChat('시스템', `<span style="color:#${tier.color.toString(16).padStart(6,'0')}; font-weight:bold;">${getArmorPieceLabel(data.armorData)}</span>을(를) 가방에 보관했습니다.${enchantTxt} (E키로 장착)`);
             } else if (data.name === '탄약') { if (gameState.ammoInventory.hasOwnProperty(data.subtype)) { gameState.ammoInventory[data.subtype] += data.amount; showChat('시스템', `<span class="item-name">${data.subtype}</span> ${data.amount}발을 획득했습니다.`); } } 
             else if (data.name === '의료키트') { gameState.health = Math.min(getMaxHealth(), gameState.health + 500); showChat('시스템', `체력이 회복되었습니다!`); } 
             else if (data.name === '음식') { playerStamina = Math.min(getMaxStamina(), playerStamina + 50); showChat('시스템', `<span class="item-name">음식</span>으로 스태미나를 회복했습니다!`); } 
@@ -3037,7 +3512,7 @@
             else nameSpan = `<span class="npc-name">${name}:</span>`; 
             messageDiv.innerHTML = `${nameSpan} ${message}`; chatBox.appendChild(messageDiv); chatBox.style.display = 'flex'; while (chatBox.children.length > 5) { chatBox.removeChild(chatBox.firstChild); } setTimeout(() => { if (chatBox.contains(messageDiv)) { messageDiv.style.opacity = '0'; setTimeout(() => { if (chatBox.contains(messageDiv)) chatBox.removeChild(messageDiv); if (chatBox.children.length === 0) chatBox.style.display = 'none'; }, 500); } }, 5000); }
         function updateInteraction() {
-            if (isPointerLocked === false || playerInVehicle || isTrading || isStatsOpen || isPaused) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
+            if (isPointerLocked === false || playerInVehicle || isTrading || isStatsOpen || isPaused || isEquipOpen) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
             const range = 3.5; let closestObject = null; let minDistance = range; const checkableObjects = [...items, ...vehicles, ...npcs]; checkableObjects.forEach(obj => { const dist = gameState.position.distanceTo(obj.position); if (dist < minDistance) { minDistance = dist; closestObject = obj; } });
             if (closestObject) { const direction = closestObject.position.clone().sub(gameState.position).normalize(); raycaster.set(gameState.position, direction); raycaster.far = range; const intersects = raycaster.intersectObjects([closestObject], true); if (intersects.length > 0 && intersects[0].object) { let target = intersects[0].object; while (target.parent && target.parent !== scene) { target = target.parent; } if (target.userData.type && (target.userData.type === 'item' || target.userData.type === 'weapon' || target.userData.type === 'scope' || target.userData.type === 'vehicle' || target.userData.type === 'npc')) { interactableObject = target; } else { interactableObject = null; } } else { interactableObject = null; } } else { interactableObject = null; }
             const prompt = document.getElementById('interaction-prompt'); const itemNameEl = document.getElementById('interaction-item-name'); const actionEl = document.getElementById('interaction-action');
@@ -3063,7 +3538,7 @@
             document.getElementById('xp-fill').style.width = `${xpPercent}%`;
             if (playerStamina < JUMP_STAMINA_COST) { document.getElementById('stamina-fill').style.background = '#FF4136'; } else { document.getElementById('stamina-fill').style.background = '#2196F3'; }
             const vehicleStatusRow = document.getElementById('vehicle-status-row'); if (playerInVehicle) { const vh = playerInVehicle.userData; const vhPercent = (vh.health / vh.maxHealth) * 100; document.getElementById('vehicle-health-fill').style.width = `${vhPercent}%`; document.getElementById('vehicle-health-text').textContent = `${Math.floor(vh.health)} / ${vh.maxHealth}`; vehicleStatusRow.style.display = 'flex'; } else { vehicleStatusRow.style.display = 'none'; }
-            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; document.getElementById('current-ammo').textContent = weaponObj.magAmmo; document.getElementById('ammo-total').textContent = ammoType ? inventoryAmmo : '—'; document.getElementById('weapon-name').textContent = weaponData.name; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { document.getElementById('reload-prompt').style.display = 'block'; } else { document.getElementById('reload-prompt').style.display = 'none'; } } else { document.getElementById('current-ammo').textContent = '-'; document.getElementById('ammo-total').textContent = '-'; document.getElementById('weapon-name').textContent = '맨손'; document.getElementById('reload-prompt').style.display = 'none'; }
+            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; document.getElementById('current-ammo').textContent = weaponObj.magAmmo; document.getElementById('ammo-total').textContent = ammoType ? inventoryAmmo : '—'; document.getElementById('weapon-name').textContent = weaponData.name; document.getElementById('weapon-ammo-type').textContent = ammoType ? `사용 탄약: ${ammoType}` : ''; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { document.getElementById('reload-prompt').style.display = 'block'; } else { document.getElementById('reload-prompt').style.display = 'none'; } } else { document.getElementById('current-ammo').textContent = '-'; document.getElementById('ammo-total').textContent = '-'; document.getElementById('weapon-name').textContent = '맨손'; document.getElementById('weapon-ammo-type').textContent = ''; document.getElementById('reload-prompt').style.display = 'none'; }
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const displayX = Math.round(playerPos.x); const displayY = Math.round(playerPos.z); document.getElementById('coord-display').innerHTML = `X: ${displayX}, Y: ${displayY} <span style="font-size:0.8em; color:#ccc; margin-left:10px;" id="biome-display">[${getBiome(playerPos.x, playerPos.z).toUpperCase()}]</span>`;
         }
         
@@ -3136,7 +3611,8 @@
             const inLava = gameState.position.y - 1.8 <= lavaHeight + 0.2;
             const lavaStatusEl = document.getElementById('lava-status');
             if (inLava) { 
-                const damage = 40 * delta;  // 기존 20→40으로 상향
+                let damage = 40 * delta;  // 기존 20→40으로 상향
+                damage *= (1 - getEquippedArmorBonuses().lavaResist); // [NEW] '불씨막이' 인첸트 적용
                 gameState.health -= damage; 
                 showLavaDamageEffect(); 
                 lavaStatusEl.style.display = 'block';
@@ -3709,7 +4185,20 @@
             const nearby = getNearbyStaticObjects(eyePos);
             const intersects = raycaster.intersectObjects([...nearby, ...structures], true); 
             const hit = intersects.find(i => i.object.geometry.type !== 'PlaneGeometry' && i.object.userData.type !== 'roof' && i.object.userData.type !== 'floor' && i.distance > 1.0 ); return !hit || hit.distance > distance - 1; }
-        function attackPlayer(damage) { if (isGameOver || isRespawning) return; if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } else { gameState.health -= damage; showPlayerDamageEffect(); updateUI(); if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } } }
+        function attackPlayer(damage) { 
+            if (isGameOver || isRespawning) return; 
+            if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } 
+            else { 
+                // [NEW] 방어구 데미지 경감 적용 (전체 피해의 85%까지만 경감 가능, 완전 무적 방지)
+                const armorDefense = getEquippedArmorBonuses().defense;
+                let reducedDamage = Math.max(damage * 0.15, damage - armorDefense);
+                // [NEW] '철벽의' 인첸트 액티브: 피해 50% 추가 감소
+                if (activeSkillEffects.damageShieldUntil > Date.now()) reducedDamage *= 0.5;
+                gameState.health -= reducedDamage; 
+                showPlayerDamageEffect(); updateUI(); 
+                if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } 
+            } 
+        }
         function updateItems(delta) { 
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             items.forEach(item => { if (item.position.distanceToSquared(playerPos) > ACTIVE_RADIUS_SQ) { item.visible = false; return; } item.visible = true; if (item.userData.type !== 'weapon') { item.rotation.y += 0.02; } if (item.userData.isGrounded) return; raycaster.far = 500; raycaster.set(item.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const itemIntersects = raycaster.intersectObjects(objects, true); let targetY = item.position.y; if (itemIntersects.length > 0) { const firstHit = itemIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object'); if(firstHit) { targetY = firstHit.point.y + 0.5; } } if (Math.abs(item.position.y - targetY) < 0.05) { item.position.y = targetY; item.userData.isGrounded = true; } else { item.position.y = THREE.MathUtils.lerp(item.position.y, targetY, 0.1); } item.userData.baseY = item.position.y; });
@@ -3721,6 +4210,7 @@
             
             updateWorldState(delta); updatePlayer(delta); updateBullets(delta); updateZombies(delta);
             if (frameCount % 60 === 0) checkAchievements(); // 누적형 스탯(주행거리 등) 주기적 체크
+            if (frameCount % 6 === 0) updateArmorSkillBar(); // [NEW] 방어구 스킬 쿨다운 바 갱신 (초당 약 10회)
             
             // [OPTIMIZATION] 230m 이상 멀어진 적(일반 원거리 적) 완전 제거 (메모리 해제)
             // [MODIFIED] 강도는 일반 몹처럼 거리로 디스폰하지 않고, 로딩된 청크 여부로만 활성/비활성 처리
@@ -3918,7 +4408,7 @@
             // [MODIFIED] 밤 최저 밝기를 기존 0.2에서 2배(0.4)로 상향 조정 (너무 어두워서 개선)
             let ambientBase = Math.max(0.4, lightIntensity * 0.4);
             
-            const nightVisionBonus = gameState.stats.perception * 0.005; 
+            const nightVisionBonus = (gameState.stats.perception + getEquippedArmorBonuses().perceptionBonus) * 0.005; 
             scene.ambientLight.intensity = Math.min(1.0, ambientBase + nightVisionBonus); 
             
             const dayColor = new THREE.Color(0x87CEEB); const sunsetColor = new THREE.Color(0xfd5e53); const nightColor = new THREE.Color(0x050515); const dayFog = new THREE.Color(0x87CEEB); const sunsetFog = new THREE.Color(0xfd5e53); const nightFog = new THREE.Color(0x050515);
@@ -4023,7 +4513,7 @@
                 setTimeout(() => {
                     flash.style.opacity = '0';
                     msg.style.opacity = '0';
-                    if (!isPaused && !isTrading && !isStatsOpen) { document.body.requestPointerLock(); }
+                    if (!isPaused && !isTrading && !isStatsOpen && !isEquipOpen) { document.body.requestPointerLock(); }
                     isRespawning = false;
                 }, 400);
             }, 900);
