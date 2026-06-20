@@ -1066,7 +1066,7 @@
             buildingsInChunk.forEach(b => { if (b.isHighrise) { collectHighriseData(b.x, b.z, b.y, chunkCityGrayMatrices, chunkCityGrayProxies); } else { collectBuildingData(b.x, b.z, b.y, chunkCityBrownMatrices, chunkCityBrownProxies, chunkRoofMatrices, chunkRoofProxies); } });
             createChunkInstancedMeshes(chunkCityGrayMatrices, sharedBoxGeo, sharedCityMatGray, chunkCityGrayProxies, chunkKey); createChunkInstancedMeshes(chunkCityBrownMatrices, sharedBoxGeo, sharedCityMatBrown, chunkCityBrownProxies, chunkKey); createChunkInstancedMeshes(chunkRoofMatrices, sharedConeGeo, sharedRoofMat, chunkRoofProxies, chunkKey);
             const chunkTrunkMatrices = []; const chunkLeafMatrices = []; const chunkRockMatrices = []; const chunkTrunkProxies = []; const chunkLeafProxies = []; const chunkRockProxies = [];
-            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? treeChance + (Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) - treeChance) * 0.5 : treeChance + (0.9 - treeChance) * 0.5; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
+            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? treeChance + (Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) - treeChance) * 0.25 : treeChance + (0.9 - treeChance) * 0.5; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
             createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
             
             if (chunkRand() > 0.68) { 
@@ -1209,6 +1209,8 @@
         }
 
         // ─── 보스 투사체 헬퍼: 포물선 + 플레이어 몸통 조준 ──────────────────
+        const bossProjectileGeoCache = new Map();
+        const bossProjectileMatCache = new Map();
         function createBossProjectile(spawnPos, targetPos, damage, color, radius, arcHeight, speedMult) {
             // targetPos는 플레이어 발 위치 기준일 수 있으므로 몸통(가슴) 높이로 보정
             const torsoTarget = targetPos.clone(); torsoTarget.y += 1.0; // 가슴 높이 조준
@@ -1219,7 +1221,13 @@
             const dY = torsoTarget.y - spawnPos.y;
             const gravity = arcHeight || 14; // 낮을수록 평탄한 포물선, 높을수록 휘어짐
             const vy0 = (dY / T) + 0.5 * gravity * T;
-            const proj = new THREE.Mesh(new THREE.SphereGeometry(radius, 7, 6), new THREE.MeshBasicMaterial({ color }));
+            // [OPTIMIZATION] geometry/material 캐싱 (반지름별로 1개씩만 생성, 매 발사마다 새로 만들지 않음)
+            const geoKey = radius;
+            let geo = bossProjectileGeoCache.get(geoKey);
+            if (!geo) { geo = new THREE.SphereGeometry(radius, 6, 5); bossProjectileGeoCache.set(geoKey, geo); }
+            let mat = bossProjectileMatCache.get(color);
+            if (!mat) { mat = new THREE.MeshBasicMaterial({ color }); bossProjectileMatCache.set(color, mat); }
+            const proj = new THREE.Mesh(geo, mat);
             proj.position.copy(spawnPos);
             proj.userData = {
                 isPhysicsBullet: true, owner: 'enemy', damage,
@@ -1263,7 +1271,7 @@
             }
             bossMesh.position.set(x, yBase + (0.9 * scale), z); bossMesh.castShadow = false;
             const skillCooldowns = { fireball: 0, shockwave: 0, summon: 0, smash: 0, boulderThrow: 0, teleport: 0, darkPulse: 0, massRaise: 0 };
-            bossMesh.userData = { type: 'boss', bossType: type, name: bossName, health: bossHealth, maxHealth: bossHealth, scale: scale, speed: speed, state: 'idle', lastAttackTime: 0, attackCooldown: type === 'witch' ? 2000 : type === 'golem' ? 4000 : 2500, attackRange: type === 'witch' ? 40 : type === 'golem' ? 12 : type === 'fire_demon' ? 10 : 45, detectionRange: 300, lastTeleportTime: 0, teleportCooldown: 8000, originalColor: new THREE.Color(color), skillCooldowns };
+            bossMesh.userData = { type: 'boss', bossType: type, name: bossName, health: bossHealth, maxHealth: bossHealth, scale: scale, speed: speed, state: 'idle', lastAttackTime: 0, attackCooldown: type === 'witch' ? 3200 : type === 'golem' ? 4000 : 2500, attackRange: type === 'witch' ? 40 : type === 'golem' ? 12 : type === 'fire_demon' ? 10 : 45, detectionRange: 300, lastTeleportTime: 0, teleportCooldown: 8000, originalColor: new THREE.Color(color), skillCooldowns };
             scene.add(bossMesh); bosses.push(bossMesh); objects.push(bossMesh); 
         }
 
@@ -1451,7 +1459,12 @@
             if (dist > boss.userData.attackRange) { boss.position.add(direction.multiplyScalar(boss.userData.speed * delta)); const groundY = getTerrainHeight(boss.position.x, boss.position.z); boss.position.y = groundY + (0.9 * boss.userData.scale); }
             if (now - boss.userData.lastAttackTime > boss.userData.attackCooldown) {
                 boss.userData.lastAttackTime = now; const rand = Math.random();
-                if (rand < 0.05) { castWitchSummon(boss); } else if (rand < 0.45) { castWitchExplosion(boss, playerPos); } else { castWitchMultiShot(boss, playerPos); }
+                // [OPTIMIZATION] 소환은 전용 쿨다운 + 현재 살아있는 소환수 제한으로 좀비 무한 누적 방지 (렉 원인)
+                const sc = boss.userData.skillCooldowns;
+                const summonedAlive = zombies.filter(z => z.userData.isWitchSummon && z.userData.health > 0).length;
+                if (rand < 0.05 && now - (sc.summon || 0) > 10000 && summonedAlive < 6) { sc.summon = now; castWitchSummon(boss); } 
+                else if (rand < 0.45) { castWitchExplosion(boss, playerPos); } 
+                else { castWitchMultiShot(boss, playerPos); }
             }
         }
 
@@ -1460,7 +1473,7 @@
         }
         function castWitchSummon(boss) {
             showChat('저주받은 마녀', '일어나라, 나의 종들이여!'); createDebrisEffect(boss.position, new THREE.Color(0x00ff00), 15);
-            for(let i=0; i<2; i++) { const angle = (Math.PI * 2 / 2) * i; const r = 3; const zx = boss.position.x + Math.cos(angle) * r; const zz = boss.position.z + Math.sin(angle) * r; const zy = getTerrainHeight(zx, zz); createZombie(zx, zz, 300, zy); const newZombie = zombies[zombies.length - 1]; newZombie.userData.state = 'chase'; newZombie.userData.lastKnownPlayerPosition.copy(playerInVehicle ? playerInVehicle.position : gameState.position); createDebrisEffect(new THREE.Vector3(zx, zy, zz), new THREE.Color(0x00ff00), 5); }
+            for(let i=0; i<2; i++) { const angle = (Math.PI * 2 / 2) * i; const r = 3; const zx = boss.position.x + Math.cos(angle) * r; const zz = boss.position.z + Math.sin(angle) * r; const zy = getTerrainHeight(zx, zz); createZombie(zx, zz, 300, zy); const newZombie = zombies[zombies.length - 1]; newZombie.userData.state = 'chase'; newZombie.userData.lastKnownPlayerPosition.copy(playerInVehicle ? playerInVehicle.position : gameState.position); newZombie.userData.isWitchSummon = true; createDebrisEffect(new THREE.Vector3(zx, zy, zz), new THREE.Color(0x00ff00), 5); }
         }
         function castWitchExplosion(boss, playerPos) { showChat('저주받은 마녀', '불타올라라!'); createHazardZone(playerPos.x, playerPos.y, playerPos.z, 5.0, 2000, 30); }
         function castWitchMultiShot(boss, targetPos) {
@@ -3471,8 +3484,19 @@
         }
 
         // Helper functions
-        function createDebrisEffect(pos, color, count=5) { for(let i=0; i<count; i++) { const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1); const mat = new THREE.MeshBasicMaterial({color: color}); const p = new THREE.Mesh(geo, mat); p.position.copy(pos); p.userData.velocity = new THREE.Vector3((Math.random()-0.5)*10, Math.random()*10, (Math.random()-0.5)*10); p.userData.life = 1.0; scene.add(p); debrisParticles.push(p); } }
-        function updateDebris(delta) { for(let i=debrisParticles.length-1; i>=0; i--) { const p = debrisParticles[i]; p.userData.life -= delta; p.userData.velocity.y -= 20 * delta; p.position.add(p.userData.velocity.clone().multiplyScalar(delta)); if(p.userData.life <= 0 || p.position.y < -50) { scene.remove(p); debrisParticles.splice(i, 1); } } }
+        const debrisSharedGeo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+        const debrisMatCache = new Map();
+        function createDebrisEffect(pos, color, count=5) { 
+            let colorKey = (color && color.isColor) ? color.getHex() : color;
+            let mat = debrisMatCache.get(colorKey);
+            if (!mat) { mat = new THREE.MeshBasicMaterial({ color }); debrisMatCache.set(colorKey, mat); }
+            for(let i=0; i<count; i++) { const p = new THREE.Mesh(debrisSharedGeo, mat); p.position.copy(pos); p.userData.velocity = new THREE.Vector3((Math.random()-0.5)*10, Math.random()*10, (Math.random()-0.5)*10); p.userData.life = 1.0; scene.add(p); debrisParticles.push(p); } 
+        }
+        function updateDebris(delta) { 
+            // [OPTIMIZATION] 디버리 파티클 최대 개수 제한 (보스 스킬 다발 시 렉 방지)
+            while (debrisParticles.length > 150) { const old = debrisParticles.shift(); if (old && old.parent) scene.remove(old); }
+            for(let i=debrisParticles.length-1; i>=0; i--) { const p = debrisParticles[i]; p.userData.life -= delta; p.userData.velocity.y -= 20 * delta; p.position.add(p.userData.velocity.clone().multiplyScalar(delta)); if(p.userData.life <= 0 || p.position.y < -50) { scene.remove(p); debrisParticles.splice(i, 1); } } 
+        }
         
         // [FIX] 데미지 텍스트가 겹치지 않도록 위치에 약간의 랜덤 오프셋 추가
         function showDamage(pos, amount, color='#ff0000') { 
