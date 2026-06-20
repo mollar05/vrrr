@@ -419,6 +419,7 @@
         const generatedChunks = new Set();
         
         let currentPlayerChunkKey = "";
+        let exploredChunkKeys = new Set();
         let frameCount = 0;
         const COLLISION_CHECK_DISTANCE_SQ = 50 * 50; 
         const BULLET_CHECK_DISTANCE_SQ = 50 * 50;
@@ -472,16 +473,16 @@
             // ─── 탐험 계열 ───
             { id: 'roadwarrior', title: '로드킬 마스터', desc: '차량으로 적 3마리 처치', condition: () => gameStats.roadKills >= 3, reward: 400, unlocked: false, claimed: false },
             { id: 'roadwarrior2', title: '폭주족', desc: '차량으로 적 20마리 처치', condition: () => gameStats.roadKills >= 20, reward: 1500, unlocked: false, claimed: false },
-            { id: 'lumberjack', title: '벌목꾼', desc: '나무 20그루 베기', condition: () => gameStats.treesChopped >= 20, reward: 500, unlocked: false, claimed: false },
+            { id: 'lumberjack', title: '질주하는 드라이버', desc: '차량으로 1000m 이상 누적 주행', condition: () => gameStats.treesChopped >= 1000, reward: 500, unlocked: false, claimed: false },
             { id: 'explorer', title: '개척자', desc: '청크 30개 탐험', condition: () => gameStats.chunksExplored >= 30, reward: 1000, unlocked: false, claimed: false },
             { id: 'explorer2', title: '방랑하는 여행자', desc: '청크 100개 탐험', condition: () => gameStats.chunksExplored >= 100, reward: 3000, unlocked: false, claimed: false },
             { id: 'driver', title: '면허 취득', desc: '차량 5대 운전', condition: () => gameStats.vehiclesDriven >= 5, reward: 600, unlocked: false, claimed: false },
             
             // ─── 생존/위험 계열 ───
             { id: 'lavawalker', title: '용암 위의 산책자', desc: '용암 데미지를 받고 생존 5회', condition: () => gameStats.lavaSurvived >= 5, reward: 1200, unlocked: false, claimed: false },
-            { id: 'survivor', title: '불사조', desc: '죽음에서 5회 부활', condition: () => gameStats.deathCount >= 5, reward: 800, unlocked: false, claimed: false },
+            { id: 'survivor', title: '구사일생', desc: '체력 5% 이하에서 5회 생존', condition: () => gameStats.deathCount >= 5, reward: 800, unlocked: false, claimed: false },
             { id: 'nightowl', title: '밤의 지배자', desc: '밤을 10번 넘기기', condition: () => gameStats.nightsSurvived >= 10, reward: 1000, unlocked: false, claimed: false },
-            { id: 'sharpshooter', title: '명사수', desc: '헤드샷으로 20마리 처치', condition: () => gameStats.headshotKills >= 20, reward: 1500, unlocked: false, claimed: false },
+            { id: 'sharpshooter', title: '명사수', desc: '50m 이상 거리에서 20마리 저격', condition: () => gameStats.headshotKills >= 20, reward: 1500, unlocked: false, claimed: false },
             { id: 'trigger', title: '방아쇠를 당기는 손가락', desc: '총알 1000발 발사', condition: () => gameStats.shotsFired >= 1000, reward: 700, unlocked: false, claimed: false },
             
             // ─── 종족/퀘스트 계열 ───
@@ -552,7 +553,9 @@
             level: 1,
             xp: 0,
             xpToNextLevel: 100,
-            isEnding: false // [NEW] 엔딩 진행 상태
+            isEnding: false, // [NEW] 엔딩 진행 상태
+            wasInLava: false,
+            wasNearDeath: false
         };
 
         function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10); }
@@ -2277,6 +2280,7 @@
             const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (!weaponObj || !muzzle) return; const weaponData = WEAPON_DATABASE[weaponObj.key]; const isMelee = (weaponData.type === 'Melee'); const isOutOfAmmo = (!isMelee && weaponObj.magAmmo <= 0); const fireRate = (isMelee || isOutOfAmmo) ? WEAPON_DATABASE["Fist"].fireRate : weaponData.fireRate; const now = Date.now(); if (now - gameState.lastShotTime < fireRate) return; gameState.lastShotTime = now;
             if (isMelee || isOutOfAmmo) { if (isOutOfAmmo) { document.getElementById('reload-prompt').style.display = 'block'; } performPunch(WEAPON_DATABASE["Fist"]); return; }
             weaponObj.magAmmo--; updateUI(); const muzzleWorldPos = new THREE.Vector3(); muzzle.getWorldPosition(muzzleWorldPos); showMuzzleFlash(muzzleWorldPos); const pellets = weaponData.pellets || 1; const spread = weaponData.spread || 0;
+            gameStats.shotsFired++;
             
             // [MODIFIED] 오크 청각 자극 코드 제거 (요청: 오크는 데미지 입을 때만 반응)
             // 기존의 "총소리 듣고 오크가 달려오는" 로직은 삭제됨.
@@ -2389,7 +2393,12 @@
             let target = closestHit.object; while (target.parent && target.parent !== scene) { target = target.parent; }
             
             // [MODIFIED] 플레이어 공격 시 hitZombie 호출 (attacker = null은 플레이어 의미)
-            if (target.userData.type === 'zombie') { hitZombie(target, damage, null); } 
+            const isMeleeAttack = weaponData.type === 'Melee';
+            if (target.userData.type === 'zombie') { 
+                const wasAlive = target.userData.health > 0;
+                hitZombie(target, damage, null); 
+                if (isMeleeAttack && wasAlive && target.userData.health <= 0) { gameStats.meleeKills++; checkAchievements(); }
+            } 
             else if (target.userData.type === 'enemy') { 
                 const enemy = target; if (!enemy.parent || enemy.userData.health <= 0) return; enemy.userData.health -= damage; showDamage(enemy.position, damage); const healthPercent = Math.max(0, enemy.userData.health / enemy.userData.maxHealth); enemy.material.color.copy(enemy.userData.originalColor).lerp(new THREE.Color(0xffffff), 1 - healthPercent); 
                 if (enemy.userData.health > 0) { 
@@ -2400,7 +2409,7 @@
                     // 적도 맞으면 customTarget을 플레이어로 재설정 (혹시 다른 몹이랑 싸우고 있었을 수도 있으니까)
                     enemy.userData.customTarget = null;
                 } 
-                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
+                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
             }
             else if (target.userData.type === 'boss') { target.userData.health -= damage; showDamage(target.position, damage); }
         }
@@ -2429,7 +2438,7 @@
 
         function interact() {
             if (playerInVehicle) { toggleVehicle(playerInVehicle); return; }
-            if (interactableObject) { const { type } = interactableObject.userData; if (type === 'item' || type === 'weapon' || type === 'scope') { pickupItem(interactableObject); } else if (type === 'npc') { const data = interactableObject.userData; if (data.name === '상인' || data.name === '방랑 상인') { openTradeModal(); } else if (data.name === '엘프 장로') {
+            if (interactableObject) { const { type } = interactableObject.userData; if (type === 'item' || type === 'weapon' || type === 'scope') { pickupItem(interactableObject); } else if (type === 'npc') { const data = interactableObject.userData; gameStats.npcTalks++; checkAchievements(); if (data.name === '상인' || data.name === '방랑 상인') { openTradeModal(); } else if (data.name === '엘프 장로') {
                     // 엘프 장로 대화 + 퀘스트
                     if (!data.questGiven) {
                         showChat('엘프 장로', data.dialogue[data.dialogueIndex % data.dialogue.length]);
@@ -2474,7 +2483,7 @@
                             showChat('시스템', '⛏️ 드워프 퀘스트 완료! (+500 몰록, +200 XP, 아이템 지급!)');
                         } else { showChat('드워프 대장장이', '덕분에 광산이 평화롭소. 언제든 또 오시오!'); }
                     } else { showChat('드워프 대장장이', data.dialogue[data.dialogueIndex % data.dialogue.length]); data.dialogueIndex++; }
-                } else if (data.name === '생존자') { const claimable = achievements.filter(ach => ach.unlocked && !ach.claimed); if (claimable.length > 0) { const ach = claimable[0]; ach.claimed = true; addMoloch(ach.reward); showChat('생존자', `오! '${ach.title}' 업적을 달성했군. 여기 보상일세.`); showChat('시스템', `도전과제 보상: ${ach.reward} 몰록 획득!`); return; } 
+                } else if (data.name === '생존자') { const claimable = achievements.filter(ach => ach.unlocked && !ach.claimed); if (claimable.length > 0) { const ach = claimable[0]; ach.claimed = true; gameStats.achievementsClaimed++; addMoloch(ach.reward); showChat('생존자', `오! '${ach.title}' 업적을 달성했군. 여기 보상일세.`); showChat('시스템', `도전과제 보상: ${ach.reward} 몰록 획득!`); return; } 
             
             // [MODIFIED] 첫 번째 퀘스트 완료 및 설명 대화 추가
             if (questState.type === 'talk_survivor' && questState.status === 1) {
@@ -2570,7 +2579,7 @@
                 } 
             } 
         }
-        function toggleVehicle(vehicle, isDestroyed = false) { if (playerInVehicle) { const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(vehicle.quaternion); const exitPos = vehicle.position.clone().add(rightDir.multiplyScalar(2.0)); const exitY = getTerrainHeight(exitPos.x, exitPos.z) + 1.8; gameState.position.set(exitPos.x, exitY, exitPos.z); const vehicleRotationY = vehicle.rotation.y; gameState.rotation.y = vehicleRotationY; gameState.rotation.x = 0; scene.add(camera); camera.position.copy(gameState.position); camera.rotation.set(gameState.rotation.x, gameState.rotation.y, 0, 'YXZ'); playerGun.visible = true; playerInVehicle = null; if (isDestroyed) { gameState.health = Math.max(0, gameState.health - 25); showChat("시스템", "차량이 파괴되었습니다! 비상 탈출합니다!"); const newPlayerPos = gameState.position.clone(); [...zombies, ...rangedEnemies].forEach(enemy => { if (enemy.userData.health > 0) { enemy.userData.lastKnownPlayerPosition.copy(newPlayerPos); enemy.userData.state = 'chase'; } }); } else { showChat('시스템', '차량에서 하차했습니다.'); } } else { playerInVehicle = vehicle; vehicle.add(camera); camera.position.set(0, 1.2, -0.5); camera.rotation.set(0, 0, 0, 'YXZ'); playerGun.visible = false; showChat('시스템', `차량에 탑승했습니다.`); } updateUI(); }
+        function toggleVehicle(vehicle, isDestroyed = false) { if (playerInVehicle) { const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(vehicle.quaternion); const exitPos = vehicle.position.clone().add(rightDir.multiplyScalar(2.0)); const exitY = getTerrainHeight(exitPos.x, exitPos.z) + 1.8; gameState.position.set(exitPos.x, exitY, exitPos.z); const vehicleRotationY = vehicle.rotation.y; gameState.rotation.y = vehicleRotationY; gameState.rotation.x = 0; scene.add(camera); camera.position.copy(gameState.position); camera.rotation.set(gameState.rotation.x, gameState.rotation.y, 0, 'YXZ'); playerGun.visible = true; playerInVehicle = null; if (isDestroyed) { gameState.health = Math.max(0, gameState.health - 25); showChat("시스템", "차량이 파괴되었습니다! 비상 탈출합니다!"); const newPlayerPos = gameState.position.clone(); [...zombies, ...rangedEnemies].forEach(enemy => { if (enemy.userData.health > 0) { enemy.userData.lastKnownPlayerPosition.copy(newPlayerPos); enemy.userData.state = 'chase'; } }); } else { showChat('시스템', '차량에서 하차했습니다.'); } } else { playerInVehicle = vehicle; vehicle.add(camera); camera.position.set(0, 1.2, -0.5); camera.rotation.set(0, 0, 0, 'YXZ'); playerGun.visible = false; gameStats.vehiclesDriven++; checkAchievements(); showChat('시스템', `차량에 탑승했습니다.`); } updateUI(); }
         function pickupItem(item) { 
             const data = item.userData; 
             gameStats.itemsLooted++; checkAchievements();
@@ -2613,6 +2622,14 @@
             document.getElementById('moloch-count').textContent = gameState.moloch;
             const maxHealth = getMaxHealth();
             const maxStamina = getMaxStamina();
+            // 구사일생 추적: 체력이 5% 이하로 떨어졌다가 그 이후 회복(또는 사망하지 않고 유지)되면 1회 카운트
+            const lowHpThreshold = maxHealth * 0.05;
+            if (gameState.health > 0 && gameState.health <= lowHpThreshold) {
+                gameState.wasNearDeath = true;
+            } else if (gameState.wasNearDeath && gameState.health > lowHpThreshold) {
+                gameState.wasNearDeath = false;
+                gameStats.deathCount++; checkAchievements();
+            }
             const healthPercent = (gameState.health / maxHealth) * 100; document.getElementById('health-fill').style.width = `${healthPercent}%`; document.getElementById('health-text').textContent = `${Math.floor(gameState.health)} / ${maxHealth}`;
             const staminaPercent = (playerStamina / maxStamina) * 100; document.getElementById('stamina-fill').style.width = `${staminaPercent}%`; document.getElementById('stamina-text').textContent = `${Math.floor(playerStamina)} / ${maxStamina}`;
             document.getElementById('level-badge').textContent = gameState.level;
@@ -2697,9 +2714,15 @@
                 gameState.health -= damage; 
                 showLavaDamageEffect(); 
                 lavaStatusEl.style.display = 'block';
+                gameState.wasInLava = true;
                 if (gameState.health <= 0) handleGameOver(); 
             } else {
                 lavaStatusEl.style.display = 'none';
+                // 용암에서 막 빠져나왔고 생존했다면 카운트
+                if (gameState.wasInLava && gameState.health > 0) {
+                    gameStats.lavaSurvived++; checkAchievements();
+                }
+                gameState.wasInLava = false;
             }
 
             if (controls.jump && gameState.onGround) { if (playerStamina > STAMINA_THRESHOLD && playerStamina >= JUMP_STAMINA_COST) { gameState.velocityY = jumpForce; playerStamina -= JUMP_STAMINA_COST; gameState.onGround = false; } else { if (playerStamina <= STAMINA_THRESHOLD) { showChat('시스템', '지쳐서 점프할 수 없습니다. (스태미나 5 이하)'); } else { showChat('시스템', '스태미나가 부족하여 점프할 수 없습니다.'); } } controls.jump = false; }
@@ -2776,7 +2799,9 @@
                 if (playerInVehicle === vehicleA) {
                     const data = vehicleA.userData; data.steering = THREE.MathUtils.lerp(data.steering, vehicleSteering, delta * 5); const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion).normalize(); const samplePos = vehicleA.position.clone().add(forwardDir.clone().multiplyScalar(2.0)); const currentH = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const nextH = getTerrainHeight(samplePos.x, samplePos.z); 
                     const slope = nextH - currentH; const gravityFactor = 15.0; const gravityResistance = slope * gravityFactor * delta; 
-                    data.speed -= gravityResistance; if (vehicleAcceleration > 0) { data.speed = Math.min(data.maxSpeed, data.speed + data.acceleration * delta); } else if (vehicleAcceleration < 0) { data.speed -= (data.speed > 0 ? data.braking : data.acceleration) * delta; } else { data.speed = THREE.MathUtils.lerp(data.speed, 0, delta * data.friction); } const turnFactor = Math.min(1, Math.abs(data.speed) / (data.maxSpeed * 0.5)); vehicleA.rotation.y -= data.steering * data.turnSpeed * turnFactor * delta; const moveDirection = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion); const displacement = moveDirection.multiplyScalar(data.speed * delta); const oldPosition = vehicleA.position.clone(); vehicleA.position.add(displacement); const terrainY = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const targetY = terrainY + 0.4; vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, targetY, delta * 10); if (vehicleA.position.y < targetY) { vehicleA.position.y = targetY; } camera.rotation.set(gameState.rotation.x, 0, 0, 'YXZ'); gameState.position.copy(camera.getWorldPosition(new THREE.Vector3())); gameState.rotation.y = vehicleA.rotation.y; 
+                    data.speed -= gravityResistance; if (vehicleAcceleration > 0) { data.speed = Math.min(data.maxSpeed, data.speed + data.acceleration * delta); } else if (vehicleAcceleration < 0) { data.speed -= (data.speed > 0 ? data.braking : data.acceleration) * delta; } else { data.speed = THREE.MathUtils.lerp(data.speed, 0, delta * data.friction); } const turnFactor = Math.min(1, Math.abs(data.speed) / (data.maxSpeed * 0.5)); vehicleA.rotation.y -= data.steering * data.turnSpeed * turnFactor * delta; const moveDirection = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion); const displacement = moveDirection.multiplyScalar(data.speed * delta); 
+                    gameStats.treesChopped += displacement.length(); // 누적 주행거리(m) 추적
+                    const oldPosition = vehicleA.position.clone(); vehicleA.position.add(displacement); const terrainY = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const targetY = terrainY + 0.4; vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, targetY, delta * 10); if (vehicleA.position.y < targetY) { vehicleA.position.y = targetY; } camera.rotation.set(gameState.rotation.x, 0, 0, 'YXZ'); gameState.position.copy(camera.getWorldPosition(new THREE.Vector3())); gameState.rotation.y = vehicleA.rotation.y; 
                     const vehicleBox = vehicleA.userData.collisionBox.clone().translate(vehicleA.position); const oldSpeed = data.speed; 
                     const speedAbs = Math.abs(data.speed);
                     if (speedAbs > 2.0) { 
@@ -3176,6 +3201,9 @@
         function handleZombieDeath(enemy, index, isPlayerKill = true) { 
             createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); zombies.splice(index, 1); 
             if (isPlayerKill) {
+                // 원거리(50m+) 처치 추적 (저격 업적)
+                const killPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+                if (enemy.position.distanceTo(killPos) >= 50) { gameStats.headshotKills++; checkAchievements(); }
                 if (questState.status === 1 && questState.type === 'hunt_zombie') { 
                     questState.currentAmount++; 
                     if (questState.currentAmount >= questState.targetAmount) { questState.currentAmount = questState.targetAmount; questState.status = 2; showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); } 
@@ -3265,6 +3293,7 @@
             const now = Date.now(); const delta = clock.getDelta(); frameCount++;
             
             updateWorldState(delta); updatePlayer(delta); updateBullets(delta); updateZombies(delta);
+            if (frameCount % 60 === 0) checkAchievements(); // 누적형 스탯(주행거리 등) 주기적 체크
             
             rangedEnemies.forEach((enemy, index) => {
                 if (enemy.userData.health <= 0) return;
@@ -3391,6 +3420,8 @@
             if (newChunkKey !== currentPlayerChunkKey) { 
                 currentPlayerChunkKey = newChunkKey; 
                 updateWorldChunks(); 
+                // 고유 청크 탐험 통계
+                if (!exploredChunkKeys.has(newChunkKey)) { exploredChunkKeys.add(newChunkKey); gameStats.chunksExplored++; checkAchievements(); }
                 // 방랑 상인: 청크 이동 시 1% 확률로 현재 청크 중앙에 생성
                 if (Math.random() < 0.01) { spawnWanderingMerchant(currentChunkX, currentChunkZ); }
             }
@@ -3417,7 +3448,7 @@
             let currentColor, currentFog;
             if (sunHeight < 0.1 && sunHeight > -0.1) { const t = (sunHeight + 0.1) / 0.2; if (timeOfDay < 0.5) { currentColor = nightColor.clone().lerp(dayColor, t); currentFog = nightFog.clone().lerp(dayFog, t); currentColor.lerp(sunsetColor, 0.3 * (1 - Math.abs(t - 0.5) * 2)); } else { currentColor = dayColor.clone().lerp(nightColor, 1-t); currentFog = dayFog.clone().lerp(nightFog, 1-t); currentColor.lerp(sunsetColor, 0.3 * (1 - Math.abs(t - 0.5) * 2)); } } else if (sunHeight >= 0.1) { currentColor = dayColor; currentFog = dayFog; } else { currentColor = nightColor; currentFog = nightFog; }
             scene.background.copy(currentColor); scene.fog.color.copy(currentFog);
-            const oldIsNight = isNight; isNight = sunHeight < 0; if (isNight && !oldIsNight) showChat('시스템', '밤이 되었습니다. 주변이 위험해집니다...'); else if (!isNight && oldIsNight) showChat('시스템', '아침이 밝았습니다.');
+            const oldIsNight = isNight; isNight = sunHeight < 0; if (isNight && !oldIsNight) showChat('시스템', '밤이 되었습니다. 주변이 위험해집니다...'); else if (!isNight && oldIsNight) { showChat('시스템', '아침이 밝았습니다.'); gameStats.nightsSurvived++; checkAchievements(); }
             if (isNight && hasLeftSafeZone === 1 && !gameState.hordeActive && (gameTime - gameState.lastHordeTime > gameState.hordeCooldown)) { startHordeEvent(); }
             if (hasLeftSafeZone === 0) { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const distFromSpawn = playerPos.length(); if (distFromSpawn > SAFE_ZONE_RADIUS) { hasLeftSafeZone = 1; showChat('시스템', '⚠️ 안전 구역을 벗어났습니다! 이제부터 적들이 당신을 인식합니다. (되돌아와도 소용없음)'); } }
         }
