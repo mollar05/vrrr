@@ -779,7 +779,42 @@
         
         function switchWeapon(index) { if (index >= gameState.weapons.length) index = 0; if (index < 0) index = gameState.weapons.length - 1; gameState.currentWeaponIndex = index; if (playerGun) camera.remove(playerGun); const weaponObj = gameState.weapons[index]; const weaponData = WEAPON_DATABASE[weaponObj.key]; playerGun = weaponData.model(); playerGun.position.set(0.4, -0.3, -0.8); playerGun.rotation.set(0, -0.1, 0); camera.add(playerGun); muzzle = playerGun.getObjectByName('muzzle'); updateUI(); }
         
-        function updateWorldChunks() { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); for (let x = playerChunkX - RENDER_DISTANCE; x <= playerChunkX + RENDER_DISTANCE; x++) { for (let z = playerChunkZ - RENDER_DISTANCE; z <= playerChunkZ + RENDER_DISTANCE; z++) { const chunkKey = `${x},${z}`; if (!generatedChunks.has(chunkKey)) { generateChunk(x, z); generatedChunks.add(chunkKey); } } } }
+        // [OPTIMIZATION] 청크 freeze 시스템: 멀리 떨어진 청크의 정적 오브젝트(나무/건물/돌)는
+        // 완전히 삭제하지 않고 visible만 끄고 충돌검사 대상에서 제외 -> 다시 가까워지면 복구.
+        // (완전 삭제 후 재생성 방식보다 안전하고, instancedMesh 재구축 비용도 없음)
+        const FREEZE_CHUNK_DISTANCE = 3; // RENDER_DISTANCE(1)보다 넉넉하게 잡아 경계에서 깜빡이지 않도록 함
+        let frozenChunks = new Set();
+
+        function setChunkFrozen(chunkKey, frozen) {
+            const objs = chunkStaticObjects.get(chunkKey);
+            if (!objs) return;
+            const seenMeshes = new Set();
+            for (const proxy of objs) {
+                proxy.userData.isFrozen = frozen;
+                const im = proxy.userData.instancedMesh;
+                if (im && !seenMeshes.has(im)) { seenMeshes.add(im); im.visible = !frozen; }
+                else if (!im) { proxy.visible = !frozen; } // instancedMesh가 아닌 단독 오브젝트(세계수, 포탈 등)
+            }
+        }
+
+        function updateChunkFreezing() {
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE);
+            const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE);
+            const newFrozen = new Set();
+            for (const chunkKey of generatedChunks) {
+                const [cx, cz] = chunkKey.split(',').map(Number);
+                const dist = Math.max(Math.abs(cx - playerChunkX), Math.abs(cz - playerChunkZ));
+                if (dist > FREEZE_CHUNK_DISTANCE) newFrozen.add(chunkKey);
+            }
+            // 새로 얼어야 할 청크: freeze 적용
+            for (const key of newFrozen) { if (!frozenChunks.has(key)) setChunkFrozen(key, true); }
+            // 더 이상 멀지 않은 청크: unfreeze (복구)
+            for (const key of frozenChunks) { if (!newFrozen.has(key)) setChunkFrozen(key, false); }
+            frozenChunks = newFrozen;
+        }
+
+        function updateWorldChunks() { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); for (let x = playerChunkX - RENDER_DISTANCE; x <= playerChunkX + RENDER_DISTANCE; x++) { for (let z = playerChunkZ - RENDER_DISTANCE; z <= playerChunkZ + RENDER_DISTANCE; z++) { const chunkKey = `${x},${z}`; if (!generatedChunks.has(chunkKey)) { generateChunk(x, z); generatedChunks.add(chunkKey); } } } updateChunkFreezing(); }
         
         function getBiome(x, z) { 
             const scale = 3000; 
@@ -959,7 +994,7 @@
 
             const objectCount = Math.floor((chunkRand() * 15 + 20) * objectDensityMultiplier);
             if (centerBiome === 'city') {
-                const cityGridSize = 40; for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.3) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
+                const cityGridSize = 55; for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.45) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
             } else if (chunkRand() > (1 - buildingChance)) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); if (type > 0.9) { const isHighrise = chunkRand() > 0.8; const size = isHighrise ? { w: 30, d: 40 } : { w: 12, d: 12 }; const y = getTerrainHeight(x, z); buildingsInChunk.push({ x, z, y, size, isHighrise }); } } }
             
             if (centerBiome === 'forest') {
@@ -1069,10 +1104,11 @@
             if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? treeChance + (Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) - treeChance) * 0.25 : treeChance + (0.9 - treeChance) * 0.5; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
             createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
             
-            if (chunkRand() > 0.68) { 
+            const enemySpawnThreshold = (centerBiome === 'city') ? 0.82 : 0.68;
+            if (chunkRand() > enemySpawnThreshold) { 
                 const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); 
                 if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRangedEnemy(x, z, 500 + chunkRand() * 500, yBase); }
-                const zombieCount = Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano' || zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
+                const zombieCount = (centerBiome === 'city') ? Math.floor(chunkRand() * 2) + 1 : Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano' || zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
             }
 
             if (centerBiome === 'city') {
@@ -1101,8 +1137,8 @@
             if (chunkRand() > 0.93) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRandomLoot(x, z, yBase + 0.5); } }
             if (chunkRand() > 0.68 && centerBiome !== 'volcano') { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); createVehicle(x, z, yBase); }
             
-            // 강도 캠프 (어느 바이옴에나 낮은 확률)
-            if (chunkRand() > 0.93 && centerBiome !== 'volcano') {
+            // 강도 캠프 (도시/화산 제외 - 도시는 이미 건물+적 밀도가 높아 렉 방지)
+            if (chunkRand() > 0.93 && centerBiome !== 'volcano' && centerBiome !== 'city') {
                 const bx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const bz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createBanditCamp(bx, bz, chunkRand);
@@ -1271,7 +1307,7 @@
             }
             bossMesh.position.set(x, yBase + (0.9 * scale), z); bossMesh.castShadow = false;
             const skillCooldowns = { fireball: 0, shockwave: 0, summon: 0, smash: 0, boulderThrow: 0, teleport: 0, darkPulse: 0, massRaise: 0 };
-            bossMesh.userData = { type: 'boss', bossType: type, name: bossName, health: bossHealth, maxHealth: bossHealth, scale: scale, speed: speed, state: 'idle', lastAttackTime: 0, attackCooldown: type === 'witch' ? 3200 : type === 'golem' ? 4000 : 2500, attackRange: type === 'witch' ? 40 : type === 'golem' ? 12 : type === 'fire_demon' ? 10 : 45, detectionRange: 300, lastTeleportTime: 0, teleportCooldown: 8000, originalColor: new THREE.Color(color), skillCooldowns };
+            bossMesh.userData = { type: 'boss', bossType: type, name: bossName, health: bossHealth, maxHealth: bossHealth, scale: scale, speed: speed, state: 'idle', lastAttackTime: 0, attackCooldown: type === 'witch' ? 3200 : type === 'golem' ? 4000 : type === 'necromancer' ? 3800 : 2500, attackRange: type === 'witch' ? 40 : type === 'golem' ? 12 : type === 'fire_demon' ? 10 : 45, detectionRange: 300, lastTeleportTime: 0, teleportCooldown: 8000, originalColor: new THREE.Color(color), skillCooldowns };
             scene.add(bossMesh); bosses.push(bossMesh); objects.push(bossMesh); 
         }
 
@@ -1411,8 +1447,9 @@
             if (now - boss.userData.lastAttackTime < boss.userData.attackCooldown) return;
             boss.userData.lastAttackTime = now;
             const rand = Math.random();
-            if (rand < 0.3 && now - sc.massRaise > 12000) {
-                // 스킬: 대규모 소환
+            const necroSummonedAlive = zombies.filter(z => z.userData.isNecroSummon && z.userData.health > 0).length;
+            if (rand < 0.12 && now - sc.massRaise > 14000 && necroSummonedAlive < 8) {
+                // 스킬: 대규모 소환 (확률 30%→12%로 하향, 동시 소환수 8마리 제한)
                 sc.massRaise = now;
                 showChat('어둠의 강령술사 모르타이', '☠️ 죽은 자들이여, 일어나라!!');
                 for (let i = 0; i < 6; i++) {
@@ -1423,9 +1460,10 @@
                     const undead = zombies[zombies.length-1];
                     undead.material.color.set(0x550055);
                     undead.userData.state = 'chase'; undead.userData.lastKnownPlayerPosition.copy(playerPos);
+                    undead.userData.isNecroSummon = true;
                 }
                 createDebrisEffect(boss.position, new THREE.Color(0x6600aa), 20);
-            } else if (rand < 0.55 && now - sc.darkPulse > 5000) {
+            } else if (rand < 0.5 && now - sc.darkPulse > 5000) {
                 // 스킬: 어둠의 파동 (다방향, 포물선 + 몸통 조준)
                 sc.darkPulse = now;
                 showChat('어둠의 강령술사 모르타이', '💜 어둠의 파동!!');
@@ -1435,7 +1473,7 @@
                 const perp = new THREE.Vector3(-toBoss.z, 0, toBoss.x); // 좌우 퍼짐 방향
                 [-6, -3, 0, 3, 6].forEach(offset => {
                     const targetPos = baseTarget.clone().add(perp.clone().multiplyScalar(offset));
-                    createBossProjectile(spawnPos, targetPos, 25, 0x9900ff, 0.8, 12, 1.5);
+                    createBossProjectile(spawnPos, targetPos, 32, 0x9900ff, 0.8, 12, 1.5);
                 });
             } else if (rand < 0.7 && now - sc.teleport > 9000) {
                 // 스킬: 어둠의 벽 (플레이어 주변 10방향 저주 포탄)
@@ -1444,13 +1482,13 @@
                 for (let i = 0; i < 10; i++) {
                     const a = (Math.PI * 2 * i) / 10;
                     const sx = playerPos.x + Math.cos(a) * 18; const sz = playerPos.z + Math.sin(a) * 18;
-                    createHazardZone(sx, 0, sz, 3.5, 2500, 18);
+                    createHazardZone(sx, 0, sz, 3.5, 2500, 23);
                 }
                 createDebrisEffect(playerPos, new THREE.Color(0x6600aa), 20);
             } else {
                 // 기본: 저주
                 showChat('어둠의 강령술사 모르타이', '저주받아라!!');
-                createHazardZone(playerPos.x, 0, playerPos.z, 4, 1800, 20);
+                createHazardZone(playerPos.x, 0, playerPos.z, 4, 1800, 26);
             }
         }
         
@@ -1751,6 +1789,12 @@
                 const enemy = zombies[index]; if (!enemy || !enemy.parent) { zombies.splice(index, 1); continue; } 
                 const data = enemy.userData;
                 const distToPlayerSq = enemy.position.distanceToSquared(targetPos);
+
+                // [OPTIMIZATION] 일정 거리(550m) 이상 멀어진 적/좀비는 완전히 제거 (메모리 해제)
+                // 단, 마녀/강령술사가 직접 소환한 개체는 보스 옆에서 활동하므로 디스폰하지 않음(보스가 죽으면 자연 정리됨)
+                if (distToPlayerSq > 302500 && !data.isWitchSummon && !data.isNecroSummon) {
+                    scene.remove(enemy); zombies.splice(index, 1); continue;
+                }
 
                 if (distToPlayerSq > 90000) { enemy.visible = false; continue; } else { enemy.visible = true; }
 
@@ -3307,6 +3351,16 @@
             
             updateWorldState(delta); updatePlayer(delta); updateBullets(delta); updateZombies(delta);
             if (frameCount % 60 === 0) checkAchievements(); // 누적형 스탯(주행거리 등) 주기적 체크
+            
+            // [OPTIMIZATION] 일정 거리(550m) 이상 멀어진 적(강도 포함) 완전 제거 (메모리 해제)
+            // 단, 엘프 퀘스트 대상인 강도 두목은 퀘스트 진행을 막지 않도록 디스폰하지 않음
+            for (let ri = rangedEnemies.length - 1; ri >= 0; ri--) {
+                const re = rangedEnemies[ri];
+                if (re.userData.isBanditLeader && elfQuestActive && !elfQuestDone) continue;
+                if (re.position.distanceToSquared(gameState.position) > 302500) {
+                    scene.remove(re); rangedEnemies.splice(ri, 1);
+                }
+            }
             
             rangedEnemies.forEach((enemy, index) => {
                 if (enemy.userData.health <= 0) return;
