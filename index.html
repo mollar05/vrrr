@@ -429,12 +429,74 @@
         
         let hasLeftSafeZone = 0;
 
-        let gameStats = { zombieKills: 0, roadKills: 0, totalMolochEarned: 0 };
+        let gameStats = { 
+            zombieKills: 0, roadKills: 0, totalMolochEarned: 0,
+            bossKills: 0, fireDemonKills: 0, golemKills: 0, necromancerKills: 0, witchKills: 0,
+            banditKills: 0, banditLeaderKills: 0, orcKills: 0, trollKills: 0,
+            elfVillagerKills: 0, dwarfVillagerKills: 0,
+            treesChopped: 0, deathCount: 0, vehiclesDriven: 0, lavaSurvived: 0,
+            shotsFired: 0, headshotKills: 0, meleeKills: 0, maxComboKills: 0,
+            tradesCompleted: 0, itemsLooted: 0, npcTalks: 0, wanderingMerchantsMet: 0,
+            elfQuestsCompleted: 0, dwarfQuestsCompleted: 0, nightsSurvived: 0,
+            chunksExplored: 0, achievementsClaimed: 0
+        };
 
         const achievements = [
+            // ─── 처치 계열 ───
             { id: 'hunter', title: '초보 사냥꾼', desc: '좀비 5마리 처치', condition: () => gameStats.zombieKills >= 5, reward: 300, unlocked: false, claimed: false },
+            { id: 'hunter2', title: '숙련된 사냥꾼', desc: '좀비 50마리 처치', condition: () => gameStats.zombieKills >= 50, reward: 800, unlocked: false, claimed: false },
+            { id: 'hunter3', title: '좀비 학살자', desc: '좀비 200마리 처치', condition: () => gameStats.zombieKills >= 200, reward: 2000, unlocked: false, claimed: false },
+            { id: 'hunter4', title: '아포칼립스의 영웅', desc: '좀비 500마리 처치', condition: () => gameStats.zombieKills >= 500, reward: 5000, unlocked: false, claimed: false },
+            { id: 'orcslayer', title: '오크 학살자', desc: '오크 20마리 처치', condition: () => gameStats.orcKills >= 20, reward: 1000, unlocked: false, claimed: false },
+            { id: 'trollslayer', title: '트롤 사냥꾼', desc: '트롤 5마리 처치', condition: () => gameStats.trollKills >= 5, reward: 1500, unlocked: false, claimed: false },
+            { id: 'banditslayer', title: '치안관', desc: '강도 15마리 처치', condition: () => gameStats.banditKills >= 15, reward: 1200, unlocked: false, claimed: false },
+            { id: 'leaderslayer', title: '현상금 사냥꾼', desc: '강도 두목 3명 처치', condition: () => gameStats.banditLeaderKills >= 3, reward: 2000, unlocked: false, claimed: false },
+            { id: 'meleemaster', title: '맨손의 달인', desc: '근접 공격으로 10마리 처치', condition: () => gameStats.meleeKills >= 10, reward: 700, unlocked: false, claimed: false },
+            
+            // ─── 보스 계열 ───
+            { id: 'witchkiller', title: '마녀사냥꾼', desc: '저주받은 마녀 처치', condition: () => gameStats.witchKills >= 1, reward: 1500, unlocked: false, claimed: false },
+            { id: 'demonslayer', title: '악마 사냥꾼', desc: '불의 악마 이그니스 처치', condition: () => gameStats.fireDemonKills >= 1, reward: 3000, unlocked: false, claimed: false },
+            { id: 'golemcrusher', title: '거인 파괴자', desc: '산의 골렘 크라그 처치', condition: () => gameStats.golemKills >= 1, reward: 2500, unlocked: false, claimed: false },
+            { id: 'necrobane', title: '강령술 파괴자', desc: '강령술사 모르타이 처치', condition: () => gameStats.necromancerKills >= 1, reward: 2200, unlocked: false, claimed: false },
+            { id: 'bossmaster', title: '보스 헌터', desc: '서로 다른 보스 4종류 모두 처치', condition: () => gameStats.fireDemonKills >= 1 && gameStats.golemKills >= 1 && gameStats.necromancerKills >= 1 && gameStats.witchKills >= 1, reward: 5000, unlocked: false, claimed: false },
+            { id: 'bossfarmer', title: '보스 파머', desc: '보스 10마리 처치', condition: () => gameStats.bossKills >= 10, reward: 4000, unlocked: false, claimed: false },
+            
+            // ─── 경제/수집 계열 ───
             { id: 'rich', title: '자본주의의 맛', desc: '1000 몰록 보유', condition: () => gameState.moloch >= 1000, reward: 500, unlocked: false, claimed: false },
-            { id: 'roadwarrior', title: '로드킬 마스터', desc: '차량으로 적 3마리 처치', condition: () => gameStats.roadKills >= 3, reward: 400, unlocked: false, claimed: false }
+            { id: 'rich2', title: '소자본가', desc: '5000 몰록 보유', condition: () => gameState.moloch >= 5000, reward: 1000, unlocked: false, claimed: false },
+            { id: 'rich3', title: '대부호', desc: '20000 몰록 보유', condition: () => gameState.moloch >= 20000, reward: 3000, unlocked: false, claimed: false },
+            { id: 'earner', title: '근면 성실', desc: '누적 10000 몰록 획득', condition: () => gameStats.totalMolochEarned >= 10000, reward: 1500, unlocked: false, claimed: false },
+            { id: 'looter', title: '약탈자', desc: '아이템 30개 획득', condition: () => gameStats.itemsLooted >= 30, reward: 800, unlocked: false, claimed: false },
+            { id: 'trader', title: '단골 손님', desc: '상인과 5회 거래', condition: () => gameStats.tradesCompleted >= 5, reward: 600, unlocked: false, claimed: false },
+            
+            // ─── 탐험 계열 ───
+            { id: 'roadwarrior', title: '로드킬 마스터', desc: '차량으로 적 3마리 처치', condition: () => gameStats.roadKills >= 3, reward: 400, unlocked: false, claimed: false },
+            { id: 'roadwarrior2', title: '폭주족', desc: '차량으로 적 20마리 처치', condition: () => gameStats.roadKills >= 20, reward: 1500, unlocked: false, claimed: false },
+            { id: 'lumberjack', title: '벌목꾼', desc: '나무 20그루 베기', condition: () => gameStats.treesChopped >= 20, reward: 500, unlocked: false, claimed: false },
+            { id: 'explorer', title: '개척자', desc: '청크 30개 탐험', condition: () => gameStats.chunksExplored >= 30, reward: 1000, unlocked: false, claimed: false },
+            { id: 'explorer2', title: '방랑하는 여행자', desc: '청크 100개 탐험', condition: () => gameStats.chunksExplored >= 100, reward: 3000, unlocked: false, claimed: false },
+            { id: 'driver', title: '면허 취득', desc: '차량 5대 운전', condition: () => gameStats.vehiclesDriven >= 5, reward: 600, unlocked: false, claimed: false },
+            
+            // ─── 생존/위험 계열 ───
+            { id: 'lavawalker', title: '용암 위의 산책자', desc: '용암 데미지를 받고 생존 5회', condition: () => gameStats.lavaSurvived >= 5, reward: 1200, unlocked: false, claimed: false },
+            { id: 'survivor', title: '불사조', desc: '죽음에서 5회 부활', condition: () => gameStats.deathCount >= 5, reward: 800, unlocked: false, claimed: false },
+            { id: 'nightowl', title: '밤의 지배자', desc: '밤을 10번 넘기기', condition: () => gameStats.nightsSurvived >= 10, reward: 1000, unlocked: false, claimed: false },
+            { id: 'sharpshooter', title: '명사수', desc: '헤드샷으로 20마리 처치', condition: () => gameStats.headshotKills >= 20, reward: 1500, unlocked: false, claimed: false },
+            { id: 'trigger', title: '방아쇠를 당기는 손가락', desc: '총알 1000발 발사', condition: () => gameStats.shotsFired >= 1000, reward: 700, unlocked: false, claimed: false },
+            
+            // ─── 종족/퀘스트 계열 ───
+            { id: 'elffriend', title: '숲의 친구', desc: '엘프 퀘스트 완료', condition: () => gameStats.elfQuestsCompleted >= 1, reward: 600, unlocked: false, claimed: false },
+            { id: 'dwarffriend', title: '광산의 친구', desc: '드워프 퀘스트 완료', condition: () => gameStats.dwarfQuestsCompleted >= 1, reward: 600, unlocked: false, claimed: false },
+            { id: 'allyofall', title: '모두의 동맹', desc: '엘프와 드워프 퀘스트 모두 완료', condition: () => gameStats.elfQuestsCompleted >= 1 && gameStats.dwarfQuestsCompleted >= 1, reward: 1500, unlocked: false, claimed: false },
+            { id: 'wanderfan', title: '단골 떠돌이', desc: '방랑 상인 3회 조우', condition: () => gameStats.wanderingMerchantsMet >= 3, reward: 800, unlocked: false, claimed: false },
+            { id: 'chatty', title: '수다쟁이', desc: 'NPC와 10회 대화', condition: () => gameStats.npcTalks >= 10, reward: 400, unlocked: false, claimed: false },
+            
+            // ─── 레벨/성장 계열 ───
+            { id: 'levelup5', title: '성장하는 생존자', desc: '레벨 5 달성', condition: () => gameState.level >= 5, reward: 500, unlocked: false, claimed: false },
+            { id: 'levelup10', title: '베테랑 생존자', desc: '레벨 10 달성', condition: () => gameState.level >= 10, reward: 1500, unlocked: false, claimed: false },
+            { id: 'levelup20', title: '전설의 생존자', desc: '레벨 20 달성', condition: () => gameState.level >= 20, reward: 4000, unlocked: false, claimed: false },
+            { id: 'statmaster', title: '올스탯 마스터', desc: '모든 스탯에 5포인트 이상 투자', condition: () => Object.values(gameState.stats).every(v => v >= 5), reward: 2000, unlocked: false, claimed: false },
+            { id: 'collector', title: '업적 수집가', desc: '업적 10개 달성', condition: () => achievements.filter(a => a.unlocked).length >= 10, reward: 2500, unlocked: false, claimed: false }
         ];
 
         // [MODIFIED] 첫 퀘스트 보상을 10몰록으로 변경
@@ -1001,7 +1063,7 @@
             buildingsInChunk.forEach(b => { if (b.isHighrise) { collectHighriseData(b.x, b.z, b.y, chunkCityGrayMatrices, chunkCityGrayProxies); } else { collectBuildingData(b.x, b.z, b.y, chunkCityBrownMatrices, chunkCityBrownProxies, chunkRoofMatrices, chunkRoofProxies); } });
             createChunkInstancedMeshes(chunkCityGrayMatrices, sharedBoxGeo, sharedCityMatGray, chunkCityGrayProxies, chunkKey); createChunkInstancedMeshes(chunkCityBrownMatrices, sharedBoxGeo, sharedCityMatBrown, chunkCityBrownProxies, chunkKey); createChunkInstancedMeshes(chunkRoofMatrices, sharedConeGeo, sharedRoofMat, chunkRoofProxies, chunkKey);
             const chunkTrunkMatrices = []; const chunkLeafMatrices = []; const chunkRockMatrices = []; const chunkTrunkProxies = []; const chunkLeafProxies = []; const chunkRockProxies = [];
-            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) : 0.9; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
+            if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? treeChance + (Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) - treeChance) * 0.5 : treeChance + (0.9 - treeChance) * 0.5; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
             createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
             
             if (chunkRand() > 0.68) { 
@@ -1143,6 +1205,29 @@
             scene.add(orc); zombies.push(orc); 
         }
 
+        // ─── 보스 투사체 헬퍼: 포물선 + 플레이어 몸통 조준 ──────────────────
+        function createBossProjectile(spawnPos, targetPos, damage, color, radius, arcHeight, speedMult) {
+            // targetPos는 플레이어 발 위치 기준일 수 있으므로 몸통(가슴) 높이로 보정
+            const torsoTarget = targetPos.clone(); torsoTarget.y += 1.0; // 가슴 높이 조준
+            const flatDir = new THREE.Vector3(torsoTarget.x - spawnPos.x, 0, torsoTarget.z - spawnPos.z);
+            const flatDist = Math.max(flatDir.length(), 0.01); flatDir.normalize();
+            const hspeed = Math.min(flatDist * (speedMult || 1.6), 55);
+            const T = flatDist / hspeed;
+            const dY = torsoTarget.y - spawnPos.y;
+            const gravity = arcHeight || 14; // 낮을수록 평탄한 포물선, 높을수록 휘어짐
+            const vy0 = (dY / T) + 0.5 * gravity * T;
+            const proj = new THREE.Mesh(new THREE.SphereGeometry(radius, 7, 6), new THREE.MeshBasicMaterial({ color }));
+            proj.position.copy(spawnPos);
+            proj.userData = {
+                isPhysicsBullet: true, owner: 'enemy', damage,
+                vx: flatDir.x * hspeed, vy: vy0, vz: flatDir.z * hspeed,
+                gravity, spawnPosition: spawnPos.clone(), maxLife: Math.max(T * 1.3, 2),
+                explodeColor: color
+            };
+            scene.add(proj); bullets.push(proj);
+            return proj;
+        }
+
         function createBoss(type, x, z, yBase) {
             let bossMesh, bossHealth, bossName, scale, speed, color;
             if (type === 'witch') {
@@ -1232,17 +1317,15 @@
                 }
                 createDebrisEffect(boss.position, new THREE.Color(0xff4500), 30);
             } else if (rand < 0.4 && now - sc.fireball > 3000) {
-                // 스킬: 화염구 3연발
+                // 스킬: 화염구 3연발 (포물선 + 몸통 조준)
                 sc.fireball = now;
                 showChat('불의 악마 이그니스', '🔥 화염구!!');
                 for (let i = 0; i < 3; i++) {
                     setTimeout(() => {
-                        const dir = playerPos.clone().sub(boss.position).normalize();
-                        dir.x += (Math.random() - 0.5) * 0.25; dir.z += (Math.random() - 0.5) * 0.25; dir.y = Math.max(dir.y, -0.1);
-                        const ball = new THREE.Mesh(new THREE.SphereGeometry(1.5, 7, 6), new THREE.MeshBasicMaterial({ color: 0xff3300 }));
-                        ball.position.copy(boss.position); ball.position.y += 5;
-                        ball.userData = { velocity: dir, speed: 30, owner: 'enemy', damage: 50, spawnPosition: ball.position.clone() };
-                        scene.add(ball); bullets.push(ball);
+                        const spawnPos = boss.position.clone(); spawnPos.y += 5;
+                        const targetPos = gameState.position.clone();
+                        targetPos.x += (Math.random() - 0.5) * 3; targetPos.z += (Math.random() - 0.5) * 3;
+                        createBossProjectile(spawnPos, targetPos, 50, 0xff3300, 1.5, 10, 1.7);
                     }, i * 400);
                 }
             } else if (phase === 3 && now - sc.summon > 10000) {
@@ -1285,27 +1368,11 @@
                 // 스킬: 바위 투척 (포물선 궤도)
                 sc.boulderThrow = now;
                 showChat('산의 골렘 크라그', '⛰️ 바위 투척!!');
-                const targetPos2 = playerPos.clone();
                 const bSpawn = boss.position.clone();
                 bSpawn.y += boss.userData.scale * 1.5;
-                // XZ 수평 방향만 계산
-                const flatDir = new THREE.Vector3(targetPos2.x - bSpawn.x, 0, targetPos2.z - bSpawn.z);
-                const flatDist = flatDir.length(); flatDir.normalize();
-                // 포물선: 수직속도 = 중력보정으로 목표 도달 시간 T 계산
-                // gravity=9.8, T≈flatDist/hspeed, vy0 = 0.5*g*T - dY/T
-                const hspeed = Math.min(flatDist * 1.8, 50);
-                const T = flatDist / hspeed;
-                const dY = (targetPos2.y + 2) - bSpawn.y;
-                const vy0 = (dY / T) + 0.5 * 18 * T; // gravity=18
-                const boulder = new THREE.Mesh(new THREE.SphereGeometry(2.5, 7, 7), new THREE.MeshLambertMaterial({ color: 0x776655 }));
-                boulder.position.copy(bSpawn);
-                boulder.userData = { 
-                    type: 'boulder', owner: 'enemy', damage: 90,
-                    vx: flatDir.x * hspeed, vy: vy0, vz: flatDir.z * hspeed,
-                    gravity: 18, spawnPosition: bSpawn.clone(), isPhysicsBullet: true,
-                    maxLife: 6
-                };
-                scene.add(boulder); bullets.push(boulder);
+                const targetPos2 = gameState.position.clone();
+                targetPos2.x += (Math.random() - 0.5) * 2; targetPos2.z += (Math.random() - 0.5) * 2;
+                createBossProjectile(bSpawn, targetPos2, 90, 0x776655, 2.5, 18, 1.8);
             } else if (rand < 0.55 && now - sc.shockwave > 7000) {
                 // 스킬: 땅 쿵쿵 (원형 진동)
                 sc.shockwave = now;
@@ -1348,16 +1415,16 @@
                 }
                 createDebrisEffect(boss.position, new THREE.Color(0x6600aa), 20);
             } else if (rand < 0.55 && now - sc.darkPulse > 5000) {
-                // 스킬: 어둠의 파동 (다방향)
+                // 스킬: 어둠의 파동 (다방향, 포물선 + 몸통 조준)
                 sc.darkPulse = now;
                 showChat('어둠의 강령술사 모르타이', '💜 어둠의 파동!!');
-                const baseDir = playerPos.clone().sub(boss.position).normalize();
-                [-0.4, -0.2, 0, 0.2, 0.4].forEach(angle => {
-                    const dir = baseDir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), angle);
-                    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.8, 6, 6), new THREE.MeshBasicMaterial({ color: 0x9900ff }));
-                    orb.position.copy(boss.position); orb.position.y += 1.5 * boss.userData.scale;
-                    orb.userData = { velocity: dir, speed: 22, owner: 'enemy', damage: 25, spawnPosition: orb.position.clone() };
-                    scene.add(orb); bullets.push(orb);
+                const spawnPos = boss.position.clone(); spawnPos.y += 1.5 * boss.userData.scale;
+                const baseTarget = gameState.position.clone();
+                const toBoss = spawnPos.clone().sub(baseTarget).setY(0).normalize();
+                const perp = new THREE.Vector3(-toBoss.z, 0, toBoss.x); // 좌우 퍼짐 방향
+                [-6, -3, 0, 3, 6].forEach(offset => {
+                    const targetPos = baseTarget.clone().add(perp.clone().multiplyScalar(offset));
+                    createBossProjectile(spawnPos, targetPos, 25, 0x9900ff, 0.8, 12, 1.5);
                 });
             } else if (rand < 0.7 && now - sc.teleport > 9000) {
                 // 스킬: 어둠의 벽 (플레이어 주변 10방향 저주 포탄)
@@ -1394,8 +1461,13 @@
         }
         function castWitchExplosion(boss, playerPos) { showChat('저주받은 마녀', '불타올라라!'); createHazardZone(playerPos.x, playerPos.y, playerPos.z, 5.0, 2000, 30); }
         function castWitchMultiShot(boss, targetPos) {
-            const baseDir = targetPos.clone().sub(boss.position).normalize(); const angles = [-0.3, 0, 0.3];
-            angles.forEach(angle => { const bullet = new THREE.Mesh(sharedBulletGeo, new THREE.MeshBasicMaterial({ color: 0x800080 })); bullet.position.copy(boss.position); bullet.position.y += 2; const dir = baseDir.clone(); dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), angle); bullet.userData = { velocity: dir, speed: 25, owner: 'enemy', damage: 15, spawnPosition: bullet.position.clone() }; scene.add(bullet); bullets.push(bullet); });
+            const spawnPos = boss.position.clone(); spawnPos.y += 2;
+            const toBoss = spawnPos.clone().sub(targetPos).setY(0).normalize();
+            const perp = new THREE.Vector3(-toBoss.z, 0, toBoss.x);
+            [-4, 0, 4].forEach(offset => {
+                const tp = targetPos.clone().add(perp.clone().multiplyScalar(offset));
+                createBossProjectile(spawnPos, tp, 15, 0x800080, 0.5, 10, 2.0);
+            });
         }
 
         function createHazardZone(x, y, z, radius, duration, damage) {
@@ -1411,9 +1483,17 @@
             showChat('시스템', `⚔️ 전설적인 적 처치: ${boss.userData.name}!`); 
             addMoloch(1000 + Math.floor(Math.random() * 1000)); 
             gainXP(500);
+            // 보스 처치 통계 기록
+            gameStats.bossKills++;
+            if (boss.userData.bossType === 'fire_demon') gameStats.fireDemonKills++;
+            else if (boss.userData.bossType === 'golem') gameStats.golemKills++;
+            else if (boss.userData.bossType === 'necromancer') gameStats.necromancerKills++;
+            else if (boss.userData.bossType === 'witch') gameStats.witchKills++;
+            checkAchievements();
             // 드워프 퀘스트: 골렘 처치 시 완료
             if (boss.userData.bossType === 'golem' && dwarfQuestActive && !dwarfQuestDone) {
                 dwarfQuestDone = true;
+                gameStats.dwarfQuestsCompleted++; checkAchievements();
                 showChat('시스템', '⛏️ [드워프 퀘스트] 골렘을 처치했습니다! 드워프 대장장이에게 돌아가세요.');
             }
             createDebrisEffect(boss.position, boss.userData.originalColor, 50); scene.remove(boss); bosses.splice(index, 1); objects = objects.filter(o => o !== boss); document.getElementById('boss-container').style.display = 'none'; 
@@ -1571,6 +1651,7 @@
             const merchant = createNPC(cx, cz, 0xffd700, '방랑 상인', dialogue, cy);
             merchant.userData.isWandering = true;
             merchant.userData.despawnTime = performance.now() + 120000; // 2분 후 소멸
+            gameStats.wanderingMerchantsMet++; checkAchievements();
             showChat('시스템', '🧳 근처에 방랑 상인이 나타났습니다!');
         }
 
@@ -1911,9 +1992,13 @@
                 const elfLight = new THREE.PointLight(0x88ff88, 0.8, 25);
                 elfLight.position.set(hx, hy + 3, hz); scene.add(elfLight);
             }
-            // 신성한 나무
+            // 신성한 나무 (세계수) - 충돌 처리하여 통과 불가능하게 함
             const sacredTrunk = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 2, 15, 8), new THREE.MeshLambertMaterial({ color: 0x5c3d11 }));
-            sacredTrunk.position.set(centerX, centerY + 7.5, centerZ); sacredTrunk.castShadow = false; scene.add(sacredTrunk);
+            sacredTrunk.position.set(centerX, centerY + 7.5, centerZ); sacredTrunk.castShadow = false; 
+            sacredTrunk.userData = { health: 999999, maxHealth: 999999, type: 'object', isWorldTree: true, originalColor: new THREE.Color(0x5c3d11) };
+            scene.add(sacredTrunk); objects.push(sacredTrunk);
+            const treeChunkKey = `${Math.round(centerX / CHUNK_SIZE)},${Math.round(centerZ / CHUNK_SIZE)}`;
+            registerChunkObject(treeChunkKey, sacredTrunk);
             const sacredLeaves = new THREE.Mesh(new THREE.SphereGeometry(10, 8, 6), new THREE.MeshLambertMaterial({ color: 0x00cc44 }));
             sacredLeaves.position.set(centerX, centerY + 20, centerZ); sacredLeaves.castShadow = false; scene.add(sacredLeaves);
             // 엘프 NPC - 1명은 대화 가능한 장로, 나머지는 장식
@@ -2217,7 +2302,7 @@
         }
         
         function addMoloch(amount) { gameState.moloch += amount; gameStats.totalMolochEarned += amount; updateUI(); checkAchievements(); }
-        function openTradeModal() { isTrading = true; document.exitPointerLock(); document.getElementById('trade-modal').style.display = 'flex'; renderTradeItems(); }
+        function openTradeModal() { isTrading = true; gameStats.tradesCompleted++; checkAchievements(); document.exitPointerLock(); document.getElementById('trade-modal').style.display = 'flex'; renderTradeItems(); }
         function closeTradeModal() { isTrading = false; document.getElementById('trade-modal').style.display = 'none'; document.body.requestPointerLock(); }
         function renderTradeItems() { 
             const list = document.getElementById('trade-list'); list.innerHTML = ''; 
@@ -2488,6 +2573,7 @@
         function toggleVehicle(vehicle, isDestroyed = false) { if (playerInVehicle) { const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(vehicle.quaternion); const exitPos = vehicle.position.clone().add(rightDir.multiplyScalar(2.0)); const exitY = getTerrainHeight(exitPos.x, exitPos.z) + 1.8; gameState.position.set(exitPos.x, exitY, exitPos.z); const vehicleRotationY = vehicle.rotation.y; gameState.rotation.y = vehicleRotationY; gameState.rotation.x = 0; scene.add(camera); camera.position.copy(gameState.position); camera.rotation.set(gameState.rotation.x, gameState.rotation.y, 0, 'YXZ'); playerGun.visible = true; playerInVehicle = null; if (isDestroyed) { gameState.health = Math.max(0, gameState.health - 25); showChat("시스템", "차량이 파괴되었습니다! 비상 탈출합니다!"); const newPlayerPos = gameState.position.clone(); [...zombies, ...rangedEnemies].forEach(enemy => { if (enemy.userData.health > 0) { enemy.userData.lastKnownPlayerPosition.copy(newPlayerPos); enemy.userData.state = 'chase'; } }); } else { showChat('시스템', '차량에서 하차했습니다.'); } } else { playerInVehicle = vehicle; vehicle.add(camera); camera.position.set(0, 1.2, -0.5); camera.rotation.set(0, 0, 0, 'YXZ'); playerGun.visible = false; showChat('시스템', `차량에 탑승했습니다.`); } updateUI(); }
         function pickupItem(item) { 
             const data = item.userData; 
+            gameStats.itemsLooted++; checkAchievements();
             if (data.type === 'weapon') { 
                 const weaponData = WEAPON_DATABASE[data.name]; const alreadyOwned = gameState.weapons.find(w => w.key === data.name); 
                 if (!alreadyOwned) { gameState.weapons.push({ key: data.name, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] = (gameState.ammoInventory[weaponData.ammoType] || 0) + (weaponData.magSize * 2); } showChat('시스템', `<span class="weapon-name-chat">${weaponData.name}</span>을(를) 획득했습니다.`); switchWeapon(gameState.weapons.length - 1); } 
@@ -2714,7 +2800,8 @@
                                         showChat('시스템', `로드킬! (${enemy.userData.name || '적'} 처치)`); 
                                         createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); 
                                         addMoloch(isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20); 
-                                        if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) { elfQuestDone = true; showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.'); }
+                                        if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; checkAchievements(); }
+                                        if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) { elfQuestDone = true; gameStats.elfQuestsCompleted++; checkAchievements(); showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.'); }
                                     } else { enemy.userData.state = 'chase'; } 
                                 } else if (enemy.userData.type === 'boss') {
                                     enemy.userData.health -= damage;
@@ -2822,7 +2909,7 @@
                         // 폭발 피해 (직격 시 만피해, 스플래시는 거리 비례)
                         const splashDist = distToPlayer < 2.2 ? 0 : bullet.position.distanceTo(gameState.position);
                         if (splashDist < 8) { attackPlayer(data.damage * (1 - splashDist / 8)); }
-                        createDebrisEffect(bullet.position, new THREE.Color(0x776655), 20);
+                        createDebrisEffect(bullet.position, new THREE.Color(data.explodeColor || 0x776655), 20);
                         createHazardZone(bullet.position.x, 0, bullet.position.z, 5, 800, 15);
                         scene.remove(bullet); bullets.splice(i, 1); continue;
                     }
@@ -2994,9 +3081,11 @@
                             const molochReward = isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20;
                             const xpReward = isBandit ? (enemy.userData.isBanditLeader ? 100 : 40) : 30;
                             addMoloch(molochReward); gainXP(xpReward);
+                            if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; checkAchievements(); }
                             // 엘프 퀘스트: 강도 두목 처치 시 완료
                             if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) {
                                 elfQuestDone = true;
+                                gameStats.elfQuestsCompleted++; checkAchievements();
                                 showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.');
                             }
                             createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
@@ -3092,7 +3181,12 @@
                     if (questState.currentAmount >= questState.targetAmount) { questState.currentAmount = questState.targetAmount; questState.status = 2; showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); } 
                     updateQuestUI(); 
                 } 
-                gameStats.zombieKills++; checkAchievements(); 
+                gameStats.zombieKills++; 
+                if (enemy.userData.isTroll) gameStats.trollKills++;
+                else if (enemy.userData.isOrc) gameStats.orcKills++;
+                else if (enemy.userData.isElfVillager) gameStats.elfVillagerKills++;
+                else if (enemy.userData.isDwarfVillager) gameStats.dwarfVillagerKills++;
+                checkAchievements(); 
                 
                 // [NEW] 1000킬 달성 시 엔딩 트리거
                 if (gameStats.zombieKills >= 1000 && !gameState.isEnding) {
