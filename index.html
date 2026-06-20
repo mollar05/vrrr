@@ -23,22 +23,15 @@
         #achievement-popup { position: fixed; top: 80px; right: 50px; background: linear-gradient(90deg, #FFD700, #FFA500); color: #000; padding: 10px 20px; border-radius: 8px; box-shadow: 0 0 15px rgba(255, 215, 0, 0.6); z-index: 105; display: none; text-align: right; transform: translateX(100%); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); border: 2px solid #fff; }
         #achievement-title { font-weight: 900; font-size: 18px; text-transform: uppercase; }
         #achievement-desc { font-size: 14px; font-weight: 500; }
-        /* [UI] 퀘스트 UI - 다중 퀘스트 + 휠 스크롤 */
-        #quest-display { position: fixed; top: 150px; right: 50px; color: #fff; text-align: right; display: none; z-index: 101; text-shadow: 1px 1px 3px rgba(0,0,0,0.9); background: rgba(0,0,0,0.55); padding: 10px 14px; border-radius: 8px; border-right: 3px solid #00ff00; min-width: 260px; max-width: 340px; pointer-events: auto; user-select: none; }
-        #quest-title { font-size: 15px; font-weight: bold; color: #00ff00; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
-        #quest-scroll-hint { font-size: 11px; color: #888; font-weight: normal; text-transform: none; letter-spacing: 0; }
-        #quest-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: hidden; }
-        .quest-entry { padding: 6px 8px; border-radius: 5px; background: rgba(255,255,255,0.06); border-left: 3px solid #444; font-size: 14px; color: #ddd; text-align: left; line-height: 1.4; }
-        .quest-entry.elf { border-left-color: #66ffaa; }
-        .quest-entry.dwarf { border-left-color: #ffaa44; }
-        .quest-entry.main { border-left-color: #4e9af1; }
-        .quest-entry .q-label { font-size: 12px; font-weight: bold; display: block; margin-bottom: 2px; }
-        .quest-entry.elf .q-label { color: #66ffaa; }
-        .quest-entry.dwarf .q-label { color: #ffaa44; }
-        .quest-entry.main .q-label { color: #4e9af1; }
-        .quest-entry.ready { border-left-color: #ffff00; animation: quest-border-pulse 1s infinite; }
-        .quest-entry.ready .q-label { color: #ffff00; }
-        @keyframes quest-border-pulse { 0%,100% { box-shadow: -2px 0 8px #ffff0044; } 50% { box-shadow: -2px 0 14px #ffff00aa; } }
+        /* [UI] 퀘스트 UI */
+        #quest-display { position: fixed; top: 150px; right: 50px; color: #fff; text-align: right; display: none; z-index: 101; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); background: rgba(0, 0, 0, 0.4); padding: 10px; border-radius: 8px; border-right: 3px solid #00ff00; max-width: 340px; }
+        #quest-title { font-size: 18px; font-weight: bold; color: #00ff00; margin-bottom: 5px; text-transform: uppercase; }
+        #quest-list { max-height: 220px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #00ff0099 transparent; }
+        #quest-list::-webkit-scrollbar { width: 5px; }
+        #quest-list::-webkit-scrollbar-thumb { background: #00ff0099; border-radius: 3px; }
+        .quest-entry { font-size: 16px; color: #ddd; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.15); }
+        .quest-entry:first-child { border-top: none; }
+        .quest-entry-label { font-size: 12px; color: #88ffaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; }
         .quest-ready { color: #ffff00 !important; font-weight: bold; animation: text-pulse 1s infinite; }
         @keyframes text-pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
@@ -232,7 +225,7 @@
         </div>
 
         <div id="quest-display">
-            <div id="quest-title">📋 임무 <span id="quest-scroll-hint">↑↓ 휠</span></div>
+            <div id="quest-title">임무</div>
             <div id="quest-list"></div>
         </div>
 
@@ -913,18 +906,29 @@
             return y;
         }
 
+        // [NEW] 용암이 지형지물처럼 위아래로 오르내리는 진폭/주기 (시각 + 데미지 판정 공용)
+        const LAVA_BOB_AMPLITUDE = 1.4; // 위아래로 출렁이는 높이(m)
+        const LAVA_BOB_SPEED = 0.35;    // 출렁이는 속도
+        let lavaBobTime = 0; // animate 루프에서 매 프레임 누적
+        // 위치마다 위상이 달라야 "지형처럼" 굽이쳐 보이므로 좌표 기반 위상 오프셋 사용
+        function getLavaBobOffset(x, z) {
+            const phase = (x * 0.015 + z * 0.011);
+            return Math.sin(lavaBobTime * LAVA_BOB_SPEED + phase) * LAVA_BOB_AMPLITUDE * 0.5 + LAVA_BOB_AMPLITUDE * 0.5;
+        }
+
         // [NEW] 특정 위치의 용암 높이를 계산하는 함수
         function getLavaHeight(x, z) {
             const tHeight = getTerrainHeight(x, z);
             const biome = getBiome(x, z);
             
             if (biome === 'volcano') {
-                // 1. 웅덩이: 지형이 LAVA_LEVEL보다 낮으면 용암 높이는 LAVA_LEVEL
-                if (tHeight < LAVA_LEVEL) return LAVA_LEVEL;
+                const bob = getLavaBobOffset(x, z);
+                // 1. 웅덩이: 지형이 LAVA_LEVEL보다 낮으면 용암 높이는 LAVA_LEVEL (+ 출렁임)
+                if (tHeight < LAVA_LEVEL) return LAVA_LEVEL + bob;
                 
-                // 2. 흐르는 용암: 노이즈 조건이 맞으면 지형보다 살짝 위에 존재
+                // 2. 흐르는 용암: 노이즈 조건이 맞으면 지형보다 살짝 위에 존재 (+ 출렁임)
                 const flowNoise = simplex.noise2D(x / 40, z / 40);
-                if (flowNoise > 0.3) return tHeight + 0.2;
+                if (flowNoise > 0.3) return tHeight + 0.2 + bob;
             }
             
             // 용암이 없는 곳은 지하 깊숙한 곳으로 처리
@@ -1947,11 +1951,9 @@
                 const moved = enemy.position.distanceTo(data.lastPosition); if (!data.isJumping && moved < 0.1 * effectiveDelta && (data.state === 'chase' || data.state === 'portal')) { data.stuckTime += effectiveDelta * 1000; } else { data.stuckTime = 0; } data.lastPosition.copy(enemy.position);
                 
                 const isPassiveByDefault = data.isOrc || data.isPeaceful;
-                // 엘프/드워프가 customTarget을 가지면 attack/chase 가능 (isProvoked처럼 동작)
-                const hasCombatTarget = !isTargetPlayer && data.customTarget && data.customTarget.userData && data.customTarget.userData.health > 0;
                 if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager) { data.state = 'portal'; } 
-                else if (((!isPassiveByDefault && !isSafeZone) || isProvoked || hasCombatTarget) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
-                else if (isProvoked || hasCombatTarget || (!isPassiveByDefault && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
+                else if (((!isPassiveByDefault && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
+                else if (isProvoked || (!isPassiveByDefault && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
                 else if (data.stuckTime > data.stuckThreshold) { data.state = 'stuck'; } else { data.state = 'wander'; }
                 
                 switch (data.state) { case 'portal': handlePortalState(enemy, data, now, effectiveDelta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': handleChaseState(enemy, data, now, effectiveDelta, hasLineOfSight, currentTargetPos); break; case 'stuck': handleStuckState(enemy, data, effectiveDelta); break; case 'wander': handleWanderState(enemy, data, now, effectiveDelta); break; case 'knockback': handleKnockbackState(enemy, data, effectiveDelta); break; }
@@ -1980,6 +1982,35 @@
             const direction = targetPos.clone().sub(enemy.position).normalize(); direction.y = 0;
             if (data.stuckTime > 500) { direction.x += (Math.random() - 0.5); direction.z += (Math.random() - 0.5); direction.normalize(); }
 
+            // [NEW] 엘프 특성: 날렵하게 거리를 벌리며 견제하는 키이팅(kiting) 패턴
+            // 너무 가까워지면 뒤로 빠지고, 거리가 멀면 다가오며 좌우로 스텝을 밟아 명중을 피함
+            if (data.isElfVillager) {
+                const distToTarget = enemy.position.distanceTo(targetPos);
+                const idealRange = data.attackRange + 4.0; // 사정거리보다 살짝 먼 거리를 유지하려 함
+                let moveDir;
+                if (distToTarget < idealRange - 1.5) {
+                    moveDir = direction.clone().negate(); // 너무 가까우면 후퇴
+                } else if (distToTarget > idealRange + 3.0) {
+                    moveDir = direction.clone(); // 너무 멀면 접근
+                } else {
+                    moveDir = new THREE.Vector3(0, 0, 0); // 적정 거리면 제자리에서 견제 스텝만
+                }
+                // 좌우로 빙글빙글 도는 스텝(strafe) 추가 — 회피 기동
+                const strafe = new THREE.Vector3(-direction.z, 0, direction.x);
+                if (!data.strafeDir || now - (data.lastStrafeFlip || 0) > 1200) { data.strafeDir = Math.random() < 0.5 ? 1 : -1; data.lastStrafeFlip = now; }
+                moveDir.addScaledVector(strafe, data.strafeDir * 0.8);
+                if (moveDir.lengthSq() > 0.0001) moveDir.normalize();
+                const elfSpeed = data.speed * 1.15; // 엘프는 더 날렵함
+                const velocity = moveDir.multiplyScalar(elfSpeed * delta);
+                enemy.position.add(velocity);
+                enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
+                if (hasLOS && !data.isJumping && data.playerElevated && data.targetHeight > 2.0) { data.velocityY = 0.3; data.isJumping = true; }
+                return;
+            }
+
+            // [NEW] 드워프 특성: 묵직하게 정면으로 우직하게 돌진하는 탱커형 — 회피 없이 직진
+            // (별도 가속 없이 기본 로직을 타되, 속도/맷집은 생성 시점에 이미 둔중하게 설정됨)
+
             const velocity = direction.multiplyScalar(data.speed * delta);
             enemy.position.add(velocity);
             enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
@@ -1988,85 +2019,6 @@
         }
 
         function handleWanderState(enemy, data, now, delta) {
-            // ── 엘프 전사 특성 행동 ──
-            if (data.isElfVillager) {
-                // 엘프는 강도(bandit type)를 발견하면 먼저 공격 (원거리 사격 흉내: 대미지 직접 처리)
-                if (!data._elfScanTime || now - data._elfScanTime > 2000) {
-                    data._elfScanTime = now;
-                    for (const re of rangedEnemies) {
-                        if (re.userData.type !== 'bandit') continue;
-                        const d = enemy.position.distanceTo(re.position);
-                        if (d < 50) { // 50m 이내 강도 발견
-                            data.customTarget = re;
-                            data.state = 'chase';
-                            if (Math.random() < 0.3) showChat('엘프', '침입자다! 물러가라!');
-                            return;
-                        }
-                    }
-                }
-                // 엘프는 마을 중심(spawn) 주변을 조용히 순찰
-                if (!data.wanderTarget || now - (data._elfWanderTime || 0) > 6000) {
-                    data._elfWanderTime = now;
-                    const radius = 18;
-                    const angle = Math.random() * Math.PI * 2;
-                    data.wanderTarget = new THREE.Vector3(
-                        data.spawnPosition.x + Math.cos(angle) * radius * Math.random(),
-                        data.spawnPosition.y,
-                        data.spawnPosition.z + Math.sin(angle) * radius * Math.random()
-                    );
-                }
-                const dist = new THREE.Vector2(enemy.position.x - data.wanderTarget.x, enemy.position.z - data.wanderTarget.z).length();
-                if (dist < 1.5) { data.wanderTarget = null; return; }
-                const dir = data.wanderTarget.clone().sub(enemy.position).normalize(); dir.y = 0;
-                enemy.position.add(dir.multiplyScalar(data.speed * 0.35 * delta));
-                enemy.lookAt(data.wanderTarget.x, enemy.position.y, data.wanderTarget.z);
-                return;
-            }
-
-            // ── 드워프 광부 특성 행동 ──
-            if (data.isDwarfVillager) {
-                // 드워프는 좀비/보스를 발견하면 적극적으로 달려들어 도끼 공격
-                if (!data._dwarfScanTime || now - data._dwarfScanTime > 1500) {
-                    data._dwarfScanTime = now;
-                    let closestThreat = null; let closestDist = 35;
-                    for (const z of zombies) {
-                        if (z === enemy || z.userData.isDwarfVillager || z.userData.isElfVillager) continue;
-                        const d = enemy.position.distanceTo(z.position);
-                        if (d < closestDist) { closestDist = d; closestThreat = z; }
-                    }
-                    for (const b of bosses) {
-                        const d = enemy.position.distanceTo(b.position);
-                        if (d < closestDist) { closestDist = d; closestThreat = b; }
-                    }
-                    if (closestThreat) {
-                        data.customTarget = closestThreat;
-                        data.state = 'chase';
-                        if (Math.random() < 0.25) showChat('드워프', '내 광산에서 꺼져라, 이 녀석들아!');
-                        return;
-                    }
-                }
-                // 드워프는 광산 주변(spawn 근처)을 천천히 순찰, 가끔 멈춤
-                if (!data.wanderTarget || now - (data._dwarfWanderTime || 0) > 8000) {
-                    data._dwarfWanderTime = now;
-                    // 가끔 그냥 멈춤 (광부처럼 제자리에서 작업하는 느낌)
-                    if (Math.random() < 0.3) { data.wanderTarget = enemy.position.clone(); return; }
-                    const radius = 12;
-                    const angle = Math.random() * Math.PI * 2;
-                    data.wanderTarget = new THREE.Vector3(
-                        data.spawnPosition.x + Math.cos(angle) * radius * Math.random(),
-                        data.spawnPosition.y,
-                        data.spawnPosition.z + Math.sin(angle) * radius * Math.random()
-                    );
-                }
-                const dist = new THREE.Vector2(enemy.position.x - data.wanderTarget.x, enemy.position.z - data.wanderTarget.z).length();
-                if (dist < 1.5) { data.wanderTarget = null; return; }
-                const dir = data.wanderTarget.clone().sub(enemy.position).normalize(); dir.y = 0;
-                enemy.position.add(dir.multiplyScalar(data.speed * 0.4 * delta));
-                enemy.lookAt(data.wanderTarget.x, enemy.position.y, data.wanderTarget.z);
-                return;
-            }
-
-            // ── 기본 wander (기존 로직) ──
             if (!data.wanderTarget) {
                 const angle = Math.random() * Math.PI * 2;
                 const dist = 5 + Math.random() * 10;
@@ -2237,19 +2189,15 @@
                     };
                     npcs.push(elf);
                 } else {
-                    // 일반 엘프 전사: 평화적, 강도를 발견하면 원거리 활로 공격
+                    // 일반 엘프 전사: 공격 가능 (좀비 시스템 재사용, 평화적 시작) - 날렵하게 거리를 유지하며 견제하는 특성
                     elf.userData = { 
-                        health: 350, maxHealth: 350, speed: 8.0, originalSpeed: 8.0, type: 'zombie', isElfVillager: true, name: '엘프',
-                        originalColor: elfMat.color.clone(), state: 'wander',
-                        lastAttackTime: 0, attackCooldown: 1200, attackRange: 28, // 원거리 활 사거리
-                        detectionRange: 55,
-                        lastMoveTime: 0, wanderTarget: null, spawnPosition: elf.position.clone(),
-                        path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
+                        health: 300, maxHealth: 300, speed: 8.5, originalSpeed: 8.5, type: 'zombie', isElfVillager: true, name: '엘프',
+                        originalColor: elfMat.color.clone(), state: 'idle', lastAttackTime: 0, attackCooldown: 1100, attackRange: 5.5, detectionRange: 65,
+                        lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
                         stuckTime: 0, stuckThreshold: 1000, lastPosition: elf.position.clone(), targetPortal: null, isUsingPortal: false,
                         portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false,
                         targetHeight: 0, playerElevated: false, lastKnownPlayerPosition: new THREE.Vector3(), velocityY: 0, isJumping: false,
-                        isProvoked: false, isPeaceful: true, customTarget: null,
-                        _elfScanTime: 0, _elfWanderTime: 0
+                        isProvoked: false, isPeaceful: true, customTarget: null
                     };
                     zombies.push(elf);
                 }
@@ -2308,19 +2256,15 @@
                     };
                     npcs.push(dwarf);
                 } else {
-                    // 일반 드워프 광부: 근처 위협(좀비/보스)을 발견하면 도끼로 공격
+                    // 일반 드워프 광부: 공격 가능 (좀비 시스템 재사용, 평화적 시작) - 묵직하고 우직한 근접 탱커 특성
                     dwarf.userData = { 
-                        health: 600, maxHealth: 600, speed: 7.0, originalSpeed: 7.0, type: 'zombie', isDwarfVillager: true, name: '드워프',
-                        originalColor: new THREE.Color(dCol), state: 'wander',
-                        lastAttackTime: 0, attackCooldown: 1800, attackRange: 3.0, // 도끼 근접 사거리
-                        detectionRange: 40,
-                        lastMoveTime: 0, wanderTarget: null, spawnPosition: dwarf.position.clone(),
-                        path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
+                        health: 550, maxHealth: 550, speed: 5.2, originalSpeed: 5.2, type: 'zombie', isDwarfVillager: true, name: '드워프',
+                        originalColor: new THREE.Color(dCol), state: 'idle', lastAttackTime: 0, attackCooldown: 2000, attackRange: 2.3, detectionRange: 50,
+                        lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
                         stuckTime: 0, stuckThreshold: 1000, lastPosition: dwarf.position.clone(), targetPortal: null, isUsingPortal: false,
                         portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false,
                         targetHeight: 0, playerElevated: false, lastKnownPlayerPosition: new THREE.Vector3(), velocityY: 0, isJumping: false,
-                        isProvoked: false, isPeaceful: true, customTarget: null,
-                        _dwarfScanTime: 0, _dwarfWanderTime: 0
+                        isProvoked: false, isPeaceful: true, customTarget: null
                     };
                     zombies.push(dwarf);
                 }
@@ -2369,6 +2313,14 @@
         }
 
         function setupControls() {
+            // [NEW] 퀘스트 목록 휠 스크롤: 무기 전환 등 게임 휠 입력과 충돌하지 않도록 분리 처리
+            const questListEl = document.getElementById('quest-list');
+            if (questListEl) {
+                questListEl.addEventListener('wheel', (e) => {
+                    e.stopPropagation();
+                    questListEl.scrollTop += e.deltaY;
+                }, { passive: true });
+            }
             document.addEventListener('keydown', (e) => { 
                 if(isGameOver || gameState.isReloading) return; 
                 if (playerInVehicle) { 
@@ -2465,18 +2417,7 @@
             });
             
             // [수정] 휠 이벤트: 줌 미세 조절 유지 (원하면 제거 가능)
-            document.addEventListener('wheel', (e) => {
-                // 퀘스트 UI 위에서 휠: 퀘스트 스크롤
-                const qd = document.getElementById('quest-display');
-                if (qd && qd.style.display !== 'none') {
-                    const rect = qd.getBoundingClientRect();
-                    if (e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
-                        questScrollOffset += e.deltaY > 0 ? 1 : -1;
-                        updateQuestUI();
-                        e.stopPropagation();
-                        return;
-                    }
-                }
+            document.addEventListener('wheel', (e) => { 
                 if (isPointerLocked && !playerInVehicle && !gameState.isReloading) { 
                     const direction = e.deltaY > 0 ? 1 : -1; 
                     if (isAiming) {
@@ -2760,63 +2701,47 @@
             } else if (questState.status === 1) { showChat('생존자', `아직 부탁한 걸 다 못 끝낸 것 같군. 좀비 ${questState.targetAmount - questState.currentAmount}마리만 더 부탁해.`); } else if (questState.status === 2) { showChat('생존자', "오! 정말 대단하군. 덕분에 한시름 놓았어. 이건 약속한 보상일세."); addMoloch(questState.rewardMoloch); showChat('시스템', `퀘스트 완료 보상: ${questState.rewardMoloch} 몰록 획득!`); questState.status = 3; updateQuestUI(); } else if (questState.status === 3) { const dialogue = ["항상 주변을 조심하게.", "자네 덕분에 오늘 밤은 편히 잘 수 있겠어.", "더 필요한 게 있으면 상인을 찾아가보게.", "이 근처에서 업적을 쌓으면 내게 오게나."]; const rnd = Math.floor(Math.random() * dialogue.length); showChat('생존자', dialogue[rnd]); } } else { if (data.tutorialDialogue && data.tutorialIndex < data.tutorialDialogue.length) { showChat(data.name, data.tutorialDialogue[data.tutorialIndex]); data.tutorialIndex++; } else { const { dialogue, dialogueIndex, name } = data; showChat(name, dialogue[dialogueIndex]); interactableObject.userData.dialogueIndex = (dialogueIndex + 1) % dialogue.length; } } } else if (type === 'vehicle') { toggleVehicle(interactableObject); } }
         }
         
-        // [NEW] 퀘스트 UI - 모든 활성 퀘스트 동시 표시, 휠로 스크롤
-        let questScrollOffset = 0;
-        const QUEST_VISIBLE_COUNT = 3; // 한 번에 보이는 최대 퀘스트 수
-
-        function updateQuestUI() {
-            const display = document.getElementById('quest-display');
-            const list = document.getElementById('quest-list');
-            
-            // 활성 퀘스트 항목 수집
+        // [MODIFIED] 퀘스트 UI 업데이트 함수 수정 (talk_survivor 타입 처리 추가)
+        function updateQuestUI() { 
+            const display = document.getElementById('quest-display'); 
+            const list = document.getElementById('quest-list'); 
             const entries = [];
 
-            // 엘프 퀘스트
-            if (elfQuestActive) {
-                if (!elfQuestDone) {
-                    entries.push({ cls: 'elf', label: '🌿 엘프 퀘스트', text: '강도 두목 처치 후 장로에게 보고', ready: false });
-                } else {
-                    entries.push({ cls: 'elf ready', label: '🌿 엘프 퀘스트', text: '✔ 엘프 장로에게 보고하세요!', ready: true });
+            // 메인(생존자) 퀘스트
+            if (questState.status === 1 || questState.status === 2 || questState.type === 'talk_survivor') {
+                if (questState.type === 'talk_survivor') {
+                    entries.push({ label: '🧭 메인 임무', html: '생존자와 대화하세요', ready: true });
+                } else if (questState.status === 1) {
+                    entries.push({ label: '🧭 메인 임무', html: `- 좀비 처치: <span style="color:#00ff00">${questState.currentAmount}</span> / ${questState.targetAmount}`, ready: false });
+                } else if (questState.status === 2) {
+                    entries.push({ label: '🧭 메인 임무', html: '생존자에게 돌아가 보고하세요!', ready: true });
                 }
             }
 
-            // 드워프 퀘스트
-            if (dwarfQuestActive) {
-                if (!dwarfQuestDone) {
-                    entries.push({ cls: 'dwarf', label: '⛏️ 드워프 퀘스트', text: '골렘(보스) 처치 후 대장장이에게 보고', ready: false });
-                } else {
-                    entries.push({ cls: 'dwarf ready', label: '⛏️ 드워프 퀘스트', text: '✔ 드워프 대장장이에게 보고하세요!', ready: true });
-                }
+            // 엘프 사이드 퀘스트
+            if (elfQuestActive && !elfQuestDone) {
+                entries.push({ label: '🌿 엘프 퀘스트', html: '강도 두목 처치 후 장로에게 보고', ready: false });
+            } else if (elfQuestActive && elfQuestDone) {
+                entries.push({ label: '🌿 엘프 퀘스트', html: '엘프 장로에게 보고하세요!', ready: true });
             }
 
-            // 메인 퀘스트
-            if (questState.status === 1) {
-                entries.push({ cls: 'main', label: '📌 메인 임무', text: `좀비 처치: ${questState.currentAmount} / ${questState.targetAmount}`, ready: false });
-            } else if (questState.status === 2) {
-                entries.push({ cls: 'main ready', label: '📌 메인 임무', text: '✔ 생존자에게 돌아가 보고하세요!', ready: true });
-            } else if (questState.status === 0 && questState.type === 'talk_survivor') {
-                entries.push({ cls: 'main ready', label: '📌 메인 임무', text: '✔ 생존자와 대화하세요', ready: true });
+            // 드워프 사이드 퀘스트
+            if (dwarfQuestActive && !dwarfQuestDone) {
+                entries.push({ label: '⛏️ 드워프 퀘스트', html: '골렘(보스) 처치 후 대장장이에게 보고', ready: false });
+            } else if (dwarfQuestActive && dwarfQuestDone) {
+                entries.push({ label: '⛏️ 드워프 퀘스트', html: '드워프 대장장이에게 보고하세요!', ready: true });
             }
 
-            if (entries.length === 0) { display.style.display = 'none'; return; }
+            if (entries.length === 0) {
+                display.style.display = 'none';
+                list.innerHTML = '';
+                return;
+            }
+
             display.style.display = 'block';
-
-            // 스크롤 범위 클램프
-            const maxOffset = Math.max(0, entries.length - QUEST_VISIBLE_COUNT);
-            questScrollOffset = Math.max(0, Math.min(questScrollOffset, maxOffset));
-
-            const hint = document.getElementById('quest-scroll-hint');
-            hint.style.display = entries.length > QUEST_VISIBLE_COUNT ? 'inline' : 'none';
-
-            // 렌더링
-            list.innerHTML = '';
-            const visible = entries.slice(questScrollOffset, questScrollOffset + QUEST_VISIBLE_COUNT);
-            visible.forEach(e => {
-                const div = document.createElement('div');
-                div.className = `quest-entry ${e.cls}`;
-                div.innerHTML = `<span class="q-label">${e.label}</span>${e.text}`;
-                list.appendChild(div);
-            });
+            list.innerHTML = entries.map(en => 
+                `<div class="quest-entry"><div class="quest-entry-label">${en.label}</div><div class="${en.ready ? 'quest-ready' : ''}">${en.html}</div></div>`
+            ).join('');
         }
         function toggleVehicle(vehicle, isDestroyed = false) { if (playerInVehicle) { const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(vehicle.quaternion); const exitPos = vehicle.position.clone().add(rightDir.multiplyScalar(2.0)); const exitY = getTerrainHeight(exitPos.x, exitPos.z) + 1.8; gameState.position.set(exitPos.x, exitY, exitPos.z); const vehicleRotationY = vehicle.rotation.y; gameState.rotation.y = vehicleRotationY; gameState.rotation.x = 0; scene.add(camera); camera.position.copy(gameState.position); camera.rotation.set(gameState.rotation.x, gameState.rotation.y, 0, 'YXZ'); playerGun.visible = true; playerInVehicle = null; if (isDestroyed) { gameState.health = Math.max(0, gameState.health - 25); showChat("시스템", "차량이 파괴되었습니다! 비상 탈출합니다!"); const newPlayerPos = gameState.position.clone(); [...zombies, ...rangedEnemies].forEach(enemy => { if (enemy.userData.health > 0) { enemy.userData.lastKnownPlayerPosition.copy(newPlayerPos); enemy.userData.state = 'chase'; } }); } else { showChat('시스템', '차량에서 하차했습니다.'); } } else { playerInVehicle = vehicle; vehicle.add(camera); camera.position.set(0, 1.2, -0.5); camera.rotation.set(0, 0, 0, 'YXZ'); playerGun.visible = false; gameStats.vehiclesDriven++; checkAchievements(); showChat('시스템', `차량에 탑승했습니다.`); } updateUI(); }
         function pickupItem(item) { 
@@ -2944,30 +2869,31 @@
             if (gameState.position.y <= groundLevel + playerHeight + 0.2 && gameState.velocityY <= 0) { if (!gameState.onGround) { gameState.velocityY = 0; } gameState.onGround = true; gameState.position.y = groundLevel + playerHeight; } else { gameState.onGround = false; }
             if (!gameState.onGround) { gameState.velocityY -= gravity; }
             
-            if (controls.jump && gameState.onGround) { if (playerStamina > STAMINA_THRESHOLD && playerStamina >= JUMP_STAMINA_COST) { gameState.velocityY = jumpForce; playerStamina -= JUMP_STAMINA_COST; gameState.onGround = false; } else { if (playerStamina <= STAMINA_THRESHOLD) { showChat('시스템', '지쳐서 점프할 수 없습니다. (스태미나 5 이하)'); } else { showChat('시스템', '스태미나가 부족하여 점프할 수 없습니다.'); } } controls.jump = false; }
-            gameState.position.y += gameState.velocityY;
-            // 용암을 지형지물처럼 취급: 용암 높이와 지형 높이 중 더 높은 것을 바닥으로
-            const lavaFloor = getLavaHeight(gameState.position.x, gameState.position.z);
-            const safeFloor = Math.max(terrainFloor, lavaFloor > -500 ? lavaFloor : -1000);
-            if (gameState.position.y < safeFloor + playerHeight) { gameState.position.y = safeFloor + playerHeight; gameState.velocityY = 0; gameState.onGround = true; }
-            if (gameState.position.y < -50) { gameState.health = 0; handleGameOver(); return; }
-            
-            // 용암 데미지: 발바닥이 용암 표면에 닿거나 그 위에 서있을 때 (0.5 유닷 이내)
-            const playerFeetY = gameState.position.y - playerHeight;
-            const onLava = lavaFloor > -500 && playerFeetY <= lavaFloor + 0.6;
+            // 용암 데미지 판정 (발바닥 기준)
+            const lavaHeight = getLavaHeight(gameState.position.x, gameState.position.z);
+            const inLava = gameState.position.y - 1.8 <= lavaHeight + 0.2;
             const lavaStatusEl = document.getElementById('lava-status');
-            if (onLava) {
-                const damage = 40 * delta;
-                gameState.health -= damage;
-                showLavaDamageEffect();
+            if (inLava) { 
+                const damage = 40 * delta;  // 기존 20→40으로 상향
+                gameState.health -= damage; 
+                showLavaDamageEffect(); 
                 lavaStatusEl.style.display = 'block';
                 gameState.wasInLava = true;
-                if (gameState.health <= 0) handleGameOver();
+                if (gameState.health <= 0) handleGameOver(); 
             } else {
                 lavaStatusEl.style.display = 'none';
-                if (gameState.wasInLava && gameState.health > 0) { gameStats.lavaSurvived++; checkAchievements(); }
+                // 용암에서 막 빠져나왔고 생존했다면 카운트
+                if (gameState.wasInLava && gameState.health > 0) {
+                    gameStats.lavaSurvived++; checkAchievements();
+                }
                 gameState.wasInLava = false;
             }
+
+            if (controls.jump && gameState.onGround) { if (playerStamina > STAMINA_THRESHOLD && playerStamina >= JUMP_STAMINA_COST) { gameState.velocityY = jumpForce; playerStamina -= JUMP_STAMINA_COST; gameState.onGround = false; } else { if (playerStamina <= STAMINA_THRESHOLD) { showChat('시스템', '지쳐서 점프할 수 없습니다. (스태미나 5 이하)'); } else { showChat('시스템', '스태미나가 부족하여 점프할 수 없습니다.'); } } controls.jump = false; }
+            gameState.position.y += gameState.velocityY;
+            const safeFloor = Math.max(terrainFloor, (getBiome(gameState.position.x, gameState.position.z) === 'volcano' ? LAVA_LEVEL : -100));
+            if (gameState.position.y < safeFloor + playerHeight) { gameState.position.y = safeFloor + playerHeight; gameState.velocityY = 0; gameState.onGround = true; }
+            if (gameState.position.y < -50) { gameState.health = 0; handleGameOver(); return; }
             const direction = new THREE.Vector3(); if (controls.moveForward) direction.z -= 1; if (controls.moveBackward) direction.z += 1; if (controls.moveLeft) direction.x -= 1; if (controls.moveRight) direction.x += 1;
             if (direction.length() > 0) { direction.normalize().applyEuler(new THREE.Euler(0, gameState.rotation.y, 0, 'YXZ')); const velocity = direction.multiplyScalar(moveSpeed); const oldPosition = gameState.position.clone();
                 const TERRAIN_COLLISION_RADIUS = 0.5; const MAX_SLOPE_HEIGHT = 1.0; const PUSH_BACK_FORCE = 0.1; const horizontalCollider = new THREE.Box3(new THREE.Vector3(-0.3, -playerHeight + 0.1, -0.3), new THREE.Vector3(0.3, (playerHeight / 2) - 0.2, 0.3));
@@ -3399,30 +3325,24 @@
                         // 몬스터 종류별 기본 데미지 설정
                         let baseDamage = 10; // 기본 좀비
                         if (data.isOrc) baseDamage = 15; // 오크는 좀 더 강함
-                        if (data.isElfVillager || data.isDwarfVillager) baseDamage = 15; // 엘프/드워프도 오크와 동일하게 강함
+                        if (data.isElfVillager) baseDamage = 12; // 엘프: 빠르지만 한 방은 약함
+                        if (data.isDwarfVillager) baseDamage = 20; // 드워프: 느리지만 묵직한 일격
                         if (data.isTroll) baseDamage = 25; // 트롤은 훨씬 강함
                         if (data.name && data.name.includes('워치프')) baseDamage = 30; // 워치프
 
                         const totalDamage = baseDamage + difficultyBonus;
                         attackPlayer(totalDamage); 
                     } else if (data.customTarget && data.customTarget.userData) { 
-                        // 몬스터 간 전투 (Mob vs Mob) - 엘프/드워프는 특화 대미지
-                        let dmg = 20;
-                        if (data.isElfVillager) {
-                            // 엘프: 원거리 활 스타일 - 더 강한 피해, 약간 긴 사거리
-                            dmg = 35;
-                            createDebrisEffect(data.customTarget.position, new THREE.Color(0x66ffaa), 3);
-                        } else if (data.isDwarfVillager) {
-                            // 드워프: 도끼 근접 - 묵직한 피해
-                            dmg = 45;
-                            createDebrisEffect(data.customTarget.position, new THREE.Color(0xffaa44), 3);
-                        }
+                        // [MODIFIED] 몬스터 간 전투 (Mob vs Mob)
+                        const dmg = 20; 
                         const victim = data.customTarget;
                         victim.userData.health -= dmg; 
-                        showDamage(victim.position, dmg, data.isElfVillager ? '#66ffaa' : data.isDwarfVillager ? '#ffaa44' : '#ffaa00'); 
+                        showDamage(victim.position, dmg, '#ffaa00'); 
                         
                         // 맞은 놈도 때린 놈을 타겟팅 (반격 메커니즘)
+                        // 피해자가 타겟이 없거나 플레이어를 쫓던 중이었다면, 자신을 때린 놈으로 타겟 변경
                         if (victim.userData.health > 0 && (!victim.userData.customTarget || victim.userData.customTarget !== enemy)) {
+                            // 오크나 좀비라면 반격
                             if (victim.userData.type === 'zombie' || victim.userData.type === 'enemy') {
                                 victim.userData.customTarget = enemy;
                                 victim.userData.state = 'chase';
@@ -3431,8 +3351,10 @@
                         }
 
                         if (victim.userData.health <= 0) {
+                            // 타겟 죽음 -> 승리 -> 타겟 초기화 (플레이어로 복귀하거나 배회)
                             data.customTarget = null;
-                            data.state = 'wander';
+                            data.state = 'idle';
+                            // 죽은 놈 처리 (좀비면 handleZombieDeath 호출 필요하지만 여기선 약식)
                             if (victim.userData.type === 'zombie') handleZombieDeath(victim, zombies.indexOf(victim), false);
                             else if (victim.userData.type === 'enemy' || victim.userData.type === 'bandit') { scene.remove(victim); rangedEnemies.splice(rangedEnemies.indexOf(victim), 1); }
                         }
@@ -3660,7 +3582,8 @@
             updateVehicles(delta); updateItems(delta); updateNPCs(delta); updateFlares(delta); updateDebris(delta);
             updateBosses(delta, now, gameState.position); updateHazardZones(now);
             updateInteraction();
-            // 용암 애니메이션 (발광 강도 맥동) - 플레이어 근처 300m 이내만 처리하여 화산 렉 최소화
+            // 용암 애니메이션 (발광 강도 맥동 + 지형지물처럼 위아래로 출렁임) - 플레이어 근처 300m 이내만 처리하여 화산 렉 최소화
+            lavaBobTime = now * 0.001;
             if (frameCount % 4 === 0) {
                 const t = now * 0.001;
                 const lavaPlayerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
@@ -3671,6 +3594,9 @@
                     const dz = lp.position.z - lavaPlayerPos.z;
                     if (dx * dx + dz * dz > LAVA_ANIM_RADIUS_SQ) return; // 먼 용암은 스킵
                     lp.userData.mat.emissiveIntensity = 0.6 + Math.sin(t * 2.0 + (lp.userData.timeOffset || 0)) * 0.35;
+                    // 용암판 전체를 살짝 위아래로 출렁여서 마치 부풀어오르는 지형처럼 보이게 함
+                    if (lp.userData.baseY === undefined) lp.userData.baseY = lp.position.y;
+                    lp.position.y = lp.userData.baseY + getLavaBobOffset(lp.position.x, lp.position.z);
                 });
                 // 용암 조명도 근처만 업데이트
                 const LIGHT_ANIM_RADIUS_SQ = 200 * 200;
