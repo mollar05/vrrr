@@ -1736,7 +1736,8 @@
             // [MODIFIED] 청크 면적이 1/4로 줄었으므로(200x200 -> 100x100) 청크당 오브젝트 수도 1/4로 줄여 동일한 월드 밀도를 유지
             const objectCount = Math.max(1, Math.floor((chunkRand() * 15 + 20) * objectDensityMultiplier / 4));
             if (centerBiome === 'city') {
-                const cityGridSize = 27; // [MODIFIED] 청크 크기가 100m로 줄어든 비율(200->100)에 맞춰 55->27로 축소하여 동일한 건물 밀도 유지 for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.45) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
+                // [MODIFIED] 청크 크기가 100m로 줄어든 비율(200->100)에 맞춰 55->27로 축소하여 동일한 건물 밀도 유지
+                const cityGridSize = 27; for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.45) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
             } else if (chunkRand() > (1 - buildingChance)) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); if (type > 0.9) { const isHighrise = chunkRand() > 0.8; const size = isHighrise ? { w: 30, d: 40 } : { w: 12, d: 12 }; const y = getTerrainHeight(x, z); buildingsInChunk.push({ x, z, y, size, isHighrise }); } } }
             
             if (centerBiome === 'forest') {
@@ -2684,7 +2685,11 @@
                 const distToEntrance = zombiePos.distanceTo(portal.entrance);
                 if (distToEntrance < 30) {
                     const heightDiff = Math.abs(portal.exit.y - targetY);
-                    if (heightDiff < 5) { 
+                    // [MODIFIED] 고층 빌딩처럼 포탈이 여러 단계(1층->2층->3층->옥상)로 이어진 경우,
+                    // 목표 높이와 5m 이내인 포탈만 고르면 중간 경유 포탈을 절대 선택할 수 없어 옥상까지 못 올라감.
+                    // 그래서 "목표와 가까운 포탈" 외에도 "지금 위치보다 위에 있고, 목표 쪽으로 가까워지는 포탈"도 후보로 인정.
+                    const movesTowardTarget = portal.exit.y > zombiePos.y + 1 && portal.exit.y <= targetY + 2;
+                    if (heightDiff < 5 || movesTowardTarget) { 
                         if (distToEntrance < minDist) { minDist = distToEntrance; bestPortal = portal; }
                     }
                 }
