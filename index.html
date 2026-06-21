@@ -1313,11 +1313,11 @@
         let controls = { moveForward: false, moveBackward: false, moveLeft: false, moveRight: false, sprint: false, jump: false };
 
         class Portal extends THREE.Object3D { 
-            constructor(entrancePos, exitPos, buildingId) { super(); this.portalId = `portal_${Date.now()}_${Math.random()}`; this.entrance = entrancePos.clone(); this.exit = exitPos.clone(); this.buildingId = buildingId; this.activationRadius = 1.5; this.cooldownTime = 500; this.lastUsedTime = new Map(); this.isActive = true; }
+            constructor(entrancePos, exitPos, buildingId, isHighrise) { super(); this.portalId = `portal_${Date.now()}_${Math.random()}`; this.entrance = entrancePos.clone(); this.exit = exitPos.clone(); this.buildingId = buildingId; this.isHighrise = !!isHighrise; this.activationRadius = 1.5; this.cooldownTime = 500; this.lastUsedTime = new Map(); this.isActive = true; }
             canUse(entityId, currentTime) { if (!this.isActive) return false; const lastUsed = this.lastUsedTime.get(entityId) || 0; return (currentTime - lastUsed) > this.cooldownTime; }
             use(entityId, currentTime) { this.lastUsedTime.set(entityId, currentTime); }
         }
-        function createPortal(entrancePos, exitPos, buildingId) { const portal = new Portal(entrancePos, exitPos, buildingId); portals.push(portal); return portal; }
+        function createPortal(entrancePos, exitPos, buildingId, isHighrise) { const portal = new Portal(entrancePos, exitPos, buildingId, isHighrise); portals.push(portal); return portal; }
 
         function init() { 
             if (typeof THREE !== 'undefined' && typeof SimplexNoise !== 'undefined') {
@@ -1362,7 +1362,14 @@
         function showAchievementPopup(ach) { const popup = document.getElementById('achievement-popup'); document.getElementById('achievement-title').textContent = ach.title; document.getElementById('achievement-desc').textContent = ach.desc; popup.style.display = 'block'; setTimeout(() => { popup.style.transform = 'translateX(0)'; }, 50); setTimeout(() => { popup.style.transform = 'translateX(100%)'; setTimeout(() => { popup.style.display = 'none'; }, 500); }, 10000); }
 
         function startLoading() {
-            const tips = ["P키를 눌러 능력치를 찍어보세요.", "T키를 눌러 스코프 배율 한계를 변경할 수 있습니다.", "우클릭 조준 중 마우스 휠을 굴려 줌을 조절하세요.", "레벨업 시 체력과 스태미나가 모두 회복됩니다.", "F 키로 차량에 탑승하거나 아이템을 주울 수 있습니다."]; 
+            const tips = [
+                "E키(또는 ESC)를 눌러 일시정지 메뉴를 열고 저장/불러오기/장비창 이동이 가능합니다.",
+                "방어구는 몹이나 보스를 처치하면 드랍됩니다. 가방에 보관되며 장비창에서 장착해야 효과가 적용됩니다.",
+                "모자(Q), 흉갑(Z), 바지(X), 부츠(C)에 붙은 인첸트는 각 키를 눌러 액티브 스킬로 발동할 수 있습니다.",
+                "엘프와 드워프 마을 주민은 평소엔 평화롭지만, 먼저 공격하면 반격합니다.",
+                "용암은 밟으면 지속 피해를 입으니 주의하세요. 부츠 인첸트로 피해를 줄일 수 있습니다.",
+                "P키를 눌러 능력치를 찍어보세요.", "T키를 눌러 스코프 배율 한계를 변경할 수 있습니다.", "우클릭 조준 중 마우스 휠을 굴려 줌을 조절하세요.", "레벨업 시 체력과 스태미나가 모두 회복됩니다.", "F 키로 차량에 탑승하거나 아이템을 주울 수 있습니다."
+            ]; 
             let tipIndex = 0; const tipElement = document.getElementById('loading-tips'); tipElement.textContent = `게임 팁: ${tips[tipIndex]}`;
             const tipInterval = setInterval(() => { tipIndex = (tipIndex + 1) % tips.length; tipElement.textContent = `게임 팁: ${tips[tipIndex]}`; }, 3000);
             let progress = 0;
@@ -2344,7 +2351,7 @@
             addBoxInstance(wallMatrices, wallProxies, x, centerY, z, size.width, totalHeight, size.depth, userData, color);
             const roofHeight = 3; dummy.position.set(x, yBase + size.height + (roofHeight / 2), z); dummy.rotation.set(0, Math.PI / 4, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); roofMatrices.push(dummy.matrix.clone());
             const roofProxy = new THREE.Mesh(sharedConeGeo, invisibleMat); roofProxy.position.copy(dummy.position); roofProxy.rotation.copy(dummy.rotation); roofProxy.visible = true; roofProxy.userData = { type: 'roof', originalColor: sharedRoofMat.color.clone() }; scene.add(roofProxy); objects.push(roofProxy); roofProxies.push(roofProxy); structures.push(roofProxy);
-            const entrancePos = new THREE.Vector3(x, yBase + 0.5, z + 7); const exitPos = new THREE.Vector3(x, yBase + size.height + 0.9, z); createPortal(entrancePos, exitPos, `building_${Math.floor(x)}_${Math.floor(z)}`);
+            // [MODIFIED] 저층 건물의 입구->옥상 직통 포탈 제거: 좀비가 이 포탈을 타고 옥상까지 올라가는 걸 막기 위함 (고층 빌딩에만 단계별 포탈 유지)
         }
 
         function collectHighriseData(x, z, yBase, matrices, proxies) {
@@ -2392,7 +2399,7 @@
             // 1층 입구 포탈
             const entrancePos = new THREE.Vector3(x, yBase + 0.5, z + (dim.d / 2) + 2); 
             const exitPos = new THREE.Vector3(x, (1 * dim.h + yOffset) + (wallThickness / 2) + 0.9, z); 
-            createPortal(entrancePos, exitPos, buildingId);
+            createPortal(entrancePos, exitPos, buildingId, true);
 
             // 2층 이상 (통짜 벽)
             if (dim.floors > 1) {
@@ -2428,7 +2435,7 @@
                     
                     const pEntrance = new THREE.Vector3(x + dim.w/2 - 5, y + 0.5, z); 
                     const pExit = new THREE.Vector3(x, ((i + 1) * dim.h + yOffset) + (wallThickness / 2) + 0.9, z); 
-                    createPortal(pEntrance, pExit, buildingId); 
+                    createPortal(pEntrance, pExit, buildingId, true); 
                 } else { 
                     const triggerMatRoof = new THREE.MeshBasicMaterial({color: 0x0088ff, transparent: true, opacity: 0.3}); 
                     const triggerRoof = new THREE.Mesh(triggerGeo, triggerMatRoof); 
@@ -2439,7 +2446,7 @@
                     
                     const pEntrance = new THREE.Vector3(x + dim.w/2 - 5, y + 0.5, z); 
                     const pExit = new THREE.Vector3(x, roofY + 0.9, z); 
-                    createPortal(pEntrance, pExit, buildingId); 
+                    createPortal(pEntrance, pExit, buildingId, true); 
                 }
                 
                 if (i < 3) { createBuildingLoot(x + (Math.random()-0.5)*(dim.w-4), y + 0.5, z + (Math.random()-0.5)*(dim.d-4)); }
@@ -2685,10 +2692,10 @@
                 const distToEntrance = zombiePos.distanceTo(portal.entrance);
                 if (distToEntrance < 30) {
                     const heightDiff = Math.abs(portal.exit.y - targetY);
-                    // [MODIFIED] 고층 빌딩처럼 포탈이 여러 단계(1층->2층->3층->옥상)로 이어진 경우,
+                    // [MODIFIED] 고층 빌딩(층마다 포탈이 1층->2층->3층->옥상으로 이어짐)에서만 단계별 경유를 허용.
                     // 목표 높이와 5m 이내인 포탈만 고르면 중간 경유 포탈을 절대 선택할 수 없어 옥상까지 못 올라감.
-                    // 그래서 "목표와 가까운 포탈" 외에도 "지금 위치보다 위에 있고, 목표 쪽으로 가까워지는 포탈"도 후보로 인정.
-                    const movesTowardTarget = portal.exit.y > zombiePos.y + 1 && portal.exit.y <= targetY + 2;
+                    // 저층 건물(단일 포탈, 입구->옥상 직통)은 기존처럼 5m 이내 조건만 적용하여 이 완화 로직에서 제외.
+                    const movesTowardTarget = portal.isHighrise && portal.exit.y > zombiePos.y + 1 && portal.exit.y <= targetY + 2;
                     if (heightDiff < 5 || movesTowardTarget) { 
                         if (distToEntrance < minDist) { minDist = distToEntrance; bestPortal = portal; }
                     }
