@@ -200,6 +200,7 @@
         #pause-load-btn:hover { background: #16305c; }
         #pause-quit-btn { border-color: #ff4444; }
         #pause-quit-btn:hover { background: #5c1616; }
+        #pause-equip-btn:hover { background: #5c4d16; }
         #pause-resume-btn { background: #444; }
         #pause-status-msg { text-align: center; font-size: 13px; color: #aaffcc; min-height: 16px; }
 
@@ -317,18 +318,19 @@
             <button id="close-trade-btn">상점 닫기</button>
         </div>
 
-        <!-- [NEW] ESC 일시정지 메뉴 -->
+        <!-- [NEW] ESC/E 일시정지 메뉴 -->
         <div id="pause-modal">
             <h2>일시정지</h2>
             <button class="pause-btn" id="pause-resume-btn">계속하기</button>
             <button class="pause-btn" id="pause-save-btn">💾 저장하기</button>
             <button class="pause-btn" id="pause-load-btn">📂 불러오기</button>
             <button class="pause-btn" id="pause-quit-btn">🚪 종료</button>
+            <button class="pause-btn" id="pause-equip-btn" style="border-color:#ffd700;">🎽 장비창 열기</button>
             <div id="pause-status-msg"></div>
             <input type="file" id="pause-load-input" accept="application/json,.json" style="display:none;">
         </div>
 
-        <!-- [NEW] 장비창 (E키) -->
+        <!-- [NEW] 장비창 (일시정지 메뉴 -> 장비창 열기) -->
         <div id="equipment-modal">
             <h2>🎽 장비창</h2>
             <div id="equip-slots-row"></div>
@@ -507,7 +509,7 @@
         let ammoPrices = {};
         let weaponPrices = {};
 
-        const CHUNK_SIZE = 200;
+        const CHUNK_SIZE = 100; // [MODIFIED] 200 -> 100: 더 작은 단위로 쪼개서 필요한 범위만 로딩되도록 함
         const RENDER_DISTANCE = 1; // 최적화: 기존 유지 (이미 1)
         const generatedChunks = new Set();
         
@@ -661,6 +663,18 @@
             return ARMOR_TIERS[0];
         }
 
+        // [NEW] 보스 전용 티어 굴림: 브론즈를 제외하고(아이언 이상) 굴려서 평균적으로 더 좋은 장비가 나오게 함
+        function rollBossArmorTier() {
+            const pool = ARMOR_TIERS.filter(t => t.id !== 'bronze');
+            const totalWeight = pool.reduce((sum, t) => sum + t.spawnWeight, 0);
+            let roll = Math.random() * totalWeight;
+            for (const tier of pool) {
+                if (roll < tier.spawnWeight) return tier;
+                roll -= tier.spawnWeight;
+            }
+            return pool[0];
+        }
+
         // 새 방어구 아이템을 생성 (슬롯, 티어를 지정하거나 무작위로 굴림)
         function generateArmorPiece(slotKey, tier) {
             slotKey = slotKey || Object.keys(ARMOR_SLOTS)[Math.floor(Math.random() * 4)];
@@ -694,6 +708,14 @@
             let price = Math.floor(40 * tier.priceMult + piece.defense * 8);
             if (piece.enchantId) price = Math.floor(price * 1.6);
             return price;
+        }
+
+        // [NEW] 원거리 적/강도 처치 시 호출하는 공용 방어구 드랍 함수
+        function tryDropArmor(position, chance, useBossRoll) {
+            if (Math.random() < chance) {
+                const piece = generateArmorPiece(null, useBossRoll ? rollBossArmorTier() : null);
+                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, position.x + 0.3, position.y, position.z - 0.3);
+            }
         }
 
         // [NEW] 상점의 방어구 진열 목록 (방문할 때마다 새로 채워지진 않고, 다 팔리면 보충됨)
@@ -891,7 +913,14 @@
         }
 
         let isStatsOpen = false;
-        let isPaused = false; // [NEW] ESC 일시정지 메뉴 상태
+        let isPaused = false; // [NEW] ESC/E 일시정지 메뉴 상태
+        // [NEW] ESC와 E키가 공통으로 사용하는 핸들러: 다른 모달이 열려있으면 그것부터 닫고, 아니면 일시정지 메뉴 토글
+        function handlePauseMenuKey() {
+            if (isTrading) { closeTradeModal(); }
+            else if (isStatsOpen) { closeStatsModal(); }
+            else if (isEquipOpen) { closeEquipmentModal(); }
+            else { togglePauseModal(); }
+        }
         function togglePauseModal() {
             if (isTrading || isStatsOpen || isEquipOpen) return; // 다른 모달이 떠있으면 ESC는 그쪽을 닫는 데 사용 (아래 keydown 핸들러에서 처리)
             isPaused = !isPaused;
@@ -908,10 +937,10 @@
                 document.body.requestPointerLock();
             }
         }
-        function closePauseModal() {
+        function closePauseModal(skipPointerLock) {
             isPaused = false;
             document.getElementById('pause-modal').style.display = 'none';
-            document.body.requestPointerLock();
+            if (!skipPointerLock) document.body.requestPointerLock();
         }
 
         // ─── [NEW] 세이브/로드 시스템 ──────────────────────────────────────────
@@ -1423,7 +1452,7 @@
         // [OPTIMIZATION] 청크 freeze 시스템: 멀리 떨어진 청크의 정적 오브젝트(나무/건물/돌)는
         // 완전히 삭제하지 않고 visible만 끄고 충돌검사 대상에서 제외 -> 다시 가까워지면 복구.
         // (완전 삭제 후 재생성 방식보다 안전하고, instancedMesh 재구축 비용도 없음)
-        const FREEZE_CHUNK_DISTANCE = 3; // RENDER_DISTANCE(1)보다 넉넉하게 잡아 경계에서 깜빡이지 않도록 함
+        const FREEZE_CHUNK_DISTANCE = 6; // [MODIFIED] 청크 크기가 100m로 절반이 된 만큼 동일한 실거리(약 600m)를 유지하도록 6으로 조정
         let frozenChunks = new Set();
 
         function setChunkFrozen(chunkKey, frozen) {
@@ -1473,8 +1502,8 @@
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; 
             const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); 
             const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); 
-            // [NEW] 반경 200m 이내의 청크를 미리 로딩 (청크 경계 진입 전 사전 로딩)
-            const PRELOAD_RADIUS = 200; // 플레이어 반경 200m
+            // [MODIFIED] 청크가 작아진 만큼(100m) 미리 로딩 반경도 합리적인 범위로 축소
+            const PRELOAD_RADIUS = 180; // 플레이어 반경 180m
             const chunkRadius = Math.ceil(PRELOAD_RADIUS / CHUNK_SIZE) + RENDER_DISTANCE;
             for (let x = playerChunkX - chunkRadius; x <= playerChunkX + chunkRadius; x++) { 
                 for (let z = playerChunkZ - chunkRadius; z <= playerChunkZ + chunkRadius; z++) { 
@@ -1700,28 +1729,31 @@
         function generateChunk(chunkX, chunkZ) {
             const chunkKey = `${chunkX},${chunkZ}`; // [OPTIMIZATION] 키 생성
             const chunkOriginX = chunkX * CHUNK_SIZE; const chunkOriginZ = chunkZ * CHUNK_SIZE; const centerBiome = getBiome(chunkOriginX, chunkOriginZ); const seed = chunkX * 31 + chunkZ * 17; let rand = (s) => () => (s = Math.sin(s) * 10000, s - Math.floor(s)); let chunkRand = rand(seed); let buildingsInChunk = [];
-            let objectDensityMultiplier = 1.0; let buildingChance = 0.1;
-            if (centerBiome === 'forest') objectDensityMultiplier = 4.5; else if (centerBiome === 'mountain') objectDensityMultiplier = 0.7; else if (centerBiome === 'volcano') objectDensityMultiplier = 0.1; else if (centerBiome === 'city') { objectDensityMultiplier = 0.2; buildingChance = 0.9; } else if (centerBiome === 'plain') { buildingChance = 0.3; objectDensityMultiplier = 1.2; }
+            // [MODIFIED] 청크 개수가 4배로 늘어난 만큼 건물 배치 확률 게이트도 1/4 수준으로 낮춰 월드 밀도 유지
+            let objectDensityMultiplier = 1.0; let buildingChance = 0.025;
+            if (centerBiome === 'forest') objectDensityMultiplier = 4.5; else if (centerBiome === 'mountain') objectDensityMultiplier = 0.7; else if (centerBiome === 'volcano') objectDensityMultiplier = 0.1; else if (centerBiome === 'city') { objectDensityMultiplier = 0.2; } else if (centerBiome === 'plain') { buildingChance = 0.825; objectDensityMultiplier = 1.2; }
 
-            const objectCount = Math.floor((chunkRand() * 15 + 20) * objectDensityMultiplier);
+            // [MODIFIED] 청크 면적이 1/4로 줄었으므로(200x200 -> 100x100) 청크당 오브젝트 수도 1/4로 줄여 동일한 월드 밀도를 유지
+            const objectCount = Math.max(1, Math.floor((chunkRand() * 15 + 20) * objectDensityMultiplier / 4));
             if (centerBiome === 'city') {
-                const cityGridSize = 55; for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.45) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
+                const cityGridSize = 27; // [MODIFIED] 청크 크기가 100m로 줄어든 비율(200->100)에 맞춰 55->27로 축소하여 동일한 건물 밀도 유지 for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.45) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
             } else if (chunkRand() > (1 - buildingChance)) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); if (type > 0.9) { const isHighrise = chunkRand() > 0.8; const size = isHighrise ? { w: 30, d: 40 } : { w: 12, d: 12 }; const y = getTerrainHeight(x, z); buildingsInChunk.push({ x, z, y, size, isHighrise }); } } }
             
             if (centerBiome === 'forest') {
-                if ((Math.abs(chunkX * 7 + chunkZ * 13) % 50) === 0) {
+                // [MODIFIED] 청크 크기가 절반이 된 만큼(100m), 같은 실제 거리 간격을 유지하도록 모듈로 값도 2배로 조정
+                if ((Math.abs(chunkX * 7 + chunkZ * 13) % 100) === 0) {
                     const wx = chunkOriginX; const wz = chunkOriginZ; const wy = getTerrainHeight(wx, wz); createWorldTree(wx, wz, wy);
                     for(let k=0; k<10; k++) { const tx = wx + (Math.random() - 0.5) * 600; const tz = wz + (Math.random() - 0.5) * 600; const ty = getTerrainHeight(tx, tz); createTroll(tx, tz, ty); }
                     if (chunkRand() > 0.3) { createBoss('witch', wx + 15, wz + 15, wy); }
                 }
 
-                if (chunkRand() > 0.95) {
+                if (chunkRand() > 0.9875) {
                     const colonySize = Math.floor(chunkRand() * 3) + 1; 
                     createOrcColony(chunkOriginX, chunkOriginZ, chunkRand, colonySize);
                 }
             }
             
-            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 100, 100); 
+            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 50, 50); // [MODIFIED] 청크 크기 절반(200->100)에 맞춰 세그먼트도 절반(100->50)으로 줄여 동일한 정밀도 유지
             const vertices = terrainGeo.attributes.position.array; 
             for (let i = 0, j = 0; i < vertices.length; i += 3, j++) { 
                 const wx = vertices[i] + chunkOriginX; 
@@ -1732,7 +1764,7 @@
             terrainGeo.computeVertexNormals(); 
 
             let groundColor = 0x3a5f3a; if (centerBiome === 'mountain') groundColor = 0x5a5a5a; else if (centerBiome === 'forest') groundColor = 0x1a3f1a; else if (centerBiome === 'city') groundColor = 0x222222; else if (centerBiome === 'volcano') groundColor = 0x111111; 
-            const ground = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.9 })); ground.rotation.x = -Math.PI / 2; ground.position.set(chunkOriginX, 0, chunkOriginZ); ground.receiveShadow = true; scene.add(ground); objects.push(ground); structures.push(ground);
+            const ground = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.9 })); ground.rotation.x = -Math.PI / 2; ground.position.set(chunkOriginX, 0, chunkOriginZ); ground.receiveShadow = true; scene.add(ground); objects.push(ground); structures.push(ground); registerChunkObject(chunkKey, ground);
             
             // [MODIFIED] 용암 생성 로직 개선 (청크 경계 문제 해결 및 흐르는 효과)
             // 기존: 중심 바이옴이 화산일 때만 평평한 판 생성 -> 변경: 모든 청크에서 버텍스 단위로 검사하여 지형 적응형 용암 생성
@@ -1745,7 +1777,7 @@
                 getBiome(chunkOriginX, chunkOriginZ - CHUNK_SIZE) === 'volcano';
 
             if (centerBiome === 'volcano' || neighborVolcano) {
-            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 20, 20); // 세그먼트 32→20으로 줄임
+            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 10, 10); // [MODIFIED] 청크 크기 절반에 맞춰 세그먼트도 절반(20->10)으로 축소
             const lavaVerts = lavaGeo.attributes.position.array;
             let hasLava = false;
 
@@ -1825,53 +1857,68 @@
             if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? treeChance + (Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) - treeChance) * 0.25 : treeChance + (0.9 - treeChance) * 0.5; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
             createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
             
-            const enemySpawnThreshold = (centerBiome === 'city') ? 0.82 : 0.68;
+            // [MODIFIED] 청크 면적이 1/4가 된 만큼(청크 개수는 4배), 적/보스 스폰 확률도 1/4로 낮춰 월드 전체 밀도를 동일하게 유지
+            const enemySpawnThreshold = (centerBiome === 'city') ? 0.955 : 0.92;
             if (chunkRand() > enemySpawnThreshold) { 
                 const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); 
                 if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRangedEnemy(x, z, 500 + chunkRand() * 500, yBase); }
                 const zombieCount = (centerBiome === 'city') ? Math.floor(chunkRand() * 2) + 1 : Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano' || zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
             }
 
+            // [NEW] 밤에는 청크가 로딩될 때 확률적으로 좀비/적이 추가로 태어남 (안전구역 밖에서만, 화산 제외)
+            if (isNight && centerBiome !== 'volcano') {
+                const distFromOrigin = Math.sqrt(chunkOriginX * chunkOriginX + chunkOriginZ * chunkOriginZ);
+                if (distFromOrigin > SAFE_ZONE_RADIUS && chunkRand() > 0.92) {
+                    const nx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const nz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const ny = getTerrainHeight(nx, nz);
+                    if (ny > LAVA_LEVEL) {
+                        const nightZombieCount = Math.floor(chunkRand() * 2) + 1;
+                        for (let i = 0; i < nightZombieCount; i++) { const zx = nx + (chunkRand() - 0.5) * 12; const zz = nz + (chunkRand() - 0.5) * 12; const zy = getTerrainHeight(zx, zz); if (zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
+                        if (chunkRand() > 0.7) { createRangedEnemy(nx, nz, 500 + chunkRand() * 500, ny); }
+                    }
+                }
+            }
+
             if (centerBiome === 'city') {
                 const cityDeepNoise = simplex.noise2D(chunkOriginX / 3000, chunkOriginZ / 3000);
-                if (cityDeepNoise < -0.8 && chunkRand() > 0.95) {
+                if (cityDeepNoise < -0.8 && chunkRand() > 0.9875) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('witch', x, z, y);
                 }
                 // 강령술사: 도시에서 가끔 등장
-                if (cityDeepNoise < -0.5 && chunkRand() > 0.97) {
+                if (cityDeepNoise < -0.5 && chunkRand() > 0.9925) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('necromancer', x, z, y);
                 }
             }
             if (centerBiome === 'volcano') {
-                if (chunkRand() > 0.88) {
+                if (chunkRand() > 0.97) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z);
                     if (y > LAVA_LEVEL) { createBoss('fire_demon', x, z, y); }
                 }
             }
             if (centerBiome === 'mountain') {
                 // 골렘: 산 지형에서 가끔 등장
-                if (chunkRand() > 0.88) {
+                if (chunkRand() > 0.97) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('golem', x, z, y);
                 }
             }
 
-            if (chunkRand() > 0.93) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRandomLoot(x, z, yBase + 0.5); } }
-            if (chunkRand() > 0.68 && centerBiome !== 'volcano') { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); createVehicle(x, z, yBase); }
+            // [MODIFIED] 청크 면적이 1/4가 된 만큼(청크 개수는 4배), 확률도 기존의 1/4로 낮춰서 월드 전체 밀도를 동일하게 유지
+            if (chunkRand() > 0.9825) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRandomLoot(x, z, yBase + 0.5); } }
+            if (chunkRand() > 0.92 && centerBiome !== 'volcano') { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); createVehicle(x, z, yBase); }
             
             // 강도 캠프 (도시/화산 제외 - 도시는 이미 건물+적 밀도가 높아 렉 방지)
-            if (chunkRand() > 0.93 && centerBiome !== 'volcano' && centerBiome !== 'city') {
+            if (chunkRand() > 0.9825 && centerBiome !== 'volcano' && centerBiome !== 'city') {
                 const bx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const bz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createBanditCamp(bx, bz, chunkRand);
             }
             // 엘프 군락 (숲 바이옴)
-            if (centerBiome === 'forest' && chunkRand() > 0.87) {
+            if (centerBiome === 'forest' && chunkRand() > 0.9675) {
                 const ex = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const ez = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createElfVillage(ex, ez, chunkRand);
             }
             // 드워프 광산 (산 바이옴)
-            if (centerBiome === 'mountain' && chunkRand() > 0.88) {
+            if (centerBiome === 'mountain' && chunkRand() > 0.97) {
                 const mx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const mz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createDwarfMine(mx, mz, chunkRand);
@@ -2278,6 +2325,11 @@
                 showChat('시스템', '⛏️ [드워프 퀘스트] 골렘을 처치했습니다! 드워프 대장장이에게 돌아가세요.');
             }
             createDebrisEffect(boss.position, boss.userData.originalColor, 50); scene.remove(boss); bosses.splice(index, 1); objects = objects.filter(o => o !== boss); document.getElementById('boss-container').style.display = 'none'; 
+            // [NEW] 보스 처치 시 높은 확률(70%)로 방어구 드랍, 티어도 아이언 이상으로 더 좋은 편이 나오게 함
+            if (Math.random() < 0.7) {
+                const piece = generateArmorPiece(null, rollBossArmorTier());
+                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, boss.position.x, boss.position.y, boss.position.z);
+            }
         }
 
         function addBoxInstance(matrices, proxies, x, y, z, w, h, d, userDataBase, originalColor) {
@@ -3000,6 +3052,11 @@
                 if (file) { loadGameFromFile(file); }
                 pauseLoadInput.value = ''; // 같은 파일을 다시 선택해도 change가 발생하도록 초기화
             });
+            // [NEW] 일시정지 메뉴 -> 장비창 열기 버튼
+            document.getElementById('pause-equip-btn').addEventListener('click', () => {
+                closePauseModal(true); // 포인터락 재요청 생략 (장비창이 바로 exitPointerLock 호출하므로 경쟁 상태 방지)
+                toggleEquipmentModal();
+            });
 
             // [NEW] 장비창 닫기 버튼
             document.getElementById('close-equip-btn').addEventListener('click', () => { closeEquipmentModal(); });
@@ -3022,17 +3079,14 @@
                     case 'KeyF': interact(); break; 
                     case 'KeyP': toggleStatsModal(); break;
                     case 'KeyT': cycleScope(); break; // [NEW] 스코프 교체 키
-                    case 'KeyE': toggleEquipmentModal(); break; // [NEW] 장비창 토글
                     // [NEW] 방어구 인첸트 액티브 스킬: 부위별로 다른 키
                     case 'KeyQ': activateArmorSkill('helmet'); break;
                     case 'KeyZ': activateArmorSkill('chest'); break;
                     case 'KeyX': activateArmorSkill('pants'); break;
                     case 'KeyC': activateArmorSkill('boots'); break;
-                    case 'Escape': // [NEW] ESC: 다른 모달이 열려있으면 그것부터 닫고, 아니면 일시정지 메뉴 토글
-                        if (isTrading) { closeTradeModal(); }
-                        else if (isStatsOpen) { closeStatsModal(); }
-                        else if (isEquipOpen) { closeEquipmentModal(); }
-                        else { togglePauseModal(); }
+                    case 'Escape': // [NEW] ESC/E: 다른 모달이 열려있으면 그것부터 닫고, 아니면 일시정지 메뉴 토글
+                    case 'KeyE':
+                        handlePauseMenuKey();
                         break;
                 } 
             });
@@ -3310,7 +3364,7 @@
                     // 적도 맞으면 customTarget을 플레이어로 재설정 (혹시 다른 몹이랑 싸우고 있었을 수도 있으니까)
                     enemy.userData.customTarget = null;
                 } 
-                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
+                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } tryDropArmor(enemy.position, 0.08, false); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
             }
             else if (target.userData.type === 'boss') { target.userData.health -= damage; showDamage(target.position, damage); }
         }
@@ -3729,6 +3783,8 @@
                                         addMoloch(isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20); 
                                         if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; checkAchievements(); }
                                         if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) { elfQuestDone = true; gameStats.elfQuestsCompleted++; checkAchievements(); showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.'); }
+                                        // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
+                                        tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
                                     } else { enemy.userData.state = 'chase'; } 
                                 } else if (enemy.userData.type === 'boss') {
                                     enemy.userData.health -= damage;
@@ -4017,6 +4073,8 @@
                             }
                             createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
                             showChat('시스템', isBandit ? `💰 ${enemy.userData.name} 처치! (+${molochReward} 몰록)` : '적을 처치했습니다!');
+                            // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
+                            tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
                         }
                     }
                     else if (bestHit.type === 'zombie') { 
@@ -4138,6 +4196,14 @@
                     const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; 
                     const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); 
                 } 
+                // [NEW] 몹 처치 시 낮은 확률로 방어구 드랍 (강한 개체일수록 확률이 조금 더 높음)
+                let armorDropChance = 0.08;
+                if (enemy.userData.isTroll) armorDropChance = 0.18;
+                else if (enemy.userData.isOrc || enemy.userData.isElfVillager || enemy.userData.isDwarfVillager) armorDropChance = 0.12;
+                if (Math.random() < armorDropChance) {
+                    const piece = generateArmorPiece();
+                    spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, enemy.position.x + 0.3, enemy.position.y, enemy.position.z + 0.3);
+                }
             }
         }
 
@@ -4376,7 +4442,7 @@
             const currentChunkX = Math.round(gameState.position.x / CHUNK_SIZE);
             const currentChunkZ = Math.round(gameState.position.z / CHUNK_SIZE);
             const newChunkKey = `${currentChunkX},${currentChunkZ}`;
-            // [NEW] 반경 200m 기반 청크 로딩: 위치가 바뀌었거나 일정 거리 이동했을 때 체크
+            // [MODIFIED] 청크 로딩 체크: 위치가 바뀌었거나 일정 거리 이동했을 때 체크 (PRELOAD_RADIUS=180m 기준)
             const cPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             if (!updateWorldChunks._lastCheckPos) updateWorldChunks._lastCheckPos = cPos.clone();
             const movedSq = cPos.distanceToSquared(updateWorldChunks._lastCheckPos);
@@ -4386,8 +4452,8 @@
                     currentPlayerChunkKey = newChunkKey; 
                     // 고유 청크 탐험 통계
                     if (!exploredChunkKeys.has(newChunkKey)) { exploredChunkKeys.add(newChunkKey); gameStats.chunksExplored++; checkAchievements(); }
-                    // 방랑 상인: 청크 이동 시 1% 확률로 현재 청크 중앙에 생성
-                    if (Math.random() < 0.01) { spawnWanderingMerchant(currentChunkX, currentChunkZ); }
+                    // 방랑 상인: 청크 이동 시 0.5% 확률로 현재 청크 중앙에 생성 (청크가 작아져 경계 통과가 잦아진 만큼 확률을 절반으로 조정)
+                    if (Math.random() < 0.005) { spawnWanderingMerchant(currentChunkX, currentChunkZ); }
                 }
                 updateWorldChunks._lastCheckPos.copy(cPos);
                 updateWorldChunks(); 
