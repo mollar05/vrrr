@@ -24,9 +24,14 @@
         #achievement-title { font-weight: 900; font-size: 18px; text-transform: uppercase; }
         #achievement-desc { font-size: 14px; font-weight: 500; }
         /* [UI] 퀘스트 UI */
-        #quest-display { position: fixed; top: 150px; right: 50px; color: #fff; text-align: right; display: none; z-index: 101; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); background: rgba(0, 0, 0, 0.4); padding: 10px; border-radius: 8px; border-right: 3px solid #00ff00; }
+        #quest-display { position: fixed; top: 150px; right: 50px; color: #fff; text-align: right; display: none; z-index: 101; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); background: rgba(0, 0, 0, 0.4); padding: 10px; border-radius: 8px; border-right: 3px solid #00ff00; max-width: 340px; }
         #quest-title { font-size: 18px; font-weight: bold; color: #00ff00; margin-bottom: 5px; text-transform: uppercase; }
-        #quest-objective { font-size: 16px; color: #ddd; }
+        #quest-list { max-height: 220px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #00ff0099 transparent; }
+        #quest-list::-webkit-scrollbar { width: 5px; }
+        #quest-list::-webkit-scrollbar-thumb { background: #00ff0099; border-radius: 3px; }
+        .quest-entry { font-size: 16px; color: #ddd; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.15); }
+        .quest-entry:first-child { border-top: none; }
+        .quest-entry-label { font-size: 12px; color: #88ffaa; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 1px; }
         .quest-ready { color: #ffff00 !important; font-weight: bold; animation: text-pulse 1s infinite; }
         @keyframes text-pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
@@ -106,6 +111,7 @@
         #ammo-display { font-size: 32px; font-weight: 700; line-height: 1; }
         #ammo-total { font-size: 20px; color: #ccc; }
         #weapon-name { font-size: 16px; font-weight: normal; margin-top: 5px; }
+        #weapon-ammo-type { font-size: 12px; color: #aaccff; margin-top: 4px; letter-spacing: 0.5px; }
         #reload-prompt { font-size: 14px; color: #ffcc00; display: none; margin-top: 5px; }
         #interaction-prompt { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 16px; background: rgba(0, 0, 0, 0.7); padding: 12px 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); display: none; }
         #interaction-key { font-weight: bold; background: #fff; color: #000; padding: 2px 6px; border-radius: 4px; margin-right: 8px; }
@@ -127,6 +133,10 @@
         #loading-tips { position: absolute; bottom: 50px; font-size: 16px; color: #aaa; padding: 10px; border-radius: 5px; max-width: 80%; text-align: center; }
         .damage-text { position: fixed; font-weight: bold; font-size: 20px; pointer-events: none; z-index: 1001; animation: damage-float 1s ease-out forwards; text-shadow: 1px 1px 2px black; }
         #player-hit-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,0,0,0.5) 0%, transparent 70%); opacity: 0; pointer-events: none; z-index: 1002; transition: opacity 0.5s; }
+        /* [NEW] 사망 후 부활 연출 */
+        #respawn-flash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; opacity: 0; pointer-events: none; z-index: 2900; transition: opacity 0.6s; }
+        #respawn-msg { position: fixed; top: 40%; left: 50%; transform: translate(-50%, -50%); color: #ff4444; font-size: 42px; font-weight: 900; text-shadow: 2px 2px 0 #000; opacity: 0; pointer-events: none; z-index: 2901; transition: opacity 0.6s; text-align: center; letter-spacing: 4px; }
+        #respawn-msg .sub { display: block; font-size: 18px; color: #fff; letter-spacing: 1px; margin-top: 10px; }
         #lava-damage-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, rgba(255,69,0,0.7) 0%, rgba(200,0,0,0.4) 50%, transparent 80%); opacity: 0; pointer-events: none; z-index: 1003; transition: opacity 0.2s; }
         #lava-status { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); color: #ff4400; font-size: 22px; font-weight: 900; text-shadow: 0 0 10px #ff0000, 2px 2px 0 #000; display: none; z-index: 1004; pointer-events: none; animation: text-pulse 0.5s infinite; }
         /* NPC 이름표 */
@@ -179,8 +189,56 @@
         #close-stats-btn { background: #555; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 10px; transition: background 0.2s; }
         #close-stats-btn:hover { background: #777; }
 
+        /* [NEW] ESC 일시정지 메뉴 */
+        #pause-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); border: 2px solid #00ff88; padding: 30px; border-radius: 15px; color: white; z-index: 2200; width: 320px; display: none; flex-direction: column; gap: 14px; box-shadow: 0 0 30px rgba(0, 255, 136, 0.4); }
+        #pause-modal h2 { color: #00ff88; text-align: center; margin: 0 0 6px 0; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #00ff88; }
+        .pause-btn { background: #2d2d44; color: white; border: 1px solid #555; padding: 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; transition: background 0.2s, transform 0.1s; }
+        .pause-btn:hover { background: #3d3d5c; transform: scale(1.02); }
+        #pause-save-btn { border-color: #00ff88; }
+        #pause-save-btn:hover { background: #0d4d33; }
+        #pause-load-btn { border-color: #4488ff; }
+        #pause-load-btn:hover { background: #16305c; }
+        #pause-quit-btn { border-color: #ff4444; }
+        #pause-quit-btn:hover { background: #5c1616; }
+        #pause-equip-btn:hover { background: #5c4d16; }
+        #pause-resume-btn { background: #444; }
+        #pause-status-msg { text-align: center; font-size: 13px; color: #aaffcc; min-height: 16px; }
+
+        /* [NEW] 장비창 (E키) */
+        #equipment-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(15, 15, 25, 0.97); border: 2px solid #ffd700; padding: 25px; border-radius: 15px; color: white; z-index: 2100; width: 640px; max-height: 80vh; display: none; flex-direction: column; box-shadow: 0 0 30px rgba(255, 215, 0, 0.3); }
+        #equipment-modal h2 { color: #ffd700; text-align: center; margin: 0 0 16px 0; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #ffd700; }
+        #equip-slots-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+        .equip-slot-box { background: #1c1c2e; border: 2px solid #444; border-radius: 10px; padding: 10px; text-align: center; min-height: 110px; display: flex; flex-direction: column; justify-content: space-between; }
+        .equip-slot-box .slot-label { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+        .equip-slot-box .slot-key { font-size: 11px; color: #ffd700; margin-top: 2px; }
+        .equip-slot-box .slot-item-name { font-size: 14px; font-weight: bold; margin: 6px 0 2px 0; min-height: 18px; }
+        .equip-slot-box .slot-item-defense { font-size: 12px; color: #88ff88; }
+        .equip-slot-box .slot-item-enchant { font-size: 11px; color: #ffd700; margin-top: 2px; }
+        .equip-slot-box .slot-empty-text { font-size: 13px; color: #555; margin: 20px 0; }
+        .equip-unequip-btn { background: #553333; color: #fff; border: none; border-radius: 5px; padding: 5px; font-size: 11px; cursor: pointer; margin-top: 6px; }
+        .equip-unequip-btn:hover { background: #774444; }
+        #bag-section h3 { color: #ddd; font-size: 15px; border-bottom: 1px solid #444; padding-bottom: 6px; margin-bottom: 8px; }
+        #bag-list { overflow-y: auto; max-height: 280px; display: flex; flex-direction: column; gap: 6px; padding-right: 4px; }
+        .bag-item-row { display: flex; align-items: center; justify-content: space-between; background: #232336; border-radius: 8px; padding: 8px 12px; border-left: 4px solid #888; }
+        .bag-item-info { font-size: 14px; }
+        .bag-item-info .bag-item-stats { font-size: 12px; color: #aaa; display: block; }
+        .bag-item-enchant { font-size: 12px; color: #ffd700; display: block; }
+        .bag-equip-btn { background: #2d6a4f; color: white; border: none; border-radius: 6px; padding: 6px 14px; cursor: pointer; font-weight: bold; font-size: 13px; }
+        .bag-equip-btn:hover { background: #38815f; }
+        .bag-empty-text { color: #666; font-size: 13px; text-align: center; padding: 20px; }
+        #close-equip-btn { background: #555; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 14px; }
+        #close-equip-btn:hover { background: #777; }
+        /* [NEW] 화면 상단 시계 옆 착용 장비 표시 */
+        #equipped-armor-display { position: fixed; top: 65px; left: 200px; display: flex; gap: 6px; z-index: 102; pointer-events: none; }
+        .equipped-armor-tag { font-size: 12px; padding: 4px 8px; border-radius: 5px; background: rgba(0,0,0,0.5); border: 1px solid; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); white-space: nowrap; }
+        /* [NEW] 액티브 스킬 쿨다운 표시 */
+        #armor-skill-bar { position: fixed; bottom: 140px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 101; pointer-events: none; }
+        .armor-skill-icon { width: 46px; height: 46px; border-radius: 8px; background: rgba(0,0,0,0.6); border: 2px solid #ffd700; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; color: white; position: relative; overflow: hidden; }
+        .armor-skill-icon .cd-overlay { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.75); transition: height 0.1s linear; }
+        .armor-skill-icon .key-label { position: absolute; top: 2px; left: 4px; font-size: 10px; color: #ffd700; }
+
         /* [NEW] 스코프 UI */
-        #scope-display-container { position: fixed; bottom: 80px; right: 50px; display: flex; flex-direction: column; align-items: flex-end; z-index: 101; pointer-events: none; }
+        #scope-display-container { position: fixed; bottom: 150px; right: 50px; display: flex; flex-direction: column; align-items: flex-end; z-index: 101; pointer-events: none; }
         .scope-row { display: flex; gap: 5px; margin-top: 5px; pointer-events: auto; }
         .scope-btn { background: rgba(0,0,0,0.6); border: 1px solid #555; color: #ccc; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
         .scope-btn:hover { background: rgba(255, 255, 255, 0.2); }
@@ -206,12 +264,15 @@
         <div id="crosshair"></div>
         <div id="muzzle-flash" class="muzzle-flash"></div>
         <div id="player-hit-overlay"></div>
+        <div id="respawn-flash"></div>
+        <div id="respawn-msg">사망<span class="sub">스폰 지점에서 부활합니다...</span></div>
         <div id="lava-damage-overlay"></div>
         <div id="lava-status">🔥 용암 속에 있습니다! 🔥</div>
         <div id="npc-labels"></div>
         
         <div id="coord-display">X: 0, Y: 0 <span style="font-size:0.8em; color:#ccc; margin-left:10px;" id="biome-display"></span></div>
         <div id="time-display">00:00</div>
+        <div id="equipped-armor-display"></div>
         <div id="moloch-display">몰록 / <span id="moloch-count">0</span></div>
 
         <div id="achievement-popup">
@@ -221,7 +282,7 @@
 
         <div id="quest-display">
             <div id="quest-title">임무</div>
-            <div id="quest-objective">없음</div>
+            <div id="quest-list"></div>
         </div>
 
         <!-- 보스 바 컨테이너 -->
@@ -257,7 +318,32 @@
             <button id="close-trade-btn">상점 닫기</button>
         </div>
 
-        <!-- [NEW] 스탯창 모달 -->
+        <!-- [NEW] ESC/E 일시정지 메뉴 -->
+        <div id="pause-modal">
+            <h2>일시정지</h2>
+            <button class="pause-btn" id="pause-resume-btn">계속하기</button>
+            <button class="pause-btn" id="pause-save-btn">💾 저장하기</button>
+            <button class="pause-btn" id="pause-load-btn">📂 불러오기</button>
+            <button class="pause-btn" id="pause-quit-btn">🚪 종료</button>
+            <button class="pause-btn" id="pause-equip-btn" style="border-color:#ffd700;">🎽 장비창 열기</button>
+            <div id="pause-status-msg"></div>
+            <input type="file" id="pause-load-input" accept="application/json,.json" style="display:none;">
+        </div>
+
+        <!-- [NEW] 장비창 (일시정지 메뉴 -> 장비창 열기) -->
+        <div id="equipment-modal">
+            <h2>🎽 장비창</h2>
+            <div id="equip-slots-row"></div>
+            <div id="bag-section">
+                <h3>가방 (보관 중인 방어구)</h3>
+                <div id="bag-list"></div>
+            </div>
+            <button id="close-equip-btn">닫기 (E)</button>
+        </div>
+
+        <!-- [NEW] 방어구 인첸트 액티브 스킬 쿨다운 표시줄 -->
+        <div id="armor-skill-bar"></div>
+
         <div id="stats-modal">
             <h2>능력치</h2>
             <div id="stat-points-display">남은 포인트: <span id="stat-points-val">0</span></div>
@@ -323,6 +409,7 @@
                 <div id="ammo-display-group">
                     <div id="ammo-display"><span id="current-ammo">0</span> / <span id="ammo-total">0</span></div>
                 </div>
+                <div id="weapon-ammo-type"></div>
                 <div id="weapon-name">맨손</div>
                 <div id="reload-prompt">[R] 재장전 필요</div>
             </div>
@@ -374,6 +461,10 @@
         let chunkStaticObjects = new Map(); // Key: "x,z", Value: [Object3D, ...]
         let lavaLights = []; // 용암 광원 애니메이션용
 
+        // [NEW] 청크 기반 몹 휴면 시스템
+        // 로드되지 않은 청크의 몹은 AI 계산을 완전히 멈추고 위치/상태만 보존
+        let activeChunkKeys = new Set(); // 현재 활성(로드된) 청크 키 목록
+
         let sunMesh, moonMesh;
 
         let sharedTrunkGeo, sharedTrunkMat;
@@ -394,6 +485,10 @@
         const GAME_DAY_DURATION = 240; 
         
         let isPointerLocked = false, isNight = false, sun, isGameOver = false;
+        let worldSeed = null; // [NEW] 저장/불러오기 시 지형 재현을 위한 월드 시드
+        // [NEW] 방어구 인첸트 액티브 스킬 상태: 쿨다운 및 지속시간 추적
+        let armorSkillCooldowns = { helmet: 0, chest: 0, pants: 0, boots: 0 };
+        let activeSkillEffects = { damageShieldUntil: 0, speedBurstUntil: 0, revealEnemiesUntil: 0 };
         let isAiming = false;
         
         // [NEW] 줌 시스템 변수 & 업그레이드
@@ -414,7 +509,7 @@
         let ammoPrices = {};
         let weaponPrices = {};
 
-        const CHUNK_SIZE = 200;
+        const CHUNK_SIZE = 100; // [MODIFIED] 200 -> 100: 더 작은 단위로 쪼개서 필요한 범위만 로딩되도록 함
         const RENDER_DISTANCE = 1; // 최적화: 기존 유지 (이미 1)
         const generatedChunks = new Set();
         
@@ -427,6 +522,7 @@
         const ACTIVE_RADIUS_SQ = ACTIVE_RADIUS * ACTIVE_RADIUS;
         const SAFE_ZONE_RADIUS = 200; 
         const LAVA_LEVEL = 5.0; 
+        const SPAWN_POSITION = new THREE.Vector3(0, 0, 0); // [NEW] 부활 지점 (월드 원점, 세이프존 중심과 동일)
         
         let hasLeftSafeZone = 0;
 
@@ -435,7 +531,7 @@
             bossKills: 0, fireDemonKills: 0, golemKills: 0, necromancerKills: 0, witchKills: 0,
             banditKills: 0, banditLeaderKills: 0, orcKills: 0, trollKills: 0,
             elfVillagerKills: 0, dwarfVillagerKills: 0,
-            treesChopped: 0, deathCount: 0, vehiclesDriven: 0, lavaSurvived: 0,
+            treesChopped: 0, deathCount: 0, vehiclesDriven: 0, lavaSurvived: 0, timesDied: 0,
             shotsFired: 0, headshotKills: 0, meleeKills: 0, maxComboKills: 0,
             tradesCompleted: 0, itemsLooted: 0, npcTalks: 0, wanderingMerchantsMet: 0,
             elfQuestsCompleted: 0, dwarfQuestsCompleted: 0, nightsSurvived: 0,
@@ -521,6 +617,114 @@
             "Fist": { name: "맨손", type: "Melee", damage: 5, fireRate: 500, range: 5.0, model: () => { const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 })); fistMesh.position.set(0, 0, -0.3); const group = new THREE.Group(); group.add(fistMesh); const dummyMuzzle = new THREE.Object3D(); dummyMuzzle.name = 'muzzle'; dummyMuzzle.position.set(0, 0, -0.4); group.add(dummyMuzzle); group.userData = { isAnimating: false, type: 'Melee' }; return group; } }
         };
 
+        // ─── [NEW] 방어구 시스템 ────────────────────────────────────────────────
+        // 티어가 높을수록: 방어력 높음 / 스폰 확률 낮음 / 상점 가격 높음 / 인첸트 부여 확률 높음
+        const ARMOR_TIERS = [
+            { id: 'bronze',   name: '브론즈',  color: 0xcd7f32, spawnWeight: 100, priceMult: 1.0, enchantChance: 0.15 },
+            { id: 'iron',     name: '아이언',  color: 0xb0b0b8, spawnWeight: 55,  priceMult: 2.2, enchantChance: 0.30 },
+            { id: 'steel',    name: '스틸',    color: 0x6e8fa3, spawnWeight: 28,  priceMult: 4.0, enchantChance: 0.50 },
+            { id: 'mythril',  name: '미스릴',  color: 0x4fd6c8, spawnWeight: 12,  priceMult: 7.5, enchantChance: 0.75 },
+            { id: 'legendary',name: '레전더리', color: 0xffd700, spawnWeight: 4,   priceMult: 14.0, enchantChance: 1.0 }
+        ];
+        // 부위별 기본 방어력(데미지 경감량) 범위 - 흉갑이 가장 많이 막고, 부츠가 가장 적게 막음
+        const ARMOR_SLOTS = {
+            helmet: { name: '모자', icon: '🪖', baseDefenseMin: 1.5, baseDefenseMax: 3.0, keyLabel: 'Q', keyCode: 'KeyQ' },
+            chest:  { name: '흉갑', icon: '🛡️', baseDefenseMin: 4.0, baseDefenseMax: 7.0, keyLabel: 'Z', keyCode: 'KeyZ' },
+            pants:  { name: '바지', icon: '👖', baseDefenseMin: 2.5, baseDefenseMax: 4.5, keyLabel: 'X', keyCode: 'KeyX' },
+            boots:  { name: '부츠', icon: '🥾', baseDefenseMin: 1.0, baseDefenseMax: 2.0, keyLabel: 'C', keyCode: 'KeyC' }
+        };
+        // 인첸트 풀: 일부는 특정 부위에만 등장. 스탯 강화형과 액티브 스킬 부여형 두 종류.
+        const ENCHANT_DATABASE = [
+            // ── 부위 제한 없음 (모든 슬롯에 등장 가능) ──
+            { id: 'vitality_boost', name: '활력의', desc: '체력 +20', slots: null, type: 'stat', stat: 'vitalityBonus', value: 20 },
+            { id: 'endurance_boost', name: '인내의', desc: '스태미나 +25', slots: null, type: 'stat', stat: 'enduranceBonus', value: 25 },
+            { id: 'perception_boost', name: '명료한', desc: '인지력 +3 (야간 시야 개선)', slots: null, type: 'stat', stat: 'perceptionBonus', value: 3 },
+            // ── 모자 전용 ──
+            { id: 'eagle_eye', name: '매의 눈', desc: '액티브: 5초간 모든 적 위치를 비춤', slots: ['helmet'], type: 'skill', skillId: 'reveal_enemies', cooldown: 30000 },
+            { id: 'clarity', name: '총명한', desc: '경험치 획득 +15%', slots: ['helmet'], type: 'stat', stat: 'xpBonusPercent', value: 15 },
+            // ── 흉갑 전용 ──
+            { id: 'fortify', name: '철벽의', desc: '액티브: 8초간 받는 피해 50% 감소', slots: ['chest'], type: 'skill', skillId: 'damage_shield', cooldown: 45000 },
+            { id: 'strength_boost', name: '강인한', desc: '힘 +3 (근접 데미지 증가)', slots: ['chest'], type: 'stat', stat: 'strengthBonus', value: 3 },
+            // ── 바지 전용 ──
+            { id: 'haste', name: '신속의', desc: '액티브: 6초간 이동속도 60% 증가', slots: ['pants'], type: 'skill', skillId: 'speed_burst', cooldown: 25000 },
+            { id: 'agility_boost', name: '날렵한', desc: '민첩 +3 (이동속도 증가)', slots: ['pants'], type: 'stat', stat: 'agilityBonus', value: 3 },
+            // ── 부츠 전용 ──
+            { id: 'blink', name: '도약의', desc: '액티브: 바라보는 방향으로 순간이동(8m)', slots: ['boots'], type: 'skill', skillId: 'blink_dash', cooldown: 18000 },
+            { id: 'featherfall', name: '불씨막이', desc: '용암 피해 70% 감소', slots: ['boots'], type: 'stat', stat: 'lavaResist', value: 0.7 }
+        ];
+
+        function rollArmorTier() {
+            const totalWeight = ARMOR_TIERS.reduce((sum, t) => sum + t.spawnWeight, 0);
+            let roll = Math.random() * totalWeight;
+            for (const tier of ARMOR_TIERS) {
+                if (roll < tier.spawnWeight) return tier;
+                roll -= tier.spawnWeight;
+            }
+            return ARMOR_TIERS[0];
+        }
+
+        // [NEW] 보스 전용 티어 굴림: 브론즈를 제외하고(아이언 이상) 굴려서 평균적으로 더 좋은 장비가 나오게 함
+        function rollBossArmorTier() {
+            const pool = ARMOR_TIERS.filter(t => t.id !== 'bronze');
+            const totalWeight = pool.reduce((sum, t) => sum + t.spawnWeight, 0);
+            let roll = Math.random() * totalWeight;
+            for (const tier of pool) {
+                if (roll < tier.spawnWeight) return tier;
+                roll -= tier.spawnWeight;
+            }
+            return pool[0];
+        }
+
+        // 새 방어구 아이템을 생성 (슬롯, 티어를 지정하거나 무작위로 굴림)
+        function generateArmorPiece(slotKey, tier) {
+            slotKey = slotKey || Object.keys(ARMOR_SLOTS)[Math.floor(Math.random() * 4)];
+            tier = tier || rollArmorTier();
+            const slotData = ARMOR_SLOTS[slotKey];
+            const tierIndex = ARMOR_TIERS.indexOf(tier);
+            const baseDefense = slotData.baseDefenseMin + Math.random() * (slotData.baseDefenseMax - slotData.baseDefenseMin);
+            const defense = baseDefense * (1 + tierIndex * 0.6);
+            let enchant = null;
+            if (Math.random() < tier.enchantChance) {
+                const pool = ENCHANT_DATABASE.filter(e => !e.slots || e.slots.includes(slotKey));
+                enchant = pool[Math.floor(Math.random() * pool.length)].id;
+            }
+            return {
+                instanceId: 'armor_' + Date.now() + '_' + Math.floor(Math.random() * 1000000),
+                slot: slotKey,
+                tierId: tier.id,
+                defense: +defense.toFixed(1),
+                enchantId: enchant
+            };
+        }
+
+        function getArmorPieceLabel(piece) {
+            const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+            const slotData = ARMOR_SLOTS[piece.slot];
+            return `${tier.name} ${slotData.name}`;
+        }
+
+        function getArmorPiecePrice(piece) {
+            const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+            let price = Math.floor(40 * tier.priceMult + piece.defense * 8);
+            if (piece.enchantId) price = Math.floor(price * 1.6);
+            return price;
+        }
+
+        // [NEW] 원거리 적/강도 처치 시 호출하는 공용 방어구 드랍 함수
+        function tryDropArmor(position, chance, useBossRoll) {
+            if (Math.random() < chance) {
+                const piece = generateArmorPiece(null, useBossRoll ? rollBossArmorTier() : null);
+                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, position.x + 0.3, position.y, position.z - 0.3);
+            }
+        }
+
+        // [NEW] 상점의 방어구 진열 목록 (방문할 때마다 새로 채워지진 않고, 다 팔리면 보충됨)
+        let shopArmorStock = [];
+        function refreshShopArmorStock() {
+            shopArmorStock = [];
+            for (let i = 0; i < 4; i++) shopArmorStock.push(generateArmorPiece());
+        }
+
         function calculateEconomy() {
             const ammoDamageSums = {}; const ammoCounts = {};
             for (const key in WEAPON_DATABASE) {
@@ -555,12 +759,134 @@
             xpToNextLevel: 100,
             isEnding: false, // [NEW] 엔딩 진행 상태
             wasInLava: false,
-            wasNearDeath: false
+            wasNearDeath: false,
+            // [NEW] 방어구: 4부위 장착 슬롯 + 보관 가방
+            armor: { helmet: null, chest: null, pants: null, boots: null },
+            bag: []
         };
 
-        function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10); }
-        function getMaxStamina() { return BASE_PLAYER_STAMINA + (gameState.stats.endurance * 20); }
-        function getMoveSpeed() { return 10 * (1 + gameState.stats.agility * 0.05); }
+        // [NEW] 장착한 방어구의 합산 효과 계산
+        function getEquippedArmorBonuses() {
+            const bonus = { defense: 0, vitalityBonus: 0, enduranceBonus: 0, perceptionBonus: 0, strengthBonus: 0, agilityBonus: 0, xpBonusPercent: 0, lavaResist: 0 };
+            for (const slotKey in gameState.armor) {
+                const piece = gameState.armor[slotKey];
+                if (!piece) continue;
+                bonus.defense += piece.defense;
+                if (piece.enchantId) {
+                    const ench = ENCHANT_DATABASE.find(e => e.id === piece.enchantId);
+                    if (ench && ench.type === 'stat') {
+                        if (ench.stat === 'lavaResist') bonus.lavaResist = Math.max(bonus.lavaResist, ench.value);
+                        else bonus[ench.stat] = (bonus[ench.stat] || 0) + ench.value;
+                    }
+                }
+            }
+            return bonus;
+        }
+        // 현재 장착 중인 부위 중 액티브 스킬을 가진 부위 목록 (슬롯키 -> enchant 객체)
+        function getEquippedSkills() {
+            const skills = {};
+            for (const slotKey in gameState.armor) {
+                const piece = gameState.armor[slotKey];
+                if (!piece || !piece.enchantId) continue;
+                const ench = ENCHANT_DATABASE.find(e => e.id === piece.enchantId);
+                if (ench && ench.type === 'skill') skills[slotKey] = ench;
+            }
+            return skills;
+        }
+
+        // [NEW] 방어구 인첸트 액티브 스킬 발동 (Q/Z/X/C 키)
+        function activateArmorSkill(slotKey) {
+            if (isPaused || isTrading || isStatsOpen || isEquipOpen || isGameOver || isRespawning) return;
+            const piece = gameState.armor[slotKey];
+            if (!piece || !piece.enchantId) return;
+            const ench = ENCHANT_DATABASE.find(e => e.id === piece.enchantId);
+            if (!ench || ench.type !== 'skill') return;
+
+            const now = Date.now();
+            if (armorSkillCooldowns[slotKey] > now) {
+                const remain = ((armorSkillCooldowns[slotKey] - now) / 1000).toFixed(1);
+                showChat('시스템', `⏳ ${ench.name} 스킬 재사용 대기 중... (${remain}초)`);
+                return;
+            }
+
+            armorSkillCooldowns[slotKey] = now + ench.cooldown;
+
+            if (ench.skillId === 'damage_shield') {
+                activeSkillEffects.damageShieldUntil = now + 8000;
+                showChat('시스템', `🛡️ <span style="color:#ffd700">${ench.name}</span> 발동! 8초간 받는 피해가 절반으로 줄어듭니다.`);
+            } else if (ench.skillId === 'speed_burst') {
+                activeSkillEffects.speedBurstUntil = now + 6000;
+                showChat('시스템', `💨 <span style="color:#ffd700">${ench.name}</span> 발동! 6초간 이동속도가 크게 증가합니다.`);
+            } else if (ench.skillId === 'reveal_enemies') {
+                activeSkillEffects.revealEnemiesUntil = now + 5000;
+                revealNearbyEnemies();
+                showChat('시스템', `👁️ <span style="color:#ffd700">${ench.name}</span> 발동! 주변 적의 위치가 5초간 드러납니다.`);
+            } else if (ench.skillId === 'blink_dash') {
+                performBlinkDash();
+                showChat('시스템', `⚡ <span style="color:#ffd700">${ench.name}</span> 발동!`);
+            }
+            updateArmorSkillBar();
+        }
+
+        // '매의 눈': 근처 적들 머리 위에 5초간 빛나는 마커를 띄움
+        function revealNearbyEnemies() {
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const allEnemies = [...zombies, ...rangedEnemies, ...bosses];
+            allEnemies.forEach(enemy => {
+                if (!enemy || !enemy.parent || enemy.userData.health <= 0) return;
+                if (enemy.position.distanceToSquared(playerPos) > 150 * 150) return;
+                const markerGeo = new THREE.RingGeometry(0.4, 0.55, 16);
+                const markerMat = new THREE.MeshBasicMaterial({ color: 0xff3333, side: THREE.DoubleSide, transparent: true, opacity: 0.9 });
+                const marker = new THREE.Mesh(markerGeo, markerMat);
+                marker.position.set(0, 2.6, 0);
+                marker.rotation.x = -Math.PI / 2;
+                marker.userData.isRevealMarker = true;
+                enemy.add(marker);
+                const markerLight = new THREE.PointLight(0xff3333, 1.5, 6);
+                markerLight.position.set(0, 2.6, 0);
+                marker.userData.light = markerLight;
+                enemy.add(markerLight);
+                setTimeout(() => {
+                    if (marker.parent) marker.parent.remove(marker);
+                    if (markerLight.parent) markerLight.parent.remove(markerLight);
+                }, 5000);
+            });
+        }
+
+        // '도약의': 바라보는 방향으로 8m 순간이동 (지형 충돌은 다음 프레임 물리에서 자연 보정됨)
+        function performBlinkDash() {
+            if (playerInVehicle) return;
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+            dir.y = 0; dir.normalize();
+            gameState.position.addScaledVector(dir, 8);
+            camera.position.copy(gameState.position);
+        }
+
+        // 화면 하단의 방어구 스킬 쿨다운 바 갱신
+        function updateArmorSkillBar() {
+            const bar = document.getElementById('armor-skill-bar');
+            if (!bar) return;
+            const skills = getEquippedSkills();
+            const slotKeys = Object.keys(skills);
+            if (slotKeys.length === 0) { bar.innerHTML = ''; return; }
+            const now = Date.now();
+            bar.innerHTML = slotKeys.map(slotKey => {
+                const ench = skills[slotKey];
+                const slotData = ARMOR_SLOTS[slotKey];
+                const cdEnd = armorSkillCooldowns[slotKey] || 0;
+                const remainRatio = cdEnd > now ? Math.min(1, (cdEnd - now) / ench.cooldown) : 0;
+                return `<div class="armor-skill-icon" title="${ench.name}: ${ench.desc}">
+                    <span class="key-label">${slotData.keyLabel}</span>
+                    ${slotData.icon}
+                    <div class="cd-overlay" style="height:${remainRatio * 100}%"></div>
+                </div>`;
+            }).join('');
+        }
+
+        function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10) + getEquippedArmorBonuses().vitalityBonus; }
+        function getMaxStamina() { return BASE_PLAYER_STAMINA + (gameState.stats.endurance * 20) + getEquippedArmorBonuses().enduranceBonus; }
+        function getMoveSpeed() { return 10 * (1 + (gameState.stats.agility + getEquippedArmorBonuses().agilityBonus) * 0.05) * (activeSkillEffects.speedBurstUntil > Date.now() ? 1.6 : 1); }
 
         function checkLevelUp() {
             if (gameState.xp >= gameState.xpToNextLevel) {
@@ -580,13 +906,321 @@
         }
 
         function gainXP(amount) {
+            const xpBonus = getEquippedArmorBonuses().xpBonusPercent;
+            if (xpBonus > 0) amount = Math.round(amount * (1 + xpBonus / 100));
             gameState.xp += amount;
             checkLevelUp();
         }
 
         let isStatsOpen = false;
+        let isPaused = false; // [NEW] ESC/E 일시정지 메뉴 상태
+        // [NEW] ESC와 E키가 공통으로 사용하는 핸들러: 다른 모달이 열려있으면 그것부터 닫고, 아니면 일시정지 메뉴 토글
+        function handlePauseMenuKey() {
+            if (isTrading) { closeTradeModal(); }
+            else if (isStatsOpen) { closeStatsModal(); }
+            else if (isEquipOpen) { closeEquipmentModal(); }
+            else { togglePauseModal(); }
+        }
+        function togglePauseModal() {
+            if (isTrading || isStatsOpen || isEquipOpen) return; // 다른 모달이 떠있으면 ESC는 그쪽을 닫는 데 사용 (아래 keydown 핸들러에서 처리)
+            isPaused = !isPaused;
+            const modal = document.getElementById('pause-modal');
+            if (isPaused) {
+                // 일시정지 시 눌려있던 이동 키 상태를 초기화 (키가 눌린 채로 메뉴가 떠도 캐릭터가 계속 움직이지 않도록)
+                controls.moveForward = false; controls.moveBackward = false; controls.moveLeft = false; controls.moveRight = false; controls.sprint = false; controls.jump = false;
+                vehicleAcceleration = 0; vehicleSteering = 0;
+                document.exitPointerLock();
+                modal.style.display = 'flex';
+                document.getElementById('pause-status-msg').textContent = '';
+            } else {
+                modal.style.display = 'none';
+                document.body.requestPointerLock();
+            }
+        }
+        function closePauseModal(skipPointerLock) {
+            isPaused = false;
+            document.getElementById('pause-modal').style.display = 'none';
+            if (!skipPointerLock) document.body.requestPointerLock();
+        }
+
+        // ─── [NEW] 세이브/로드 시스템 ──────────────────────────────────────────
+        const SAVE_VERSION = 1;
+        function buildSaveData() {
+            const playerPos = gameState.position;
+            return {
+                saveVersion: SAVE_VERSION,
+                savedAt: Date.now(),
+                worldSeed: worldSeed,
+                gameTime: gameTime,
+                hasLeftSafeZone: hasLeftSafeZone,
+                gameState: {
+                    health: gameState.health,
+                    moloch: gameState.moloch,
+                    ammoInventory: gameState.ammoInventory,
+                    weapons: gameState.weapons,
+                    currentWeaponIndex: gameState.currentWeaponIndex,
+                    position: { x: playerPos.x, y: playerPos.y, z: playerPos.z },
+                    rotation: { x: gameState.rotation.x, y: gameState.rotation.y },
+                    stats: gameState.stats,
+                    statPoints: gameState.statPoints,
+                    level: gameState.level,
+                    xp: gameState.xp,
+                    xpToNextLevel: gameState.xpToNextLevel,
+                    lastHordeTime: gameState.lastHordeTime,
+                    hordeCooldown: gameState.hordeCooldown,
+                    armor: gameState.armor,
+                    bag: gameState.bag
+                },
+                playerStamina: playerStamina,
+                unlockedScopeIndex: unlockedScopeIndex,
+                gameStats: gameStats,
+                questState: questState,
+                elfQuestActive: elfQuestActive, elfQuestDone: elfQuestDone,
+                dwarfQuestActive: dwarfQuestActive, dwarfQuestDone: dwarfQuestDone,
+                achievements: achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed })),
+                shopArmorStock: shopArmorStock
+            };
+        }
+
+        function saveGameToFile() {
+            try {
+                const data = buildSaveData();
+                const json = JSON.stringify(data, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                const dateStr = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+                a.href = url;
+                a.download = `savegame_${dateStr}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                document.getElementById('pause-status-msg').textContent = '✅ 저장 완료! 파일이 다운로드되었습니다.';
+            } catch (e) {
+                console.error('저장 실패:', e);
+                document.getElementById('pause-status-msg').textContent = '❌ 저장에 실패했습니다.';
+            }
+        }
+
+        function applySaveData(data) {
+            try {
+                if (!data || typeof data !== 'object') throw new Error('잘못된 저장 파일입니다.');
+
+                // 월드 시드 복원 (지형이 동일하게 재생성되도록) - 신선한 페이지 로드 직후이므로 청크는 아직 없음
+                if (data.worldSeed) {
+                    worldSeed = data.worldSeed;
+                    simplex = new SimplexNoise(worldSeed);
+                }
+
+                if (typeof data.gameTime === 'number') gameTime = data.gameTime;
+                if (typeof data.hasLeftSafeZone === 'number') hasLeftSafeZone = data.hasLeftSafeZone;
+
+                const gs = data.gameState || {};
+                if (typeof gs.health === 'number') gameState.health = gs.health;
+                if (typeof gs.moloch === 'number') gameState.moloch = gs.moloch;
+                if (gs.ammoInventory) gameState.ammoInventory = gs.ammoInventory;
+                if (gs.weapons) gameState.weapons = gs.weapons;
+                if (typeof gs.currentWeaponIndex === 'number') gameState.currentWeaponIndex = gs.currentWeaponIndex;
+                if (gs.position) gameState.position.set(gs.position.x, gs.position.y, gs.position.z);
+                if (gs.rotation) { gameState.rotation.x = gs.rotation.x; gameState.rotation.y = gs.rotation.y; }
+                if (gs.stats) gameState.stats = gs.stats;
+                if (typeof gs.statPoints === 'number') gameState.statPoints = gs.statPoints;
+                if (typeof gs.level === 'number') gameState.level = gs.level;
+                if (typeof gs.xp === 'number') gameState.xp = gs.xp;
+                if (typeof gs.xpToNextLevel === 'number') gameState.xpToNextLevel = gs.xpToNextLevel;
+                if (typeof gs.lastHordeTime === 'number') gameState.lastHordeTime = gs.lastHordeTime;
+                if (typeof gs.hordeCooldown === 'number') gameState.hordeCooldown = gs.hordeCooldown;
+                if (gs.armor) gameState.armor = Object.assign({ helmet: null, chest: null, pants: null, boots: null }, gs.armor);
+                if (Array.isArray(gs.bag)) gameState.bag = gs.bag;
+                gameState.velocityY = 0; gameState.onGround = true; gameState.isReloading = false;
+
+                if (typeof data.playerStamina === 'number') playerStamina = data.playerStamina;
+                if (typeof data.unlockedScopeIndex === 'number') unlockedScopeIndex = data.unlockedScopeIndex;
+                if (data.gameStats) Object.assign(gameStats, data.gameStats);
+                if (data.questState) questState = data.questState;
+                elfQuestActive = !!data.elfQuestActive; elfQuestDone = !!data.elfQuestDone;
+                dwarfQuestActive = !!data.dwarfQuestActive; dwarfQuestDone = !!data.dwarfQuestDone;
+                if (Array.isArray(data.shopArmorStock)) shopArmorStock = data.shopArmorStock;
+
+                if (Array.isArray(data.achievements)) {
+                    data.achievements.forEach(saved => {
+                        const ach = achievements.find(a => a.id === saved.id);
+                        if (ach) { ach.unlocked = !!saved.unlocked; ach.claimed = !!saved.claimed; }
+                    });
+                }
+
+                return true;
+            } catch (e) {
+                console.error('불러오기 실패:', e);
+                return false;
+            }
+        }
+
+        function loadGameFromFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                let data;
+                try {
+                    data = JSON.parse(e.target.result);
+                } catch (err) {
+                    document.getElementById('pause-status-msg').textContent = '❌ 파일을 읽을 수 없습니다. (JSON 형식 오류)';
+                    return;
+                }
+                if (!data || typeof data !== 'object' || !data.gameState) {
+                    document.getElementById('pause-status-msg').textContent = '❌ 올바른 저장 파일이 아닙니다.';
+                    return;
+                }
+                // [MODIFIED] 살아있는 월드(좀비/구조물/루팅 등)를 그 자리에서 갈아끼우는 건 매우 위험하므로,
+                // 세이브 데이터를 임시 저장해두고 페이지를 새로고침하여 깨끗한 상태에서 다시 불러옴
+                try {
+                    sessionStorage.setItem('pendingLoadSave', JSON.stringify(data));
+                } catch (err) {
+                    document.getElementById('pause-status-msg').textContent = '❌ 저장 파일을 적용할 수 없습니다.';
+                    return;
+                }
+                document.getElementById('pause-status-msg').textContent = '📂 불러오는 중...';
+                location.reload();
+            };
+            reader.onerror = () => {
+                document.getElementById('pause-status-msg').textContent = '❌ 파일을 읽는 중 오류가 발생했습니다.';
+            };
+            reader.readAsText(file);
+        }
+
+        function quitGame() {
+            location.reload();
+        }
+
+        // ─── [NEW] 장비창 시스템 ──────────────────────────────────────────────
+        let isEquipOpen = false;
+        function toggleEquipmentModal() {
+            if (isTrading || isStatsOpen || isPaused) return;
+            isEquipOpen = !isEquipOpen;
+            const modal = document.getElementById('equipment-modal');
+            if (isEquipOpen) {
+                document.exitPointerLock();
+                modal.style.display = 'flex';
+                renderEquipmentUI();
+            } else {
+                modal.style.display = 'none';
+                document.body.requestPointerLock();
+            }
+        }
+        function closeEquipmentModal() {
+            isEquipOpen = false;
+            document.getElementById('equipment-modal').style.display = 'none';
+            document.body.requestPointerLock();
+        }
+
+        function tierColorHex(tierId) {
+            const tier = ARMOR_TIERS.find(t => t.id === tierId);
+            return '#' + tier.color.toString(16).padStart(6, '0');
+        }
+
+        function renderEquipmentUI() {
+            const slotsRow = document.getElementById('equip-slots-row');
+            slotsRow.innerHTML = '';
+            for (const slotKey in ARMOR_SLOTS) {
+                const slotData = ARMOR_SLOTS[slotKey];
+                const piece = gameState.armor[slotKey];
+                const box = document.createElement('div');
+                box.className = 'equip-slot-box';
+                if (piece) {
+                    const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                    box.style.borderColor = tierColorHex(piece.tierId);
+                    const enchant = piece.enchantId ? ENCHANT_DATABASE.find(e => e.id === piece.enchantId) : null;
+                    box.innerHTML = `
+                        <div><div class="slot-label">${slotData.icon} ${slotData.name}</div><div class="slot-key">발동키: ${slotData.keyLabel}</div></div>
+                        <div>
+                            <div class="slot-item-name" style="color:${tierColorHex(piece.tierId)}">${tier.name}</div>
+                            <div class="slot-item-defense">방어력 +${piece.defense}</div>
+                            ${enchant ? `<div class="slot-item-enchant">✨ ${enchant.name} ${enchant.desc}</div>` : ''}
+                        </div>
+                        <button class="equip-unequip-btn" data-slot="${slotKey}">해제</button>
+                    `;
+                } else {
+                    box.innerHTML = `
+                        <div><div class="slot-label">${slotData.icon} ${slotData.name}</div><div class="slot-key">발동키: ${slotData.keyLabel}</div></div>
+                        <div class="slot-empty-text">비어있음</div>
+                        <div></div>
+                    `;
+                }
+                slotsRow.appendChild(box);
+            }
+            slotsRow.querySelectorAll('.equip-unequip-btn').forEach(btn => {
+                btn.addEventListener('click', () => unequipArmorPiece(btn.dataset.slot));
+            });
+
+            const bagList = document.getElementById('bag-list');
+            bagList.innerHTML = '';
+            if (gameState.bag.length === 0) {
+                bagList.innerHTML = `<div class="bag-empty-text">가방이 비어있습니다. 필드에서 방어구를 주워보세요.</div>`;
+            } else {
+                gameState.bag.forEach((piece, idx) => {
+                    const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                    const slotData = ARMOR_SLOTS[piece.slot];
+                    const enchant = piece.enchantId ? ENCHANT_DATABASE.find(e => e.id === piece.enchantId) : null;
+                    const row = document.createElement('div');
+                    row.className = 'bag-item-row';
+                    row.style.borderLeftColor = tierColorHex(piece.tierId);
+                    row.innerHTML = `
+                        <div class="bag-item-info">
+                            <span style="color:${tierColorHex(piece.tierId)}; font-weight:bold;">${slotData.icon} ${tier.name} ${slotData.name}</span>
+                            <span class="bag-item-stats">방어력 +${piece.defense}</span>
+                            ${enchant ? `<span class="bag-item-enchant">✨ ${enchant.name} ${enchant.desc}</span>` : ''}
+                        </div>
+                        <button class="bag-equip-btn" data-idx="${idx}">장착</button>
+                    `;
+                    bagList.appendChild(row);
+                });
+                bagList.querySelectorAll('.bag-equip-btn').forEach(btn => {
+                    btn.addEventListener('click', () => equipArmorPiece(parseInt(btn.dataset.idx)));
+                });
+            }
+        }
+
+        function equipArmorPiece(bagIndex) {
+            const piece = gameState.bag[bagIndex];
+            if (!piece) return;
+            const currentlyEquipped = gameState.armor[piece.slot];
+            gameState.armor[piece.slot] = piece;
+            gameState.bag.splice(bagIndex, 1);
+            if (currentlyEquipped) gameState.bag.push(currentlyEquipped); // 기존 장비는 가방으로
+            showChat('시스템', `<span style="color:${tierColorHex(piece.tierId)}; font-weight:bold;">${getArmorPieceLabel(piece)}</span>을(를) 장착했습니다.`);
+            renderEquipmentUI();
+            updateEquippedArmorDisplay();
+            updateUI();
+        }
+
+        function unequipArmorPiece(slotKey) {
+            const piece = gameState.armor[slotKey];
+            if (!piece) return;
+            gameState.armor[slotKey] = null;
+            gameState.bag.push(piece);
+            showChat('시스템', `${getArmorPieceLabel(piece)}을(를) 해제했습니다.`);
+            renderEquipmentUI();
+            updateEquippedArmorDisplay();
+            updateUI();
+        }
+
+        // 시계 옆에 현재 착용 중인 장비 목록 표시
+        function updateEquippedArmorDisplay() {
+            const el = document.getElementById('equipped-armor-display');
+            if (!el) return;
+            const tags = [];
+            for (const slotKey in ARMOR_SLOTS) {
+                const piece = gameState.armor[slotKey];
+                if (!piece) continue;
+                const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                const slotData = ARMOR_SLOTS[slotKey];
+                tags.push(`<div class="equipped-armor-tag" style="color:${tierColorHex(piece.tierId)}; border-color:${tierColorHex(piece.tierId)}">${slotData.icon} ${tier.name} ${slotData.name}</div>`);
+            }
+            el.innerHTML = tags.join('');
+        }
+
         function toggleStatsModal() {
-            if (isTrading) return;
+            if (isTrading || isPaused || isEquipOpen) return;
             isStatsOpen = !isStatsOpen;
             const modal = document.getElementById('stats-modal');
             if (isStatsOpen) {
@@ -687,7 +1321,15 @@
 
         function init() { 
             if (typeof THREE !== 'undefined' && typeof SimplexNoise !== 'undefined') {
-                simplex = new SimplexNoise(); 
+                // [NEW] 월드 시드: 저장/불러오기 시 동일한 지형이 재생성되도록 시드 고정
+                // 불러오기로 인한 새로고침이라면 저장된 시드를 사용, 아니면 새 시드 생성
+                let pendingSeed = null;
+                try {
+                    const pendingRaw = sessionStorage.getItem('pendingLoadSave');
+                    if (pendingRaw) { const pendingData = JSON.parse(pendingRaw); pendingSeed = pendingData.worldSeed || null; }
+                } catch (e) { /* 무시: 저장 데이터가 없거나 손상된 경우 새 게임으로 진행 */ }
+                worldSeed = pendingSeed || ('world_' + Date.now() + '_' + Math.floor(Math.random() * 1000000));
+                simplex = new SimplexNoise(worldSeed); 
                 sharedTrunkGeo = new THREE.CylinderGeometry(0.5, 0.8, 8.5, 8); sharedTrunkMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
                 sharedLeafGeo = new THREE.SphereGeometry(4, 8, 6); sharedLeafMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
                 sharedRockGeo = new THREE.DodecahedronGeometry(1); sharedRockMat = new THREE.MeshLambertMaterial({ color: 0x808080 });
@@ -728,7 +1370,35 @@
         }
 
         // [MODIFIED] 게임 시작 시 updateQuestUI() 호출 추가
-        function startGame() { createScene(); switchWeapon(0); const startY = getTerrainHeight(gameState.position.x, gameState.position.z); gameState.position.y = startY + 1.8; updateWorldChunks(); currentPlayerChunkKey = `${Math.round(gameState.position.x / CHUNK_SIZE)},${Math.round(gameState.position.z / CHUNK_SIZE)}`; setupControls(); document.getElementById('close-trade-btn').addEventListener('click', closeTradeModal); hideLoading(); animate(); updateScopeUI(); updateQuestUI(); }
+        function startGame() { 
+            createScene(); 
+            // [NEW] 불러오기로 인한 시작이라면 저장된 게임 상태를 여기서 적용 (청크 생성 전, 플레이어 위치 기준으로 월드가 만들어지도록)
+            let loadedFromSave = false;
+            try {
+                const pendingRaw = sessionStorage.getItem('pendingLoadSave');
+                if (pendingRaw) {
+                    sessionStorage.removeItem('pendingLoadSave');
+                    const pendingData = JSON.parse(pendingRaw);
+                    loadedFromSave = applySaveData(pendingData);
+                }
+            } catch (e) { console.error('저장 데이터 적용 실패:', e); }
+
+            switchWeapon(gameState.currentWeaponIndex || 0); 
+            if (!loadedFromSave) {
+                const startY = getTerrainHeight(gameState.position.x, gameState.position.z); 
+                gameState.position.y = startY + 1.8; 
+            }
+            updateWorldChunks(); 
+            currentPlayerChunkKey = `${Math.round(gameState.position.x / CHUNK_SIZE)},${Math.round(gameState.position.z / CHUNK_SIZE)}`; 
+            setupControls(); 
+            document.getElementById('close-trade-btn').addEventListener('click', closeTradeModal); 
+            hideLoading(); 
+            animate(); 
+            updateScopeUI(); 
+            updateQuestUI(); 
+            updateEquippedArmorDisplay(); // [NEW] 착용 장비 표시 초기화 (불러오기 시 복원된 장비 반영)
+            if (loadedFromSave) { updateUI(); showChat('시스템', '📂 저장된 게임을 불러왔습니다.'); }
+        }
         function showError(msg) { document.getElementById('loading-screen').innerHTML = `<div class="loading-text" style="color: #ff6666;">오류</div><div style="color:#fff;margin-top:20px;">${msg}</div>`; }
         function hideLoading() { document.getElementById('loading-screen').style.display = 'none'; }
 
@@ -782,7 +1452,7 @@
         // [OPTIMIZATION] 청크 freeze 시스템: 멀리 떨어진 청크의 정적 오브젝트(나무/건물/돌)는
         // 완전히 삭제하지 않고 visible만 끄고 충돌검사 대상에서 제외 -> 다시 가까워지면 복구.
         // (완전 삭제 후 재생성 방식보다 안전하고, instancedMesh 재구축 비용도 없음)
-        const FREEZE_CHUNK_DISTANCE = 3; // RENDER_DISTANCE(1)보다 넉넉하게 잡아 경계에서 깜빡이지 않도록 함
+        const FREEZE_CHUNK_DISTANCE = 6; // [MODIFIED] 청크 크기가 100m로 절반이 된 만큼 동일한 실거리(약 600m)를 유지하도록 6으로 조정
         let frozenChunks = new Set();
 
         function setChunkFrozen(chunkKey, frozen) {
@@ -802,19 +1472,54 @@
             const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE);
             const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE);
             const newFrozen = new Set();
+            const newActive = new Set();
             for (const chunkKey of generatedChunks) {
                 const [cx, cz] = chunkKey.split(',').map(Number);
                 const dist = Math.max(Math.abs(cx - playerChunkX), Math.abs(cz - playerChunkZ));
                 if (dist > FREEZE_CHUNK_DISTANCE) newFrozen.add(chunkKey);
+                else newActive.add(chunkKey);
             }
             // 새로 얼어야 할 청크: freeze 적용
             for (const key of newFrozen) { if (!frozenChunks.has(key)) setChunkFrozen(key, true); }
             // 더 이상 멀지 않은 청크: unfreeze (복구)
             for (const key of frozenChunks) { if (!newFrozen.has(key)) setChunkFrozen(key, false); }
             frozenChunks = newFrozen;
+            activeChunkKeys = newActive;
         }
 
-        function updateWorldChunks() { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); for (let x = playerChunkX - RENDER_DISTANCE; x <= playerChunkX + RENDER_DISTANCE; x++) { for (let z = playerChunkZ - RENDER_DISTANCE; z <= playerChunkZ + RENDER_DISTANCE; z++) { const chunkKey = `${x},${z}`; if (!generatedChunks.has(chunkKey)) { generateChunk(x, z); generatedChunks.add(chunkKey); } } } updateChunkFreezing(); }
+        // 몹이 속한 청크 키를 반환하는 헬퍼
+        function getChunkKeyForPos(x, z) {
+            return `${Math.round(x / CHUNK_SIZE)},${Math.round(z / CHUNK_SIZE)}`;
+        }
+
+        // 몹이 활성 청크에 있는지 여부 반환
+        function isEnemyInActiveChunk(enemy) {
+            const key = getChunkKeyForPos(enemy.position.x, enemy.position.z);
+            return activeChunkKeys.has(key);
+        }
+
+        function updateWorldChunks() { 
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; 
+            const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); 
+            const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); 
+            // [MODIFIED] 청크가 작아진 만큼(100m) 미리 로딩 반경도 합리적인 범위로 축소
+            const PRELOAD_RADIUS = 180; // 플레이어 반경 180m
+            const chunkRadius = Math.ceil(PRELOAD_RADIUS / CHUNK_SIZE) + RENDER_DISTANCE;
+            for (let x = playerChunkX - chunkRadius; x <= playerChunkX + chunkRadius; x++) { 
+                for (let z = playerChunkZ - chunkRadius; z <= playerChunkZ + chunkRadius; z++) { 
+                    // 실제 청크 중심까지 거리 체크 (원형 반경)
+                    const chunkCenterX = x * CHUNK_SIZE;
+                    const chunkCenterZ = z * CHUNK_SIZE;
+                    const dx = chunkCenterX - playerPos.x;
+                    const dz = chunkCenterZ - playerPos.z;
+                    const distToChunk = Math.sqrt(dx * dx + dz * dz);
+                    if (distToChunk > PRELOAD_RADIUS + CHUNK_SIZE * 0.5) continue; // 반경 밖 청크 스킵
+                    const chunkKey = `${x},${z}`; 
+                    if (!generatedChunks.has(chunkKey)) { generateChunk(x, z); generatedChunks.add(chunkKey); } 
+                } 
+            } 
+            updateChunkFreezing(); 
+        }
         
         function getBiome(x, z) { 
             const scale = 3000; 
@@ -862,18 +1567,29 @@
             return y;
         }
 
+        // [NEW] 용암이 지형지물처럼 위아래로 오르내리는 진폭/주기 (시각 + 데미지 판정 공용)
+        const LAVA_BOB_AMPLITUDE = 1.4; // 위아래로 출렁이는 높이(m)
+        const LAVA_BOB_SPEED = 0.35;    // 출렁이는 속도
+        let lavaBobTime = 0; // animate 루프에서 매 프레임 누적
+        // 위치마다 위상이 달라야 "지형처럼" 굽이쳐 보이므로 좌표 기반 위상 오프셋 사용
+        function getLavaBobOffset(x, z) {
+            const phase = (x * 0.015 + z * 0.011);
+            return Math.sin(lavaBobTime * LAVA_BOB_SPEED + phase) * LAVA_BOB_AMPLITUDE * 0.5 + LAVA_BOB_AMPLITUDE * 0.5;
+        }
+
         // [NEW] 특정 위치의 용암 높이를 계산하는 함수
         function getLavaHeight(x, z) {
             const tHeight = getTerrainHeight(x, z);
             const biome = getBiome(x, z);
             
             if (biome === 'volcano') {
-                // 1. 웅덩이: 지형이 LAVA_LEVEL보다 낮으면 용암 높이는 LAVA_LEVEL
-                if (tHeight < LAVA_LEVEL) return LAVA_LEVEL;
+                const bob = getLavaBobOffset(x, z);
+                // 1. 웅덩이: 지형이 LAVA_LEVEL보다 낮으면 용암 높이는 LAVA_LEVEL (+ 출렁임)
+                if (tHeight < LAVA_LEVEL) return LAVA_LEVEL + bob;
                 
-                // 2. 흐르는 용암: 노이즈 조건이 맞으면 지형보다 살짝 위에 존재
+                // 2. 흐르는 용암: 노이즈 조건이 맞으면 지형보다 살짝 위에 존재 (+ 출렁임)
                 const flowNoise = simplex.noise2D(x / 40, z / 40);
-                if (flowNoise > 0.3) return tHeight + 0.2;
+                if (flowNoise > 0.3) return tHeight + 0.2 + bob;
             }
             
             // 용암이 없는 곳은 지하 깊숙한 곳으로 처리
@@ -893,6 +1609,26 @@
                 const lens = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.02, 8), new THREE.MeshBasicMaterial({ color: 0x00ffff }));
                 lens.position.y = 0.16;
                 mesh.add(lens);
+            } else if (data.type === 'armor') {
+                // [NEW] 방어구 아이템 모델: 부위별로 다른 형태, 티어 색상으로 도색되어 한눈에 등급 구분 가능
+                const tier = ARMOR_TIERS.find(t => t.id === data.armorData.tierId);
+                const armorMat = new THREE.MeshStandardMaterial({ color: tier.color, metalness: 0.6, roughness: 0.35, emissive: tier.color, emissiveIntensity: 0.15 });
+                const slot = data.armorData.slot;
+                if (slot === 'helmet') {
+                    mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), armorMat);
+                } else if (slot === 'chest') {
+                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.5, 0.25), armorMat);
+                } else if (slot === 'pants') {
+                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.22), armorMat);
+                } else {
+                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.4), armorMat);
+                }
+                // 인첸트가 있으면 은은한 빛 파티클(포인트라이트)로 강조
+                if (data.armorData.enchantId) {
+                    const glow = new THREE.PointLight(tier.color, 1.2, 3);
+                    glow.position.set(0, 0.3, 0);
+                    mesh.add(glow);
+                }
             } else {
                 let color = 0xffffff;
                 let geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
@@ -938,6 +1674,10 @@
                 else if (scopeRoll > 0.4) level = 1; // 2x
                 
                 spawnItem({ type: 'scope', level: level, name: `${SCOPE_LEVELS[level]}배율 스코프` }, x, y, z);
+            } else if (rand < 0.88) {
+                // [NEW] 방어구 드랍 (티어가 높을수록 희귀)
+                const piece = generateArmorPiece();
+                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, x, y, z);
             }
         }
 
@@ -989,28 +1729,32 @@
         function generateChunk(chunkX, chunkZ) {
             const chunkKey = `${chunkX},${chunkZ}`; // [OPTIMIZATION] 키 생성
             const chunkOriginX = chunkX * CHUNK_SIZE; const chunkOriginZ = chunkZ * CHUNK_SIZE; const centerBiome = getBiome(chunkOriginX, chunkOriginZ); const seed = chunkX * 31 + chunkZ * 17; let rand = (s) => () => (s = Math.sin(s) * 10000, s - Math.floor(s)); let chunkRand = rand(seed); let buildingsInChunk = [];
-            let objectDensityMultiplier = 1.0; let buildingChance = 0.1;
-            if (centerBiome === 'forest') objectDensityMultiplier = 4.5; else if (centerBiome === 'mountain') objectDensityMultiplier = 0.7; else if (centerBiome === 'volcano') objectDensityMultiplier = 0.1; else if (centerBiome === 'city') { objectDensityMultiplier = 0.2; buildingChance = 0.9; } else if (centerBiome === 'plain') { buildingChance = 0.3; objectDensityMultiplier = 1.2; }
+            // [MODIFIED] 청크 개수가 4배로 늘어난 만큼 건물 배치 확률 게이트도 1/4 수준으로 낮춰 월드 밀도 유지
+            let objectDensityMultiplier = 1.0; let buildingChance = 0.025;
+            if (centerBiome === 'forest') objectDensityMultiplier = 4.5; else if (centerBiome === 'mountain') objectDensityMultiplier = 0.7; else if (centerBiome === 'volcano') objectDensityMultiplier = 0.1; else if (centerBiome === 'city') { objectDensityMultiplier = 0.2; } else if (centerBiome === 'plain') { buildingChance = 0.825; objectDensityMultiplier = 1.2; }
 
-            const objectCount = Math.floor((chunkRand() * 15 + 20) * objectDensityMultiplier);
+            // [MODIFIED] 청크 면적이 1/4로 줄었으므로(200x200 -> 100x100) 청크당 오브젝트 수도 1/4로 줄여 동일한 월드 밀도를 유지
+            const objectCount = Math.max(1, Math.floor((chunkRand() * 15 + 20) * objectDensityMultiplier / 4));
             if (centerBiome === 'city') {
-                const cityGridSize = 55; for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.45) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
+                // [MODIFIED] 청크 크기가 100m로 줄어든 비율(200->100)에 맞춰 55->27로 축소하여 동일한 건물 밀도 유지
+                const cityGridSize = 27; for(let cx = chunkOriginX - CHUNK_SIZE/2; cx < chunkOriginX + CHUNK_SIZE/2; cx += cityGridSize) { for(let cz = chunkOriginZ - CHUNK_SIZE/2; cz < chunkOriginZ + CHUNK_SIZE/2; cz += cityGridSize) { if (chunkRand() > 0.45) { const isHighrise = chunkRand() > 0.4; const size = isHighrise ? { w: 30, d: 30 } : { w: 15, d: 15 }; const y = getTerrainHeight(cx, cz); buildingsInChunk.push({ x: cx + (chunkRand()*10-5), z: cz + (chunkRand()*10-5), y, size, isHighrise }); } } }
             } else if (chunkRand() > (1 - buildingChance)) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); if (type > 0.9) { const isHighrise = chunkRand() > 0.8; const size = isHighrise ? { w: 30, d: 40 } : { w: 12, d: 12 }; const y = getTerrainHeight(x, z); buildingsInChunk.push({ x, z, y, size, isHighrise }); } } }
             
             if (centerBiome === 'forest') {
-                if ((Math.abs(chunkX * 7 + chunkZ * 13) % 50) === 0) {
+                // [MODIFIED] 청크 크기가 절반이 된 만큼(100m), 같은 실제 거리 간격을 유지하도록 모듈로 값도 2배로 조정
+                if ((Math.abs(chunkX * 7 + chunkZ * 13) % 100) === 0) {
                     const wx = chunkOriginX; const wz = chunkOriginZ; const wy = getTerrainHeight(wx, wz); createWorldTree(wx, wz, wy);
                     for(let k=0; k<10; k++) { const tx = wx + (Math.random() - 0.5) * 600; const tz = wz + (Math.random() - 0.5) * 600; const ty = getTerrainHeight(tx, tz); createTroll(tx, tz, ty); }
                     if (chunkRand() > 0.3) { createBoss('witch', wx + 15, wz + 15, wy); }
                 }
 
-                if (chunkRand() > 0.95) {
+                if (chunkRand() > 0.9875) {
                     const colonySize = Math.floor(chunkRand() * 3) + 1; 
                     createOrcColony(chunkOriginX, chunkOriginZ, chunkRand, colonySize);
                 }
             }
             
-            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 100, 100); 
+            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 50, 50); // [MODIFIED] 청크 크기 절반(200->100)에 맞춰 세그먼트도 절반(100->50)으로 줄여 동일한 정밀도 유지
             const vertices = terrainGeo.attributes.position.array; 
             for (let i = 0, j = 0; i < vertices.length; i += 3, j++) { 
                 const wx = vertices[i] + chunkOriginX; 
@@ -1021,11 +1765,20 @@
             terrainGeo.computeVertexNormals(); 
 
             let groundColor = 0x3a5f3a; if (centerBiome === 'mountain') groundColor = 0x5a5a5a; else if (centerBiome === 'forest') groundColor = 0x1a3f1a; else if (centerBiome === 'city') groundColor = 0x222222; else if (centerBiome === 'volcano') groundColor = 0x111111; 
-            const ground = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.9 })); ground.rotation.x = -Math.PI / 2; ground.position.set(chunkOriginX, 0, chunkOriginZ); ground.receiveShadow = true; scene.add(ground); objects.push(ground); structures.push(ground);
+            const ground = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.9 })); ground.rotation.x = -Math.PI / 2; ground.position.set(chunkOriginX, 0, chunkOriginZ); ground.receiveShadow = true; scene.add(ground); objects.push(ground); structures.push(ground); registerChunkObject(chunkKey, ground);
             
             // [MODIFIED] 용암 생성 로직 개선 (청크 경계 문제 해결 및 흐르는 효과)
             // 기존: 중심 바이옴이 화산일 때만 평평한 판 생성 -> 변경: 모든 청크에서 버텍스 단위로 검사하여 지형 적응형 용암 생성
-            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 32, 32);
+            // [OPTIMIZATION] 화산 바이옴이 아닌 청크는 용암 생성 자체를 스킵하여 렉 방지
+            // 화산 바이옴이거나 그 인접 청크(경계 용암)일 때만 생성
+            const neighborVolcano = 
+                getBiome(chunkOriginX + CHUNK_SIZE, chunkOriginZ) === 'volcano' ||
+                getBiome(chunkOriginX - CHUNK_SIZE, chunkOriginZ) === 'volcano' ||
+                getBiome(chunkOriginX, chunkOriginZ + CHUNK_SIZE) === 'volcano' ||
+                getBiome(chunkOriginX, chunkOriginZ - CHUNK_SIZE) === 'volcano';
+
+            if (centerBiome === 'volcano' || neighborVolcano) {
+            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 10, 10); // [MODIFIED] 청크 크기 절반에 맞춰 세그먼트도 절반(20->10)으로 축소
             const lavaVerts = lavaGeo.attributes.position.array;
             let hasLava = false;
 
@@ -1096,6 +1849,7 @@
                     lavaLights.push({ light: lavaLight, baseIntensity: 2.5 });
                 }
             }
+            } // end volcano lava check
 
             const chunkCityGrayMatrices = []; const chunkCityBrownMatrices = []; const chunkRoofMatrices = []; const chunkCityGrayProxies = []; const chunkCityBrownProxies = []; const chunkRoofProxies = [];
             buildingsInChunk.forEach(b => { if (b.isHighrise) { collectHighriseData(b.x, b.z, b.y, chunkCityGrayMatrices, chunkCityGrayProxies); } else { collectBuildingData(b.x, b.z, b.y, chunkCityBrownMatrices, chunkCityBrownProxies, chunkRoofMatrices, chunkRoofProxies); } });
@@ -1104,53 +1858,68 @@
             if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? treeChance + (Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) - treeChance) * 0.25 : treeChance + (0.9 - treeChance) * 0.5; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
             createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
             
-            const enemySpawnThreshold = (centerBiome === 'city') ? 0.82 : 0.68;
+            // [MODIFIED] 청크 면적이 1/4가 된 만큼(청크 개수는 4배), 적/보스 스폰 확률도 1/4로 낮춰 월드 전체 밀도를 동일하게 유지
+            const enemySpawnThreshold = (centerBiome === 'city') ? 0.955 : 0.92;
             if (chunkRand() > enemySpawnThreshold) { 
                 const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); 
                 if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRangedEnemy(x, z, 500 + chunkRand() * 500, yBase); }
                 const zombieCount = (centerBiome === 'city') ? Math.floor(chunkRand() * 2) + 1 : Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano' || zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
             }
 
+            // [NEW] 밤에는 청크가 로딩될 때 확률적으로 좀비/적이 추가로 태어남 (안전구역 밖에서만, 화산 제외)
+            if (isNight && centerBiome !== 'volcano') {
+                const distFromOrigin = Math.sqrt(chunkOriginX * chunkOriginX + chunkOriginZ * chunkOriginZ);
+                if (distFromOrigin > SAFE_ZONE_RADIUS && chunkRand() > 0.92) {
+                    const nx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const nz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const ny = getTerrainHeight(nx, nz);
+                    if (ny > LAVA_LEVEL) {
+                        const nightZombieCount = Math.floor(chunkRand() * 2) + 1;
+                        for (let i = 0; i < nightZombieCount; i++) { const zx = nx + (chunkRand() - 0.5) * 12; const zz = nz + (chunkRand() - 0.5) * 12; const zy = getTerrainHeight(zx, zz); if (zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
+                        if (chunkRand() > 0.7) { createRangedEnemy(nx, nz, 500 + chunkRand() * 500, ny); }
+                    }
+                }
+            }
+
             if (centerBiome === 'city') {
                 const cityDeepNoise = simplex.noise2D(chunkOriginX / 3000, chunkOriginZ / 3000);
-                if (cityDeepNoise < -0.8 && chunkRand() > 0.95) {
+                if (cityDeepNoise < -0.8 && chunkRand() > 0.9875) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('witch', x, z, y);
                 }
                 // 강령술사: 도시에서 가끔 등장
-                if (cityDeepNoise < -0.5 && chunkRand() > 0.97) {
+                if (cityDeepNoise < -0.5 && chunkRand() > 0.9925) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('necromancer', x, z, y);
                 }
             }
             if (centerBiome === 'volcano') {
-                if (chunkRand() > 0.88) {
+                if (chunkRand() > 0.97) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z);
                     if (y > LAVA_LEVEL) { createBoss('fire_demon', x, z, y); }
                 }
             }
             if (centerBiome === 'mountain') {
                 // 골렘: 산 지형에서 가끔 등장
-                if (chunkRand() > 0.88) {
+                if (chunkRand() > 0.97) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('golem', x, z, y);
                 }
             }
 
-            if (chunkRand() > 0.93) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRandomLoot(x, z, yBase + 0.5); } }
-            if (chunkRand() > 0.68 && centerBiome !== 'volcano') { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); createVehicle(x, z, yBase); }
+            // [MODIFIED] 청크 면적이 1/4가 된 만큼(청크 개수는 4배), 확률도 기존의 1/4로 낮춰서 월드 전체 밀도를 동일하게 유지
+            if (chunkRand() > 0.9825) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRandomLoot(x, z, yBase + 0.5); } }
+            if (chunkRand() > 0.92 && centerBiome !== 'volcano') { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); createVehicle(x, z, yBase); }
             
             // 강도 캠프 (도시/화산 제외 - 도시는 이미 건물+적 밀도가 높아 렉 방지)
-            if (chunkRand() > 0.93 && centerBiome !== 'volcano' && centerBiome !== 'city') {
+            if (chunkRand() > 0.9825 && centerBiome !== 'volcano' && centerBiome !== 'city') {
                 const bx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const bz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createBanditCamp(bx, bz, chunkRand);
             }
             // 엘프 군락 (숲 바이옴)
-            if (centerBiome === 'forest' && chunkRand() > 0.87) {
+            if (centerBiome === 'forest' && chunkRand() > 0.9675) {
                 const ex = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const ez = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createElfVillage(ex, ez, chunkRand);
             }
             // 드워프 광산 (산 바이옴)
-            if (centerBiome === 'mountain' && chunkRand() > 0.88) {
+            if (centerBiome === 'mountain' && chunkRand() > 0.97) {
                 const mx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const mz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createDwarfMine(mx, mz, chunkRand);
@@ -1317,6 +2086,12 @@
 
             bosses.forEach((boss, index) => {
                 if (boss.userData.health <= 0) { handleBossDeath(boss, index); return; }
+                // 비활성 청크의 보스: 렌더링 끄고 AI 계산 완전 정지
+                if (!isEnemyInActiveChunk(boss)) {
+                    boss.visible = false;
+                    return;
+                }
+                boss.visible = true;
                 const dist = boss.position.distanceTo(playerPos);
                 if (isSafeZone && boss.userData.health >= boss.userData.maxHealth) return;
                 if (dist < minDst) { minDst = dist; activeBoss = boss; }
@@ -1551,6 +2326,11 @@
                 showChat('시스템', '⛏️ [드워프 퀘스트] 골렘을 처치했습니다! 드워프 대장장이에게 돌아가세요.');
             }
             createDebrisEffect(boss.position, boss.userData.originalColor, 50); scene.remove(boss); bosses.splice(index, 1); objects = objects.filter(o => o !== boss); document.getElementById('boss-container').style.display = 'none'; 
+            // [NEW] 보스 처치 시 높은 확률(70%)로 방어구 드랍, 티어도 아이언 이상으로 더 좋은 편이 나오게 함
+            if (Math.random() < 0.7) {
+                const piece = generateArmorPiece(null, rollBossArmorTier());
+                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, boss.position.x, boss.position.y, boss.position.z);
+            }
         }
 
         function addBoxInstance(matrices, proxies, x, y, z, w, h, d, userDataBase, originalColor) {
@@ -1790,13 +2570,18 @@
                 const data = enemy.userData;
                 const distToPlayerSq = enemy.position.distanceToSquared(targetPos);
 
-                // [OPTIMIZATION] 일정 거리(550m) 이상 멀어진 적/좀비는 완전히 제거 (메모리 해제)
-                // 단, 마녀/강령술사가 직접 소환한 개체는 보스 옆에서 활동하므로 디스폰하지 않음(보스가 죽으면 자연 정리됨)
-                if (distToPlayerSq > 302500 && !data.isWitchSummon && !data.isNecroSummon) {
+                // 230m 이상 멀어진 모든 좀비/소환체 디스폰 (보스 소환체 포함)
+                if (distToPlayerSq > 52900) {
                     scene.remove(enemy); zombies.splice(index, 1); continue;
                 }
 
-                if (distToPlayerSq > 90000) { enemy.visible = false; continue; } else { enemy.visible = true; }
+                // 비활성 청크의 몹: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존)
+                if (!isEnemyInActiveChunk(enemy)) {
+                    enemy.visible = false;
+                    continue;
+                }
+
+                enemy.visible = true;
 
                 const isClose = distToPlayerSq < 2500; 
                 const updateRate = isClose ? 1 : 3;
@@ -1848,6 +2633,15 @@
                     }
                 }
 
+                // [NEW] 용암 데미지: 좀비/트롤/오크/엘프는 용암에 닿으면 피해를 입음. 드워프는 용암에 면역.
+                if (!data.isDwarfVillager && data.health > 0 && (frameCount + index) % 4 === 0) {
+                    const mobLavaHeight = getLavaHeight(enemy.position.x, enemy.position.z);
+                    if (enemy.position.y - 0.9 <= mobLavaHeight + 0.2) {
+                        data.health -= 40 * (delta * 4); // 4프레임마다 체크하므로 누락분 보정
+                        if (data.health <= 0) { handleZombieDeath(enemy, index, false); continue; }
+                    }
+                }
+
                 let heightOffset = 0.9; if (data.isTroll) heightOffset = 1.35; if (data.isOrc) heightOffset = data.name.includes('워치프') ? 1.35 : 1.0;
                 if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03 * updateRate; if (enemy.position.y <= zombieGroundY + heightOffset && data.velocityY < 0) { enemy.position.y = zombieGroundY + heightOffset; data.isJumping = false; data.velocityY = 0; } } else { if (biome !== 'city' || validGroundHit) { enemy.position.y = zombieGroundY + heightOffset; } }
                 
@@ -1891,7 +2685,11 @@
                 const distToEntrance = zombiePos.distanceTo(portal.entrance);
                 if (distToEntrance < 30) {
                     const heightDiff = Math.abs(portal.exit.y - targetY);
-                    if (heightDiff < 5) { 
+                    // [MODIFIED] 고층 빌딩처럼 포탈이 여러 단계(1층->2층->3층->옥상)로 이어진 경우,
+                    // 목표 높이와 5m 이내인 포탈만 고르면 중간 경유 포탈을 절대 선택할 수 없어 옥상까지 못 올라감.
+                    // 그래서 "목표와 가까운 포탈" 외에도 "지금 위치보다 위에 있고, 목표 쪽으로 가까워지는 포탈"도 후보로 인정.
+                    const movesTowardTarget = portal.exit.y > zombiePos.y + 1 && portal.exit.y <= targetY + 2;
+                    if (heightDiff < 5 || movesTowardTarget) { 
                         if (distToEntrance < minDist) { minDist = distToEntrance; bestPortal = portal; }
                     }
                 }
@@ -1905,6 +2703,35 @@
             
             const direction = targetPos.clone().sub(enemy.position).normalize(); direction.y = 0;
             if (data.stuckTime > 500) { direction.x += (Math.random() - 0.5); direction.z += (Math.random() - 0.5); direction.normalize(); }
+
+            // [NEW] 엘프 특성: 날렵하게 거리를 벌리며 견제하는 키이팅(kiting) 패턴
+            // 너무 가까워지면 뒤로 빠지고, 거리가 멀면 다가오며 좌우로 스텝을 밟아 명중을 피함
+            if (data.isElfVillager) {
+                const distToTarget = enemy.position.distanceTo(targetPos);
+                const idealRange = data.attackRange + 4.0; // 사정거리보다 살짝 먼 거리를 유지하려 함
+                let moveDir;
+                if (distToTarget < idealRange - 1.5) {
+                    moveDir = direction.clone().negate(); // 너무 가까우면 후퇴
+                } else if (distToTarget > idealRange + 3.0) {
+                    moveDir = direction.clone(); // 너무 멀면 접근
+                } else {
+                    moveDir = new THREE.Vector3(0, 0, 0); // 적정 거리면 제자리에서 견제 스텝만
+                }
+                // 좌우로 빙글빙글 도는 스텝(strafe) 추가 — 회피 기동
+                const strafe = new THREE.Vector3(-direction.z, 0, direction.x);
+                if (!data.strafeDir || now - (data.lastStrafeFlip || 0) > 1200) { data.strafeDir = Math.random() < 0.5 ? 1 : -1; data.lastStrafeFlip = now; }
+                moveDir.addScaledVector(strafe, data.strafeDir * 0.8);
+                if (moveDir.lengthSq() > 0.0001) moveDir.normalize();
+                const elfSpeed = data.speed * 1.15; // 엘프는 더 날렵함
+                const velocity = moveDir.multiplyScalar(elfSpeed * delta);
+                enemy.position.add(velocity);
+                enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
+                if (hasLOS && !data.isJumping && data.playerElevated && data.targetHeight > 2.0) { data.velocityY = 0.3; data.isJumping = true; }
+                return;
+            }
+
+            // [NEW] 드워프 특성: 묵직하게 정면으로 우직하게 돌진하는 탱커형 — 회피 없이 직진
+            // (별도 가속 없이 기본 로직을 타되, 속도/맷집은 생성 시점에 이미 둔중하게 설정됨)
 
             const velocity = direction.multiplyScalar(data.speed * delta);
             enemy.position.add(velocity);
@@ -2084,10 +2911,10 @@
                     };
                     npcs.push(elf);
                 } else {
-                    // 일반 엘프 전사: 공격 가능 (좀비 시스템 재사용, 평화적 시작)
+                    // 일반 엘프 전사: 공격 가능 (좀비 시스템 재사용, 평화적 시작) - 날렵하게 거리를 유지하며 견제하는 특성
                     elf.userData = { 
-                        health: 350, maxHealth: 350, speed: 8.0, originalSpeed: 8.0, type: 'zombie', isElfVillager: true, name: '엘프',
-                        originalColor: elfMat.color.clone(), state: 'idle', lastAttackTime: 0, attackCooldown: 1800, attackRange: 2.2, detectionRange: 60,
+                        health: 300, maxHealth: 300, speed: 8.5, originalSpeed: 8.5, type: 'zombie', isElfVillager: true, name: '엘프',
+                        originalColor: elfMat.color.clone(), state: 'idle', lastAttackTime: 0, attackCooldown: 1100, attackRange: 5.5, detectionRange: 65,
                         lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
                         stuckTime: 0, stuckThreshold: 1000, lastPosition: elf.position.clone(), targetPortal: null, isUsingPortal: false,
                         portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false,
@@ -2151,10 +2978,10 @@
                     };
                     npcs.push(dwarf);
                 } else {
-                    // 일반 드워프 광부: 공격 가능 (좀비 시스템 재사용, 평화적 시작)
+                    // 일반 드워프 광부: 공격 가능 (좀비 시스템 재사용, 평화적 시작) - 묵직하고 우직한 근접 탱커 특성
                     dwarf.userData = { 
-                        health: 450, maxHealth: 450, speed: 6.0, originalSpeed: 6.0, type: 'zombie', isDwarfVillager: true, name: '드워프',
-                        originalColor: new THREE.Color(dCol), state: 'idle', lastAttackTime: 0, attackCooldown: 1500, attackRange: 2.5, detectionRange: 55,
+                        health: 550, maxHealth: 550, speed: 5.2, originalSpeed: 5.2, type: 'zombie', isDwarfVillager: true, name: '드워프',
+                        originalColor: new THREE.Color(dCol), state: 'idle', lastAttackTime: 0, attackCooldown: 2000, attackRange: 2.3, detectionRange: 50,
                         lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
                         stuckTime: 0, stuckThreshold: 1000, lastPosition: dwarf.position.clone(), targetPortal: null, isUsingPortal: false,
                         portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false,
@@ -2208,12 +3035,42 @@
         }
 
         function setupControls() {
+            // [NEW] 퀘스트 목록 휠 스크롤: 무기 전환 등 게임 휠 입력과 충돌하지 않도록 분리 처리
+            const questListEl = document.getElementById('quest-list');
+            if (questListEl) {
+                questListEl.addEventListener('wheel', (e) => {
+                    e.stopPropagation();
+                    questListEl.scrollTop += e.deltaY;
+                }, { passive: true });
+            }
+
+            // [NEW] ESC 일시정지 메뉴 버튼 바인딩
+            document.getElementById('pause-resume-btn').addEventListener('click', () => { closePauseModal(); });
+            document.getElementById('pause-save-btn').addEventListener('click', () => { saveGameToFile(); });
+            document.getElementById('pause-quit-btn').addEventListener('click', () => {
+                if (confirm('정말 게임을 종료하시겠습니까? 저장하지 않은 진행 상황은 사라집니다.')) { quitGame(); }
+            });
+            const pauseLoadInput = document.getElementById('pause-load-input');
+            document.getElementById('pause-load-btn').addEventListener('click', () => { pauseLoadInput.click(); });
+            pauseLoadInput.addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (file) { loadGameFromFile(file); }
+                pauseLoadInput.value = ''; // 같은 파일을 다시 선택해도 change가 발생하도록 초기화
+            });
+            // [NEW] 일시정지 메뉴 -> 장비창 열기 버튼
+            document.getElementById('pause-equip-btn').addEventListener('click', () => {
+                closePauseModal(true); // 포인터락 재요청 생략 (장비창이 바로 exitPointerLock 호출하므로 경쟁 상태 방지)
+                toggleEquipmentModal();
+            });
+
+            // [NEW] 장비창 닫기 버튼
+            document.getElementById('close-equip-btn').addEventListener('click', () => { closeEquipmentModal(); });
             document.addEventListener('keydown', (e) => { 
                 if(isGameOver || gameState.isReloading) return; 
                 if (playerInVehicle) { 
                     switch(e.code) { case 'KeyW': vehicleAcceleration = -1; break; case 'KeyS': vehicleAcceleration = 1; break; case 'KeyA': vehicleSteering = -1; break; case 'KeyD': vehicleSteering = 1; break; } 
                 } else { 
-                    if (!isTrading && !isStatsOpen) { 
+                    if (!isTrading && !isStatsOpen && !isPaused && !isEquipOpen) { 
                         switch (e.code) { case 'KeyW': controls.moveForward = true; break; case 'KeyA': controls.moveLeft = true; break; case 'KeyS': controls.moveBackward = true; break; case 'KeyD': controls.moveRight = true; break; case 'Space': controls.jump = true; break; case 'ShiftLeft': controls.sprint = true; break; } 
                     } 
                 } 
@@ -2227,6 +3084,15 @@
                     case 'KeyF': interact(); break; 
                     case 'KeyP': toggleStatsModal(); break;
                     case 'KeyT': cycleScope(); break; // [NEW] 스코프 교체 키
+                    // [NEW] 방어구 인첸트 액티브 스킬: 부위별로 다른 키
+                    case 'KeyQ': activateArmorSkill('helmet'); break;
+                    case 'KeyZ': activateArmorSkill('chest'); break;
+                    case 'KeyX': activateArmorSkill('pants'); break;
+                    case 'KeyC': activateArmorSkill('boots'); break;
+                    case 'Escape': // [NEW] ESC/E: 다른 모달이 열려있으면 그것부터 닫고, 아니면 일시정지 메뉴 토글
+                    case 'KeyE':
+                        handlePauseMenuKey();
+                        break;
                 } 
             });
             document.addEventListener('keyup', (e) => { if (playerInVehicle) { switch(e.code) { case 'KeyW': if (vehicleAcceleration < 0) vehicleAcceleration = 0; break; case 'KeyS': if (vehicleAcceleration > 0) vehicleAcceleration = 0; break; case 'KeyA': if (vehicleSteering < 0) vehicleSteering = 0; break; case 'KeyD': if (vehicleSteering > 0) vehicleSteering = 0; break; } } switch (e.code) { case 'KeyW': controls.moveForward = false; break; case 'KeyA': controls.moveLeft = false; break; case 'KeyS': controls.moveBackward = false; break; case 'KeyD': controls.moveRight = false; break; case 'ShiftLeft': controls.sprint = false; case 'Space': controls.jump = false; break; } });
@@ -2234,9 +3100,9 @@
             // [FIX] WrongDocumentError Fix
             document.addEventListener('click', (event) => { 
                 // UI 클릭 시 포인터 잠금 방지
-                if (event.target.closest('button') || event.target.closest('#trade-modal') || event.target.closest('#stats-modal')) return;
+                if (event.target.closest('button') || event.target.closest('#trade-modal') || event.target.closest('#stats-modal') || event.target.closest('#pause-modal') || event.target.closest('#equipment-modal')) return;
 
-                if (!isPointerLocked && !isTrading && !isStatsOpen) { 
+                if (!isPointerLocked && !isTrading && !isStatsOpen && !isPaused && !isEquipOpen) { 
                     // document.body 대신 renderer.domElement 사용 시도
                     const target = renderer ? renderer.domElement : document.body;
                     if(target && target.requestPointerLock) {
@@ -2255,6 +3121,7 @@
                 document.getElementById('crosshair').style.display = isPointerLocked ? 'block' : 'none'; 
                 document.body.style.cursor = isPointerLocked ? 'none' : 'default'; 
                 if (isPointerLocked && (isTrading || isStatsOpen)) { closeTradeModal(); closeStatsModal(); } 
+                if (isPointerLocked && isEquipOpen) { closeEquipmentModal(); }
             });
             
             document.addEventListener('mousemove', (e) => { if (isPointerLocked) { const sensitivity = 0.0015; if (!playerInVehicle) { gameState.rotation.y -= e.movementX * sensitivity; } gameState.rotation.x -= e.movementY * sensitivity; gameState.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gameState.rotation.x)); } });
@@ -2438,12 +3305,48 @@
             list.appendChild(scopeRow);
 
 
-            const ammoHeader = document.createElement('h3'); ammoHeader.style.color = '#ff6b6b'; ammoHeader.style.fontSize = '16px'; ammoHeader.style.marginTop = '20px'; ammoHeader.style.borderBottom = '1px solid #555'; ammoHeader.style.paddingBottom = '5px'; ammoHeader.textContent = '탄약 판매 (내 물건 팔기)'; list.appendChild(ammoHeader); for (const [type, amount] of Object.entries(gameState.ammoInventory)) { const price = ammoPrices[type] || 10; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type}: ${amount}발 보유`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.textContent = `10발 판매 (+${price} 몰록)`; if (amount < 10) { btn.disabled = true; btn.textContent = '수량 부족'; } btn.onclick = () => { if (gameState.ammoInventory[type] >= 10) { gameState.ammoInventory[type] -= 10; addMoloch(price); showChat('상인', `${type} 10발을 ${price} 몰록에 샀네.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const ammoBuyHeader = document.createElement('h3'); ammoBuyHeader.style.color = '#4ecdc4'; ammoBuyHeader.style.fontSize = '16px'; ammoBuyHeader.style.marginTop = '20px'; ammoBuyHeader.style.borderBottom = '1px solid #555'; ammoBuyHeader.style.paddingBottom = '5px'; ammoBuyHeader.textContent = '탄약 구매 (상인 물건 사기)'; list.appendChild(ammoBuyHeader); for (const type of Object.keys(gameState.ammoInventory)) { const sellPrice = ammoPrices[type] || 10; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type} (10발)`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); gameState.ammoInventory[type] += 10; showChat('상인', `여기 ${type} 10발일세. 아껴 쓰게나.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const weaponHeader = document.createElement('h3'); weaponHeader.style.color = '#ff6b6b'; weaponHeader.style.fontSize = '16px'; weaponHeader.style.marginTop = '20px'; weaponHeader.style.borderBottom = '1px solid #555'; weaponHeader.style.paddingBottom = '5px'; weaponHeader.textContent = '무기 판매'; list.appendChild(weaponHeader); let sellableWeaponsCount = 0; gameState.weapons.forEach((weapon, index) => { if (weapon.key === 'Fist') return; sellableWeaponsCount++; const weaponData = WEAPON_DATABASE[weapon.key]; const price = weaponPrices[weapon.key] || 100; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; let nameText = `${weaponData.name}`; if (index === gameState.currentWeaponIndex) { nameText += ` (장착 중)`; info.style.color = '#ffff00'; } info.textContent = nameText; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#ff9800'; btn.textContent = `판매 (+${price} 몰록)`; btn.onclick = () => { addMoloch(price); showChat('상인', `${weaponData.name}을(를) ${price} 몰록에 매입하지.`); if (index === gameState.currentWeaponIndex) { switchWeapon(0); } else if (index < gameState.currentWeaponIndex) { gameState.currentWeaponIndex--; } gameState.weapons.splice(index, 1); renderTradeItems(); updateUI(); }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); }); if (sellableWeaponsCount === 0) { const emptyMsg = document.createElement('div'); emptyMsg.style.padding = '10px'; emptyMsg.style.color = '#aaa'; emptyMsg.style.fontSize = '14px'; emptyMsg.textContent = '판매할 무기가 없습니다.'; list.appendChild(emptyMsg); } const weaponBuyHeader = document.createElement('h3'); weaponBuyHeader.style.color = '#4ecdc4'; weaponBuyHeader.style.fontSize = '16px'; weaponBuyHeader.style.marginTop = '20px'; weaponBuyHeader.style.borderBottom = '1px solid #555'; weaponBuyHeader.style.paddingBottom = '5px'; weaponBuyHeader.textContent = '무기 구매'; list.appendChild(weaponBuyHeader); for (const key in WEAPON_DATABASE) { if (key === 'Fist') continue; const weaponData = WEAPON_DATABASE[key]; const sellPrice = weaponPrices[key] || 100; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const isOwned = gameState.weapons.find(w => w.key === key); const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = weaponData.name; if (isOwned) { info.textContent += " (보유중)"; info.style.color = "#aaa"; } const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); if (isOwned) { showChat('상인', `이미 ${weaponData.name}이 있구만. 탄약만 챙겨주지.`); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } else { showChat('상인', `좋은 선택이야. ${weaponData.name}은(는) 아주 쓸만하지.`); gameState.weapons.push({ key: key, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } }
+            const ammoHeader = document.createElement('h3'); ammoHeader.style.color = '#ff6b6b'; ammoHeader.style.fontSize = '16px'; ammoHeader.style.marginTop = '20px'; ammoHeader.style.borderBottom = '1px solid #555'; ammoHeader.style.paddingBottom = '5px'; ammoHeader.textContent = '탄약 판매 (내 물건 팔기)'; list.appendChild(ammoHeader); for (const [type, amount] of Object.entries(gameState.ammoInventory)) { const price = ammoPrices[type] || 10; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type}: ${amount}발 보유`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.textContent = `10발 판매 (+${price} 몰록)`; if (amount < 10) { btn.disabled = true; btn.textContent = '수량 부족'; } btn.onclick = () => { if (gameState.ammoInventory[type] >= 10) { gameState.ammoInventory[type] -= 10; addMoloch(price); showChat('상인', `${type} 10발을 ${price} 몰록에 샀네.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const ammoBuyHeader = document.createElement('h3'); ammoBuyHeader.style.color = '#4ecdc4'; ammoBuyHeader.style.fontSize = '16px'; ammoBuyHeader.style.marginTop = '20px'; ammoBuyHeader.style.borderBottom = '1px solid #555'; ammoBuyHeader.style.paddingBottom = '5px'; ammoBuyHeader.textContent = '탄약 구매 (상인 물건 사기)'; list.appendChild(ammoBuyHeader); for (const type of Object.keys(gameState.ammoInventory)) { const sellPrice = ammoPrices[type] || 10; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = `${type} (10발)`; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); gameState.ammoInventory[type] += 10; showChat('상인', `여기 ${type} 10발일세. 아껴 쓰게나.`); renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); } const weaponHeader = document.createElement('h3'); weaponHeader.style.color = '#ff6b6b'; weaponHeader.style.fontSize = '16px'; weaponHeader.style.marginTop = '20px'; weaponHeader.style.borderBottom = '1px solid #555'; weaponHeader.style.paddingBottom = '5px'; weaponHeader.textContent = '무기 판매'; list.appendChild(weaponHeader); let sellableWeaponsCount = 0; gameState.weapons.forEach((weapon, index) => { if (weapon.key === 'Fist') return; sellableWeaponsCount++; const weaponData = WEAPON_DATABASE[weapon.key]; const price = weaponPrices[weapon.key] || 100; const row = document.createElement('div'); row.className = 'trade-item'; const info = document.createElement('span'); info.className = 'trade-item-info'; let nameText = `${weaponData.name}`; if (index === gameState.currentWeaponIndex) { nameText += ` (장착 중)`; info.style.color = '#ffff00'; } info.textContent = nameText; const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#ff9800'; btn.textContent = `판매 (+${price} 몰록)`; btn.onclick = () => { addMoloch(price); showChat('상인', `${weaponData.name}을(를) ${price} 몰록에 매입하지.`); if (index === gameState.currentWeaponIndex) { switchWeapon(0); } else if (index < gameState.currentWeaponIndex) { gameState.currentWeaponIndex--; } gameState.weapons.splice(index, 1); renderTradeItems(); updateUI(); }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); }); if (sellableWeaponsCount === 0) { const emptyMsg = document.createElement('div'); emptyMsg.style.padding = '10px'; emptyMsg.style.color = '#aaa'; emptyMsg.style.fontSize = '14px'; emptyMsg.textContent = '판매할 무기가 없습니다.'; list.appendChild(emptyMsg); } const weaponBuyHeader = document.createElement('h3'); weaponBuyHeader.style.color = '#4ecdc4'; weaponBuyHeader.style.fontSize = '16px'; weaponBuyHeader.style.marginTop = '20px'; weaponBuyHeader.style.borderBottom = '1px solid #555'; weaponBuyHeader.style.paddingBottom = '5px'; weaponBuyHeader.textContent = '무기 구매'; list.appendChild(weaponBuyHeader); for (const key in WEAPON_DATABASE) { if (key === 'Fist') continue; const weaponData = WEAPON_DATABASE[key]; const sellPrice = weaponPrices[key] || 100; const buyPrice = sellPrice * 3; const row = document.createElement('div'); row.className = 'trade-item'; const isOwned = gameState.weapons.find(w => w.key === key); const info = document.createElement('span'); info.className = 'trade-item-info'; info.textContent = weaponData.name; if (isOwned) { info.textContent += " (보유중)"; info.style.color = "#aaa"; } const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`; if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; } btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); if (isOwned) { showChat('상인', `이미 ${weaponData.name}이 있구만. 탄약만 챙겨주지.`); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } else { showChat('상인', `좋은 선택이야. ${weaponData.name}은(는) 아주 쓸만하지.`); gameState.weapons.push({ key: key, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] += weaponData.magSize; } } renderTradeItems(); updateUI(); } }; row.appendChild(info); row.appendChild(btn); list.appendChild(row); }
+
+            // [NEW] 방어구 판매 (가방에 있는 것만)
+            const armorSellHeader = document.createElement('h3'); armorSellHeader.style.color = '#ff6b6b'; armorSellHeader.style.fontSize = '16px'; armorSellHeader.style.marginTop = '20px'; armorSellHeader.style.borderBottom = '1px solid #555'; armorSellHeader.style.paddingBottom = '5px'; armorSellHeader.textContent = '방어구 판매 (가방)'; list.appendChild(armorSellHeader);
+            if (gameState.bag.length === 0) {
+                const emptyMsg = document.createElement('div'); emptyMsg.style.padding = '10px'; emptyMsg.style.color = '#aaa'; emptyMsg.style.fontSize = '14px'; emptyMsg.textContent = '판매할 방어구가 가방에 없습니다.'; list.appendChild(emptyMsg);
+            } else {
+                gameState.bag.forEach((piece, idx) => {
+                    const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                    const slotData = ARMOR_SLOTS[piece.slot];
+                    const sellPrice = Math.floor(getArmorPiecePrice(piece) * 0.4);
+                    const row = document.createElement('div'); row.className = 'trade-item';
+                    const info = document.createElement('span'); info.className = 'trade-item-info';
+                    info.innerHTML = `<span style="color:${tierColorHex(piece.tierId)}">${tier.name} ${slotData.name}</span> (방어력 +${piece.defense}${piece.enchantId ? ', 인첸트' : ''})`;
+                    const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.textContent = `판매 (+${sellPrice} 몰록)`;
+                    btn.onclick = () => { addMoloch(sellPrice); showChat('상인', `${tier.name} ${slotData.name}을(를) ${sellPrice} 몰록에 매입하지.`); gameState.bag.splice(idx, 1); renderTradeItems(); updateUI(); };
+                    row.appendChild(info); row.appendChild(btn); list.appendChild(row);
+                });
+            }
+
+            // [NEW] 방어구 구매 (티어가 높을수록 비쌈, 무작위 부위/인첸트로 생성되어 진열됨)
+            const armorBuyHeader = document.createElement('h3'); armorBuyHeader.style.color = '#4ecdc4'; armorBuyHeader.style.fontSize = '16px'; armorBuyHeader.style.marginTop = '20px'; armorBuyHeader.style.borderBottom = '1px solid #555'; armorBuyHeader.style.paddingBottom = '5px'; armorBuyHeader.textContent = '방어구 구매'; list.appendChild(armorBuyHeader);
+            if (!shopArmorStock || shopArmorStock.length === 0) refreshShopArmorStock();
+            shopArmorStock.forEach((piece, idx) => {
+                const tier = ARMOR_TIERS.find(t => t.id === piece.tierId);
+                const slotData = ARMOR_SLOTS[piece.slot];
+                const buyPrice = getArmorPiecePrice(piece);
+                const row = document.createElement('div'); row.className = 'trade-item';
+                const info = document.createElement('span'); info.className = 'trade-item-info';
+                const enchant = piece.enchantId ? ENCHANT_DATABASE.find(e => e.id === piece.enchantId) : null;
+                info.innerHTML = `<span style="color:${tierColorHex(piece.tierId)}; font-weight:bold;">${tier.name} ${slotData.name}</span> 방어력 +${piece.defense}${enchant ? `<br><span style="color:#ffd700; font-size:12px;">✨ ${enchant.name} ${enchant.desc}</span>` : ''}`;
+                const btn = document.createElement('button'); btn.className = 'sell-btn'; btn.style.backgroundColor = '#2196F3'; btn.textContent = `구매 (-${buyPrice} 몰록)`;
+                if (gameState.moloch < buyPrice) { btn.disabled = true; btn.textContent = '몰록 부족'; btn.style.backgroundColor = '#555'; }
+                btn.onclick = () => { if (gameState.moloch >= buyPrice) { addMoloch(-buyPrice); gameState.bag.push(piece); showChat('상인', `${tier.name} ${slotData.name}일세. 잘 챙겨 입게나.`); shopArmorStock.splice(idx, 1); renderTradeItems(); updateUI(); } };
+                row.appendChild(info); row.appendChild(btn); list.appendChild(row);
+            });
+        }
 
         function performPunch(weaponData) {
             let damage = weaponData.damage; 
             if (weaponData.type === 'Melee') {
-                damage += (gameState.stats.strength * 2);
+                damage += ((gameState.stats.strength + getEquippedArmorBonuses().strengthBonus) * 2);
             }
             
             const range = weaponData.range; const direction = new THREE.Vector3(); camera.getWorldDirection(direction); raycaster.set(gameState.position, direction); raycaster.far = range; const allHits = raycaster.intersectObjects([...rangedEnemies, ...zombies, ...bosses], true); if (allHits.length === 0) return; let closestHit = null; for (const hit of allHits) { if (!closestHit || hit.distance < closestHit.distance) { closestHit = hit; } } if (!closestHit) return; if (playerGun && playerGun.userData.type === 'Melee') { if (playerGun.userData.isAnimating) return; playerGun.userData.isAnimating = true; const originalPos = { y: -0.3, z: -0.8 }; const punchY = originalPos.y + 0.1; const punchZ = originalPos.z - 0.2; playerGun.position.y = punchY; setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.z = punchZ; } setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.y = originalPos.y; playerGun.position.z = originalPos.z; playerGun.userData.isAnimating = false; } }, 50); }, 100); }
@@ -2466,7 +3369,7 @@
                     // 적도 맞으면 customTarget을 플레이어로 재설정 (혹시 다른 몹이랑 싸우고 있었을 수도 있으니까)
                     enemy.userData.customTarget = null;
                 } 
-                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
+                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } tryDropArmor(enemy.position, 0.08, false); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
             }
             else if (target.userData.type === 'boss') { target.userData.health -= damage; showDamage(target.position, damage); }
         }
@@ -2569,15 +3472,6 @@
                 setTimeout(() => showChat('생존자', "💰 [강도]들은 도로변에 캠프를 치고 있어. 총기와 전술을 쓰니 일반 적보다 위험하지만 더 많은 몰록을 갖고 있지."), explainDelay * 6.5);
                 setTimeout(() => showChat('생존자', "🌿 숲에서는 가끔 엘프 군락을, ⛏️ 산에서는 드워프 광산을 발견할 수 있어. 구경해봐!"), explainDelay * 7.0);
                 
-                // [NEW] 적/지형 설명이 끝난 뒤, 플레이어가 직접 활용할 수 있는 기능들도 추가 안내
-                setTimeout(() => showChat('생존자', "자, 이제 자네가 직접 쓸 수 있는 것들도 알려줌세."), explainDelay * 7.6);
-                setTimeout(() => showChat('생존자', "📈 [성장] 적을 처치하면 경험치와 함께 스탯 포인트를 얻어. <span style='color:#9b59b6'>P키</span>를 눌러 체력, 근력 같은 스탯에 투자할 수 있지."), explainDelay * 8.2);
-                setTimeout(() => showChat('생존자', "🎒 [장비] 곳곳에 떨어진 무기와 방어구를 주워서 <span style='color:#ffd700'>1~5번 키</span>로 무기를 바꿔가며 쓸 수 있어. 탄약이 떨어지면 <span style='color:#ffd700'>R키</span>로 재장전하게."), explainDelay * 8.8);
-                setTimeout(() => showChat('생존자', "🔭 [조준] 우클릭으로 조준하고, 그 상태에서 마우스 휠로 줌을, <span style='color:#ffd700'>T키</span>로 스코프 배율을 바꿀 수 있어."), explainDelay * 9.4);
-                setTimeout(() => showChat('생존자', "💰 [거래] 상인을 만나면 <span style='color:#ffd700'>F키</span>로 말을 걸어 몰록으로 물건을 사고팔 수 있네. 가끔 떠돌아다니는 방랑 상인도 만날 수 있을 걸세."), explainDelay * 10.0);
-                setTimeout(() => showChat('생존자', "🚗 [차량] 길가의 차량 옆에서 <span style='color:#ffd700'>F키</span>를 누르면 탑승해서 빠르게 이동하거나 적을 들이받을 수 있어. 같은 키로 내릴 수 있고."), explainDelay * 10.6);
-                setTimeout(() => showChat('생존자', "🏆 [업적] 여러 도전과제를 달성하면 보상이 쌓이는데, 다시 나를 찾아오면 그 보상을 챙겨주겠네."), explainDelay * 11.2);
-                
                 // 설명이 끝난 후 다음 퀘스트(좀비 사냥) 부여
                 setTimeout(() => {
                     showChat('생존자', "설명은 이쯤 하고... 자네 실력을 좀 볼까?");
@@ -2587,7 +3481,7 @@
                         questState.currentAmount = 0; 
                         updateQuestUI(); 
                     }, 2000);
-                }, explainDelay * 12.2);
+                }, explainDelay * 8.0);
                 return;
             }
 
@@ -2600,50 +3494,44 @@
         // [MODIFIED] 퀘스트 UI 업데이트 함수 수정 (talk_survivor 타입 처리 추가)
         function updateQuestUI() { 
             const display = document.getElementById('quest-display'); 
-            const objective = document.getElementById('quest-objective'); 
-            
-            // 엘프/드워프 사이드 퀘스트 우선 표시
-            if (elfQuestActive && !elfQuestDone) {
-                display.style.display = 'block';
-                objective.innerHTML = '🌿 [엘프 퀘스트] 강도 두목 처치 후 장로에게 보고';
-                objective.className = '';
-                return;
-            }
-            if (elfQuestActive && elfQuestDone) {
-                display.style.display = 'block';
-                objective.innerHTML = '🌿 [엘프 퀘스트] 엘프 장로에게 보고하세요!';
-                objective.className = 'quest-ready';
-                return;
-            }
-            if (dwarfQuestActive && !dwarfQuestDone) {
-                display.style.display = 'block';
-                objective.innerHTML = '⛏️ [드워프 퀘스트] 골렘(보스) 처치 후 대장장이에게 보고';
-                objective.className = '';
-                return;
-            }
-            if (dwarfQuestActive && dwarfQuestDone) {
-                display.style.display = 'block';
-                objective.innerHTML = '⛏️ [드워프 퀘스트] 드워프 대장장이에게 보고하세요!';
-                objective.className = 'quest-ready';
-                return;
-            }
-            
-            if (questState.status === 0 || questState.status === 3) { 
-                display.style.display = 'none'; 
-            } else { 
-                display.style.display = 'block'; 
-                
+            const list = document.getElementById('quest-list'); 
+            const entries = [];
+
+            // 메인(생존자) 퀘스트
+            if (questState.status === 1 || questState.status === 2 || questState.type === 'talk_survivor') {
                 if (questState.type === 'talk_survivor') {
-                    objective.innerHTML = "생존자와 대화하세요";
-                    objective.className = 'quest-ready';
-                } else if (questState.status === 1) { 
-                    objective.innerHTML = `- 좀비 처치: <span style="color:#00ff00">${questState.currentAmount}</span> / ${questState.targetAmount}`; 
-                    objective.className = ''; 
-                } else if (questState.status === 2) { 
-                    objective.innerHTML = "생존자에게 돌아가 보고하세요!"; 
-                    objective.className = 'quest-ready'; 
-                } 
-            } 
+                    entries.push({ label: '🧭 메인 임무', html: '생존자와 대화하세요', ready: true });
+                } else if (questState.status === 1) {
+                    entries.push({ label: '🧭 메인 임무', html: `- 좀비 처치: <span style="color:#00ff00">${questState.currentAmount}</span> / ${questState.targetAmount}`, ready: false });
+                } else if (questState.status === 2) {
+                    entries.push({ label: '🧭 메인 임무', html: '생존자에게 돌아가 보고하세요!', ready: true });
+                }
+            }
+
+            // 엘프 사이드 퀘스트
+            if (elfQuestActive && !elfQuestDone) {
+                entries.push({ label: '🌿 엘프 퀘스트', html: '강도 두목 처치 후 장로에게 보고', ready: false });
+            } else if (elfQuestActive && elfQuestDone) {
+                entries.push({ label: '🌿 엘프 퀘스트', html: '엘프 장로에게 보고하세요!', ready: true });
+            }
+
+            // 드워프 사이드 퀘스트
+            if (dwarfQuestActive && !dwarfQuestDone) {
+                entries.push({ label: '⛏️ 드워프 퀘스트', html: '골렘(보스) 처치 후 대장장이에게 보고', ready: false });
+            } else if (dwarfQuestActive && dwarfQuestDone) {
+                entries.push({ label: '⛏️ 드워프 퀘스트', html: '드워프 대장장이에게 보고하세요!', ready: true });
+            }
+
+            if (entries.length === 0) {
+                display.style.display = 'none';
+                list.innerHTML = '';
+                return;
+            }
+
+            display.style.display = 'block';
+            list.innerHTML = entries.map(en => 
+                `<div class="quest-entry"><div class="quest-entry-label">${en.label}</div><div class="${en.ready ? 'quest-ready' : ''}">${en.html}</div></div>`
+            ).join('');
         }
         function toggleVehicle(vehicle, isDestroyed = false) { if (playerInVehicle) { const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(vehicle.quaternion); const exitPos = vehicle.position.clone().add(rightDir.multiplyScalar(2.0)); const exitY = getTerrainHeight(exitPos.x, exitPos.z) + 1.8; gameState.position.set(exitPos.x, exitY, exitPos.z); const vehicleRotationY = vehicle.rotation.y; gameState.rotation.y = vehicleRotationY; gameState.rotation.x = 0; scene.add(camera); camera.position.copy(gameState.position); camera.rotation.set(gameState.rotation.x, gameState.rotation.y, 0, 'YXZ'); playerGun.visible = true; playerInVehicle = null; if (isDestroyed) { gameState.health = Math.max(0, gameState.health - 25); showChat("시스템", "차량이 파괴되었습니다! 비상 탈출합니다!"); const newPlayerPos = gameState.position.clone(); [...zombies, ...rangedEnemies].forEach(enemy => { if (enemy.userData.health > 0) { enemy.userData.lastKnownPlayerPosition.copy(newPlayerPos); enemy.userData.state = 'chase'; } }); } else { showChat('시스템', '차량에서 하차했습니다.'); } } else { playerInVehicle = vehicle; vehicle.add(camera); camera.position.set(0, 1.2, -0.5); camera.rotation.set(0, 0, 0, 'YXZ'); playerGun.visible = false; gameStats.vehiclesDriven++; checkAchievements(); showChat('시스템', `차량에 탑승했습니다.`); } updateUI(); }
         function pickupItem(item) { 
@@ -2661,6 +3549,12 @@
                 } else {
                     showChat('시스템', '이미 더 좋은 스코프를 가지고 있습니다.');
                 }
+            } else if (data.type === 'armor') {
+                // [NEW] 방어구는 자동 장착되지 않고 가방에 보관됨 (E키로 장비창을 열어 장착)
+                gameState.bag.push(data.armorData);
+                const tier = ARMOR_TIERS.find(t => t.id === data.armorData.tierId);
+                const enchantTxt = data.armorData.enchantId ? ` <span style="color:#ffd700">[인첸트 있음]</span>` : '';
+                showChat('시스템', `<span style="color:#${tier.color.toString(16).padStart(6,'0')}; font-weight:bold;">${getArmorPieceLabel(data.armorData)}</span>을(를) 가방에 보관했습니다.${enchantTxt} (E키로 장착)`);
             } else if (data.name === '탄약') { if (gameState.ammoInventory.hasOwnProperty(data.subtype)) { gameState.ammoInventory[data.subtype] += data.amount; showChat('시스템', `<span class="item-name">${data.subtype}</span> ${data.amount}발을 획득했습니다.`); } } 
             else if (data.name === '의료키트') { gameState.health = Math.min(getMaxHealth(), gameState.health + 500); showChat('시스템', `체력이 회복되었습니다!`); } 
             else if (data.name === '음식') { playerStamina = Math.min(getMaxStamina(), playerStamina + 50); showChat('시스템', `<span class="item-name">음식</span>으로 스태미나를 회복했습니다!`); } 
@@ -2677,7 +3571,7 @@
             else nameSpan = `<span class="npc-name">${name}:</span>`; 
             messageDiv.innerHTML = `${nameSpan} ${message}`; chatBox.appendChild(messageDiv); chatBox.style.display = 'flex'; while (chatBox.children.length > 5) { chatBox.removeChild(chatBox.firstChild); } setTimeout(() => { if (chatBox.contains(messageDiv)) { messageDiv.style.opacity = '0'; setTimeout(() => { if (chatBox.contains(messageDiv)) chatBox.removeChild(messageDiv); if (chatBox.children.length === 0) chatBox.style.display = 'none'; }, 500); } }, 5000); }
         function updateInteraction() {
-            if (isPointerLocked === false || playerInVehicle || isTrading || isStatsOpen) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
+            if (isPointerLocked === false || playerInVehicle || isTrading || isStatsOpen || isPaused || isEquipOpen) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
             const range = 3.5; let closestObject = null; let minDistance = range; const checkableObjects = [...items, ...vehicles, ...npcs]; checkableObjects.forEach(obj => { const dist = gameState.position.distanceTo(obj.position); if (dist < minDistance) { minDistance = dist; closestObject = obj; } });
             if (closestObject) { const direction = closestObject.position.clone().sub(gameState.position).normalize(); raycaster.set(gameState.position, direction); raycaster.far = range; const intersects = raycaster.intersectObjects([closestObject], true); if (intersects.length > 0 && intersects[0].object) { let target = intersects[0].object; while (target.parent && target.parent !== scene) { target = target.parent; } if (target.userData.type && (target.userData.type === 'item' || target.userData.type === 'weapon' || target.userData.type === 'scope' || target.userData.type === 'vehicle' || target.userData.type === 'npc')) { interactableObject = target; } else { interactableObject = null; } } else { interactableObject = null; } } else { interactableObject = null; }
             const prompt = document.getElementById('interaction-prompt'); const itemNameEl = document.getElementById('interaction-item-name'); const actionEl = document.getElementById('interaction-action');
@@ -2703,7 +3597,7 @@
             document.getElementById('xp-fill').style.width = `${xpPercent}%`;
             if (playerStamina < JUMP_STAMINA_COST) { document.getElementById('stamina-fill').style.background = '#FF4136'; } else { document.getElementById('stamina-fill').style.background = '#2196F3'; }
             const vehicleStatusRow = document.getElementById('vehicle-status-row'); if (playerInVehicle) { const vh = playerInVehicle.userData; const vhPercent = (vh.health / vh.maxHealth) * 100; document.getElementById('vehicle-health-fill').style.width = `${vhPercent}%`; document.getElementById('vehicle-health-text').textContent = `${Math.floor(vh.health)} / ${vh.maxHealth}`; vehicleStatusRow.style.display = 'flex'; } else { vehicleStatusRow.style.display = 'none'; }
-            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; document.getElementById('current-ammo').textContent = weaponObj.magAmmo; document.getElementById('ammo-total').textContent = ammoType ? inventoryAmmo : '—'; document.getElementById('weapon-name').textContent = weaponData.name; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { document.getElementById('reload-prompt').style.display = 'block'; } else { document.getElementById('reload-prompt').style.display = 'none'; } } else { document.getElementById('current-ammo').textContent = '-'; document.getElementById('ammo-total').textContent = '-'; document.getElementById('weapon-name').textContent = '맨손'; document.getElementById('reload-prompt').style.display = 'none'; }
+            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; document.getElementById('current-ammo').textContent = weaponObj.magAmmo; document.getElementById('ammo-total').textContent = ammoType ? inventoryAmmo : '—'; document.getElementById('weapon-name').textContent = weaponData.name; document.getElementById('weapon-ammo-type').textContent = ammoType ? `사용 탄약: ${ammoType}` : ''; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { document.getElementById('reload-prompt').style.display = 'block'; } else { document.getElementById('reload-prompt').style.display = 'none'; } } else { document.getElementById('current-ammo').textContent = '-'; document.getElementById('ammo-total').textContent = '-'; document.getElementById('weapon-name').textContent = '맨손'; document.getElementById('weapon-ammo-type').textContent = ''; document.getElementById('reload-prompt').style.display = 'none'; }
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const displayX = Math.round(playerPos.x); const displayY = Math.round(playerPos.z); document.getElementById('coord-display').innerHTML = `X: ${displayX}, Y: ${displayY} <span style="font-size:0.8em; color:#ccc; margin-left:10px;" id="biome-display">[${getBiome(playerPos.x, playerPos.z).toUpperCase()}]</span>`;
         }
         
@@ -2776,7 +3670,8 @@
             const inLava = gameState.position.y - 1.8 <= lavaHeight + 0.2;
             const lavaStatusEl = document.getElementById('lava-status');
             if (inLava) { 
-                const damage = 40 * delta;  // 기존 20→40으로 상향
+                let damage = 40 * delta;  // 기존 20→40으로 상향
+                damage *= (1 - getEquippedArmorBonuses().lavaResist); // [NEW] '불씨막이' 인첸트 적용
                 gameState.health -= damage; 
                 showLavaDamageEffect(); 
                 lavaStatusEl.style.display = 'block';
@@ -2893,6 +3788,8 @@
                                         addMoloch(isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20); 
                                         if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; checkAchievements(); }
                                         if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) { elfQuestDone = true; gameStats.elfQuestsCompleted++; checkAchievements(); showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.'); }
+                                        // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
+                                        tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
                                     } else { enemy.userData.state = 'chase'; } 
                                 } else if (enemy.userData.type === 'boss') {
                                     enemy.userData.health -= damage;
@@ -3181,6 +4078,8 @@
                             }
                             createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
                             showChat('시스템', isBandit ? `💰 ${enemy.userData.name} 처치! (+${molochReward} 몰록)` : '적을 처치했습니다!');
+                            // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
+                            tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
                         }
                     }
                     else if (bestHit.type === 'zombie') { 
@@ -3227,7 +4126,8 @@
                         // 몬스터 종류별 기본 데미지 설정
                         let baseDamage = 10; // 기본 좀비
                         if (data.isOrc) baseDamage = 15; // 오크는 좀 더 강함
-                        if (data.isElfVillager || data.isDwarfVillager) baseDamage = 15; // 엘프/드워프도 오크와 동일하게 강함
+                        if (data.isElfVillager) baseDamage = 12; // 엘프: 빠르지만 한 방은 약함
+                        if (data.isDwarfVillager) baseDamage = 20; // 드워프: 느리지만 묵직한 일격
                         if (data.isTroll) baseDamage = 25; // 트롤은 훨씬 강함
                         if (data.name && data.name.includes('워치프')) baseDamage = 30; // 워치프
 
@@ -3301,6 +4201,14 @@
                     const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; 
                     const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); 
                 } 
+                // [NEW] 몹 처치 시 낮은 확률로 방어구 드랍 (강한 개체일수록 확률이 조금 더 높음)
+                let armorDropChance = 0.08;
+                if (enemy.userData.isTroll) armorDropChance = 0.18;
+                else if (enemy.userData.isOrc || enemy.userData.isElfVillager || enemy.userData.isDwarfVillager) armorDropChance = 0.12;
+                if (Math.random() < armorDropChance) {
+                    const piece = generateArmorPiece();
+                    spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, enemy.position.x + 0.3, enemy.position.y, enemy.position.z + 0.3);
+                }
             }
         }
 
@@ -3348,7 +4256,20 @@
             const nearby = getNearbyStaticObjects(eyePos);
             const intersects = raycaster.intersectObjects([...nearby, ...structures], true); 
             const hit = intersects.find(i => i.object.geometry.type !== 'PlaneGeometry' && i.object.userData.type !== 'roof' && i.object.userData.type !== 'floor' && i.distance > 1.0 ); return !hit || hit.distance > distance - 1; }
-        function attackPlayer(damage) { if (isGameOver) return; if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } else { gameState.health -= damage; showPlayerDamageEffect(); updateUI(); if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } } }
+        function attackPlayer(damage) { 
+            if (isGameOver || isRespawning) return; 
+            if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } 
+            else { 
+                // [NEW] 방어구 데미지 경감 적용 (전체 피해의 85%까지만 경감 가능, 완전 무적 방지)
+                const armorDefense = getEquippedArmorBonuses().defense;
+                let reducedDamage = Math.max(damage * 0.15, damage - armorDefense);
+                // [NEW] '철벽의' 인첸트 액티브: 피해 50% 추가 감소
+                if (activeSkillEffects.damageShieldUntil > Date.now()) reducedDamage *= 0.5;
+                gameState.health -= reducedDamage; 
+                showPlayerDamageEffect(); updateUI(); 
+                if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } 
+            } 
+        }
         function updateItems(delta) { 
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             items.forEach(item => { if (item.position.distanceToSquared(playerPos) > ACTIVE_RADIUS_SQ) { item.visible = false; return; } item.visible = true; if (item.userData.type !== 'weapon') { item.rotation.y += 0.02; } if (item.userData.isGrounded) return; raycaster.far = 500; raycaster.set(item.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const itemIntersects = raycaster.intersectObjects(objects, true); let targetY = item.position.y; if (itemIntersects.length > 0) { const firstHit = itemIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object'); if(firstHit) { targetY = firstHit.point.y + 0.5; } } if (Math.abs(item.position.y - targetY) < 0.05) { item.position.y = targetY; item.userData.isGrounded = true; } else { item.position.y = THREE.MathUtils.lerp(item.position.y, targetY, 0.1); } item.userData.baseY = item.position.y; });
@@ -3360,13 +4281,14 @@
             
             updateWorldState(delta); updatePlayer(delta); updateBullets(delta); updateZombies(delta);
             if (frameCount % 60 === 0) checkAchievements(); // 누적형 스탯(주행거리 등) 주기적 체크
+            if (frameCount % 6 === 0) updateArmorSkillBar(); // [NEW] 방어구 스킬 쿨다운 바 갱신 (초당 약 10회)
             
-            // [OPTIMIZATION] 일정 거리(550m) 이상 멀어진 적(강도 포함) 완전 제거 (메모리 해제)
-            // 단, 엘프 퀘스트 대상인 강도 두목은 퀘스트 진행을 막지 않도록 디스폰하지 않음
+            // [OPTIMIZATION] 230m 이상 멀어진 적(일반 원거리 적) 완전 제거 (메모리 해제)
+            // [MODIFIED] 강도는 일반 몹처럼 거리로 디스폰하지 않고, 로딩된 청크 여부로만 활성/비활성 처리
             for (let ri = rangedEnemies.length - 1; ri >= 0; ri--) {
                 const re = rangedEnemies[ri];
-                if (re.userData.isBanditLeader && elfQuestActive && !elfQuestDone) continue;
-                if (re.position.distanceToSquared(gameState.position) > 302500) {
+                if (re.userData.type === 'bandit') continue; // 강도는 거리 디스폰 제외 (청크 기반으로만 처리)
+                if (re.position.distanceToSquared(gameState.position) > 52900) {
                     scene.remove(re); rangedEnemies.splice(ri, 1);
                 }
             }
@@ -3374,6 +4296,12 @@
             rangedEnemies.forEach((enemy, index) => {
                 if (enemy.userData.health <= 0) return;
                 const distSq = enemy.position.distanceToSquared(gameState.position);
+
+                // 비활성 청크의 원거리 적/강도: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존, 디스폰 아님)
+                if (!isEnemyInActiveChunk(enemy)) {
+                    enemy.visible = false;
+                    return;
+                }
                 
                 // [OPTIMIZATION] AI 쓰로틀링 강화 (먼 적일수록 업데이트 덜 함)
                 if (distSq > 40000 && (frameCount + index) % 8 !== 0) return; // 200m+ 
@@ -3393,6 +4321,19 @@
 
                 const groundY = getTerrainHeight(enemy.position.x, enemy.position.z);
                 if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03; if (enemy.position.y <= groundY + 1.25) { enemy.position.y = groundY + 1.25; data.isJumping = false; data.velocityY = 0; } } else { enemy.position.y = groundY + 1.25; }
+
+                // [NEW] 용암 데미지: 일반 원거리 적과 강도는 용암에 닿으면 피해를 입음
+                if ((frameCount + index) % 4 === 0) {
+                    const reLavaHeight = getLavaHeight(enemy.position.x, enemy.position.z);
+                    if (enemy.position.y - 1.25 <= reLavaHeight + 0.2) {
+                        data.health -= 10.7; // 약 4프레임(≈0.267초)분 누적 데미지 (40/s 기준)
+                        if (data.health <= 0) {
+                            createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
+                            return;
+                        }
+                    }
+                }
+
 
                 if (now - data.lastMoveTime > 100) {
                     enemy.lookAt(playerPos.x, enemy.position.y, playerPos.z); const dist = Math.sqrt(distSq);
@@ -3477,15 +4418,28 @@
             updateVehicles(delta); updateItems(delta); updateNPCs(delta); updateFlares(delta); updateDebris(delta);
             updateBosses(delta, now, gameState.position); updateHazardZones(now);
             updateInteraction();
-            // 용암 애니메이션 (발광 강도 맥동)
-            if (frameCount % 3 === 0) {
+            // 용암 애니메이션 (발광 강도 맥동 + 지형지물처럼 위아래로 출렁임) - 플레이어 근처 300m 이내만 처리하여 화산 렉 최소화
+            lavaBobTime = now * 0.001;
+            if (frameCount % 4 === 0) {
                 const t = now * 0.001;
+                const lavaPlayerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+                const LAVA_ANIM_RADIUS_SQ = 300 * 300;
                 lavaPlanes.forEach(lp => {
-                    if (lp.userData.mat) {
-                        lp.userData.mat.emissiveIntensity = 0.6 + Math.sin(t * 2.0 + (lp.userData.timeOffset || 0)) * 0.35;
-                    }
+                    if (!lp.userData.mat) return;
+                    const dx = lp.position.x - lavaPlayerPos.x;
+                    const dz = lp.position.z - lavaPlayerPos.z;
+                    if (dx * dx + dz * dz > LAVA_ANIM_RADIUS_SQ) return; // 먼 용암은 스킵
+                    lp.userData.mat.emissiveIntensity = 0.6 + Math.sin(t * 2.0 + (lp.userData.timeOffset || 0)) * 0.35;
+                    // 용암판 전체를 살짝 위아래로 출렁여서 마치 부풀어오르는 지형처럼 보이게 함
+                    if (lp.userData.baseY === undefined) lp.userData.baseY = lp.position.y;
+                    lp.position.y = lp.userData.baseY + getLavaBobOffset(lp.position.x, lp.position.z);
                 });
+                // 용암 조명도 근처만 업데이트
+                const LIGHT_ANIM_RADIUS_SQ = 200 * 200;
                 lavaLights.forEach(ll => {
+                    const ldx = ll.light.position.x - lavaPlayerPos.x;
+                    const ldz = ll.light.position.z - lavaPlayerPos.z;
+                    if (ldx * ldx + ldz * ldz > LIGHT_ANIM_RADIUS_SQ) return;
                     ll.light.intensity = ll.baseIntensity + Math.sin(t * 3.0 + ll.light.position.x) * 1.0;
                 });
             }
@@ -3493,13 +4447,21 @@
             const currentChunkX = Math.round(gameState.position.x / CHUNK_SIZE);
             const currentChunkZ = Math.round(gameState.position.z / CHUNK_SIZE);
             const newChunkKey = `${currentChunkX},${currentChunkZ}`;
-            if (newChunkKey !== currentPlayerChunkKey) { 
-                currentPlayerChunkKey = newChunkKey; 
+            // [MODIFIED] 청크 로딩 체크: 위치가 바뀌었거나 일정 거리 이동했을 때 체크 (PRELOAD_RADIUS=180m 기준)
+            const cPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            if (!updateWorldChunks._lastCheckPos) updateWorldChunks._lastCheckPos = cPos.clone();
+            const movedSq = cPos.distanceToSquared(updateWorldChunks._lastCheckPos);
+            const CHUNK_CHECK_INTERVAL_SQ = 30 * 30; // 30m마다 재체크
+            if (newChunkKey !== currentPlayerChunkKey || movedSq > CHUNK_CHECK_INTERVAL_SQ) { 
+                if (newChunkKey !== currentPlayerChunkKey) {
+                    currentPlayerChunkKey = newChunkKey; 
+                    // 고유 청크 탐험 통계
+                    if (!exploredChunkKeys.has(newChunkKey)) { exploredChunkKeys.add(newChunkKey); gameStats.chunksExplored++; checkAchievements(); }
+                    // 방랑 상인: 청크 이동 시 0.5% 확률로 현재 청크 중앙에 생성 (청크가 작아져 경계 통과가 잦아진 만큼 확률을 절반으로 조정)
+                    if (Math.random() < 0.005) { spawnWanderingMerchant(currentChunkX, currentChunkZ); }
+                }
+                updateWorldChunks._lastCheckPos.copy(cPos);
                 updateWorldChunks(); 
-                // 고유 청크 탐험 통계
-                if (!exploredChunkKeys.has(newChunkKey)) { exploredChunkKeys.add(newChunkKey); gameStats.chunksExplored++; checkAchievements(); }
-                // 방랑 상인: 청크 이동 시 1% 확률로 현재 청크 중앙에 생성
-                if (Math.random() < 0.01) { spawnWanderingMerchant(currentChunkX, currentChunkZ); }
             }
 
             renderer.render(scene, camera);
@@ -3517,7 +4479,7 @@
             // [MODIFIED] 밤 최저 밝기를 기존 0.2에서 2배(0.4)로 상향 조정 (너무 어두워서 개선)
             let ambientBase = Math.max(0.4, lightIntensity * 0.4);
             
-            const nightVisionBonus = gameState.stats.perception * 0.005; 
+            const nightVisionBonus = (gameState.stats.perception + getEquippedArmorBonuses().perceptionBonus) * 0.005; 
             scene.ambientLight.intensity = Math.min(1.0, ambientBase + nightVisionBonus); 
             
             const dayColor = new THREE.Color(0x87CEEB); const sunsetColor = new THREE.Color(0xfd5e53); const nightColor = new THREE.Color(0x050515); const dayFog = new THREE.Color(0x87CEEB); const sunsetFog = new THREE.Color(0xfd5e53); const nightFog = new THREE.Color(0x050515);
@@ -3577,7 +4539,56 @@
         }
         function showPlayerDamageEffect() { const el = document.getElementById('player-hit-overlay'); el.style.opacity = '1'; setTimeout(() => el.style.opacity = '0', 300); }
         function showLavaDamageEffect() { const el = document.getElementById('lava-damage-overlay'); el.style.opacity = '1'; setTimeout(() => el.style.opacity = '0', 300); }
-        function handleGameOver() { if (isGameOver) return; isGameOver = true; document.exitPointerLock(); document.getElementById('game-over-screen').style.display = 'flex'; }
+        // [MODIFIED] 사망 시 게임오버 대신 스폰 지점에서 부활. 인벤토리/스탯/퀘스트/업적은 그대로 유지.
+        let isRespawning = false; // 부활 연출 중 중복 트리거 방지
+        function handleGameOver() {
+            if (isRespawning || isGameOver) return;
+            isRespawning = true;
+
+            // 차량에 타고 있었다면 강제로 내리게 함
+            if (playerInVehicle) {
+                scene.add(camera);
+                playerGun.visible = true;
+                playerInVehicle = null;
+            }
+
+            gameStats.timesDied++; checkAchievements();
+
+            // 가벼운 페널티: 보유 몰록의 10% 손실 (인벤토리/무기/스탯/레벨/퀘스트는 그대로 유지)
+            const molochPenalty = Math.floor(gameState.moloch * 0.1);
+            if (molochPenalty > 0) gameState.moloch = Math.max(0, gameState.moloch - molochPenalty);
+
+            const flash = document.getElementById('respawn-flash');
+            const msg = document.getElementById('respawn-msg');
+            flash.style.opacity = '1';
+            msg.style.opacity = '1';
+            document.exitPointerLock();
+
+            setTimeout(() => {
+                // 스폰 지점으로 이동 + 체력/스태미나 일부 회복
+                const spawnY = getTerrainHeight(SPAWN_POSITION.x, SPAWN_POSITION.z);
+                gameState.position.set(SPAWN_POSITION.x, spawnY + 1.8, SPAWN_POSITION.z);
+                gameState.velocityY = 0; gameState.onGround = true; gameState.inHighrise = false;
+                gameState.health = Math.floor(getMaxHealth() * 0.5);
+                playerStamina = Math.floor(getMaxStamina() * 0.5);
+                gameState.wasInLava = false; gameState.wasNearDeath = false;
+                camera.position.copy(gameState.position);
+
+                updateUI();
+                if (molochPenalty > 0) {
+                    showChat('시스템', `💀 사망했습니다... 스폰 지점에서 부활합니다. (몰록 ${molochPenalty} 손실)`);
+                } else {
+                    showChat('시스템', '💀 사망했습니다... 스폰 지점에서 부활합니다.');
+                }
+
+                setTimeout(() => {
+                    flash.style.opacity = '0';
+                    msg.style.opacity = '0';
+                    if (!isPaused && !isTrading && !isStatsOpen && !isEquipOpen) { document.body.requestPointerLock(); }
+                    isRespawning = false;
+                }, 400);
+            }, 900);
+        }
         
         function isPositionInView(pos) {
             camera.updateMatrixWorld(); camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
