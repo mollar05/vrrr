@@ -26,7 +26,7 @@
         /* [UI] 퀘스트 UI */
         #quest-display { position: fixed; top: 150px; right: 50px; color: #fff; text-align: right; display: none; z-index: 101; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); background: rgba(0, 0, 0, 0.4); padding: 10px; border-radius: 8px; border-right: 3px solid #00ff00; max-width: 340px; }
         #quest-title { font-size: 18px; font-weight: bold; color: #00ff00; margin-bottom: 5px; text-transform: uppercase; }
-        #quest-list { max-height: 220px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #00ff0099 transparent; }
+        #quest-list { max-height: 160px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #00ff0099 transparent; }
         #quest-list::-webkit-scrollbar { width: 5px; }
         #quest-list::-webkit-scrollbar-thumb { background: #00ff0099; border-radius: 3px; }
         .quest-entry { font-size: 16px; color: #ddd; padding: 4px 0; border-top: 1px solid rgba(255,255,255,0.15); }
@@ -116,7 +116,7 @@
         #interaction-prompt { position: absolute; bottom: 20%; left: 50%; transform: translateX(-50%); text-align: center; font-size: 16px; background: rgba(0, 0, 0, 0.7); padding: 12px 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2); display: none; }
         #interaction-key { font-weight: bold; background: #fff; color: #000; padding: 2px 6px; border-radius: 4px; margin-right: 8px; }
         .muzzle-flash { position: fixed; width: 100px; height: 100px; transform: translate(-50%, -50%); background: radial-gradient(circle, #ffff00 0%, #ff8800 30%, transparent 70%); border-radius: 50%; opacity: 0; pointer-events: none; z-index: 999; }
-        #chat-box { position: absolute; top: 250px; right: 50px; left: auto; width: 350px; max-height: 300px; background: rgba(0, 0, 0, 0.0); border: none; padding: 0; overflow-y: hidden; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
+        #chat-box { position: fixed; top: 150px; right: 50px; left: auto; width: 350px; max-height: 300px; background: rgba(0, 0, 0, 0.0); border: none; padding: 0; overflow-y: hidden; display: flex; flex-direction: column; align-items: flex-end; pointer-events: none; }
         .chat-message { margin: 5px 0; padding: 8px 12px; border-radius: 5px; background: rgba(0, 0, 0, 0.7); border: 1px solid rgba(255, 255, 255, 0.2); color: #fff; width: fit-content; animation: fadeIn 0.3s ease-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
         .npc-name { color: #00ff00; font-weight: bold; }
@@ -238,7 +238,7 @@
         .armor-skill-icon .key-label { position: absolute; top: 2px; left: 4px; font-size: 10px; color: #ffd700; }
 
         /* [NEW] 스코프 UI */
-        #scope-display-container { position: fixed; bottom: 150px; right: 50px; display: flex; flex-direction: column; align-items: flex-end; z-index: 101; pointer-events: none; }
+        #scope-display-container { position: fixed; bottom: 220px; right: 50px; display: flex; flex-direction: column; align-items: flex-end; z-index: 101; pointer-events: none; }
         .scope-row { display: flex; gap: 5px; margin-top: 5px; pointer-events: auto; }
         .scope-btn { background: rgba(0,0,0,0.6); border: 1px solid #555; color: #ccc; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 14px; transition: all 0.2s; }
         .scope-btn:hover { background: rgba(255, 255, 255, 0.2); }
@@ -428,13 +428,18 @@
         
         <!-- [NEW] 엔딩 화면 -->
         <div id="ending-screen">
-            <div id="ending-title">탈출 성공</div>
-            <div id="ending-subtitle">이 구역의 좀비를 대부분 소탕했습니다!</div>
+            <div id="ending-title">어둠의 핵심 파괴</div>
+            <div id="ending-subtitle" style="font-size:28px; color:#333; margin-bottom:10px;">이그니스를 쓰러뜨렸습니다!</div>
+            <div style="font-size:18px; color:#555; margin-bottom:30px; max-width:600px; text-align:center; line-height:1.7;">
+                어둠의 핵심이 파괴되었습니다. 좀비 감염이 멈추고,<br>이 세계에 다시 빛이 돌아오기 시작했습니다.<br>
+                생존자 레이든, 상인 가르도, 엘프 장로 실바누스, 드워프 대장장이 브롬...<br>모두가 당신의 용기를 기억할 것입니다.
+            </div>
             <div id="ending-stats">
                 <div>처치한 좀비: <span id="end-kill-count">0</span></div>
                 <div>획득한 몰록: <span id="end-moloch-count">0</span></div>
+                <div>달성 레벨: <span id="end-level">1</span></div>
             </div>
-            <div id="ending-number">Ending 10</div>
+            <div id="ending-number" style="margin-top:20px; color:#00aaff; font-size:16px;">TRUE ENDING — 어둠의 핵심</div>
             <button id="restart-button" onclick="location.reload()" style="background:#00aaff; margin-top:20px;">새로운 시작</button>
         </div>
     </div>
@@ -600,6 +605,100 @@
         let questState = { status: 1, type: 'talk_survivor', targetAmount: 1, currentAmount: 0, rewardMoloch: 10 };
         let elfQuestActive = false, elfQuestDone = false;
         let dwarfQuestActive = false, dwarfQuestDone = false;
+
+        // ═══════════════════════════════════════════════════
+        // [MAIN STORY] 어둠의 핵심 — 5챕터 메인스토리 상태머신
+        // chapter: 1~5  |  phase: 'intro'/'active'/'done'
+        // ═══════════════════════════════════════════════════
+        let mainStory = {
+            chapter: 1,
+            phase: 'intro',   // 'intro' = NPC 대화 전 / 'active' = 목표 진행 중 / 'done' = 보고 완료
+            kills: 0,         // 챕터1,3,4 좀비·보스 카운터
+        };
+        // 챕터별 정의
+        const STORY_CHAPTERS = [
+            null, // index 0 unused
+            { // 챕터 1
+                label: '🧭 제 1장: 첫 번째 시련',
+                npc: '생존자',
+                task: 'kill_zombie',
+                target: 5,
+                reward: { moloch: 300, xp: 100 },
+                intro: [
+                    "이봐... 자네 어디서 왔나? 이 폐허 속에서 살아있는 사람은 드물어.",
+                    "내 이름은 레이든. 이 구역의 생존자야. 자네도 봤겠지만... 뭔가 이상해.",
+                    "좀비가 평소보다 훨씬 많아졌어. 조직적으로 움직이는 것 같기도 하고.",
+                    "도와줄 수 있겠나? 일단 주변 좀비 5마리만 처치해 줘. 자네 실력도 볼 겸.",
+                ],
+                activeMsg: (kills, target) => `좀비를 처치해라 (${kills}/${target})`,
+                doneNpcMsg: "오! 해냈군. 역시 믿을 만한 사람이야. 그런데... 더 큰 문제가 있어.",
+                doneMsg: "좀비들의 움직임이 이상해. 상인 '가르도'를 찾아가 봐. 그가 이 세계에 대해 가장 많이 알고 있거든.",
+            },
+            { // 챕터 2
+                label: '🗺️ 제 2장: 상인의 비밀',
+                npc: '상인',
+                task: 'kill_witch',
+                target: 1,
+                reward: { moloch: 500, xp: 200 },
+                intro: [
+                    "오, 레이든이 보낸 사람이군. 나는 가르도. 이 세계를 꽤 오래 살아왔지.",
+                    "좀비들의 변화... 나도 느끼고 있어. 숲 깊은 곳에 마녀가 있거든.",
+                    "그 마녀, 저주받은 마녀 '샤드라'가 좀비들을 지휘하고 있는 거야.",
+                    "처치해 준다면 내가 가진 정보를 모두 알려주지. 단, 조심해. 그녀는 강해.",
+                ],
+                activeMsg: () => '저주받은 마녀를 처치하라 (0/1)',
+                doneNpcMsg: "마녀를 처치했다고?! 대단하군. 그렇다면... 더 깊은 이야기를 해줄게.",
+                doneMsg: "마녀는 더 큰 존재의 하수인이었어. 숲의 엘프 장로 '실바누스'를 찾아가. 그가 이 어둠의 근원을 알고 있을 거야.",
+            },
+            { // 챕터 3
+                label: '🌿 제 3장: 어둠의 그림자',
+                npc: '엘프 장로',
+                task: 'kill_necromancer',
+                target: 1,
+                reward: { moloch: 800, xp: 350 },
+                intro: [
+                    "인간이여... 가르도가 보냈군. 우리 숲도 이미 감염의 그림자가 드리웠소.",
+                    "강령술사 '모르타이'가 죽은 자들을 일으켜 군대를 만들고 있소.",
+                    "그는 어딘가에 있는 '어둠의 핵심'으로부터 힘을 받고 있소.",
+                    "모르타이를 처치하면 핵심의 위치를 알 수 있을 것이오. 부탁하오.",
+                ],
+                activeMsg: () => '강령술사 모르타이를 처치하라 (0/1)',
+                doneNpcMsg: "모르타이를 쓰러뜨렸소?! 그렇다면 핵심의 위치가 드러났을 것이오.",
+                doneMsg: "모르타이의 기억에서 단서를 얻었소. 드워프 대장장이 '브롬'을 찾아가시오. 화산 속 핵심에 접근하려면 특수 장비가 필요하오.",
+            },
+            { // 챕터 4
+                label: '⛏️ 제 4장: 강철의 의지',
+                npc: '드워프 대장장이',
+                task: 'kill_golem',
+                target: 1,
+                reward: { moloch: 1000, xp: 500 },
+                intro: [
+                    "엘프 장로님이 보내셨소? 나는 브롬이오. 이 폐허의 대장장이지.",
+                    "화산에 가려면 특수 방어구가 필요하오. 하지만 재료를 구할 수가 없소.",
+                    "산의 골렘 '크라그'가 우리 광산을 봉쇄하고 있거든. 마력에 오염된 것 같소.",
+                    "크라그를 처치해 준다면 최고의 장비를 만들어 드리리다. 어떻소?",
+                ],
+                activeMsg: () => '골렘 크라그를 처치하라 (0/1)',
+                doneNpcMsg: "크라그를 해치웠소?! 훌륭하오! 자, 약속한 대로 내 최고 작품을 드리지.",
+                doneMsg: "이제 화산에 들어갈 준비가 됐소. 생존자 레이든에게 돌아가시오. 그가 화산 진입 경로를 알고 있을 것이오.",
+            },
+            { // 챕터 5
+                label: '🔥 제 5장: 어둠의 핵심',
+                npc: '생존자',
+                task: 'kill_fire_demon',
+                target: 1,
+                reward: { moloch: 2000, xp: 1000 },
+                intro: [
+                    "드디어 돌아왔군. 자네가 해낼 줄 알았어... 이제 마지막이야.",
+                    "화산 심부에 '이그니스'가 있어. 어둠의 핵심 그 자체야.",
+                    "이그니스를 처치하지 않으면 이 세계는 끝이야. 좀비 감염도 멈추지 않아.",
+                    "자네가 이 세계의 마지막 희망이야. 가서 이그니스를 쓰러뜨려 줘.",
+                ],
+                activeMsg: () => '불의 악마 이그니스를 처치하라 (0/1)',
+                doneNpcMsg: null, // 엔딩 화면으로 대체
+                doneMsg: null,
+            },
+        ];
         
         const WEAPON_DATABASE = {
             "M416": { name: "M416", type: "AR", ammoType: "5.56mm", damage: 41, fireRate: 90, magSize: 30, bulletSpeed: 880, reloadTime: 2500, model: createMachineGunModel, effectiveRange: 60, maxRange: 450, minDamageMultiplier: 0.4 },
@@ -977,6 +1076,7 @@
                 questState: questState,
                 elfQuestActive: elfQuestActive, elfQuestDone: elfQuestDone,
                 dwarfQuestActive: dwarfQuestActive, dwarfQuestDone: dwarfQuestDone,
+                mainStory: { chapter: mainStory.chapter, phase: mainStory.phase, kills: mainStory.kills },
                 achievements: achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed })),
                 shopArmorStock: shopArmorStock
             };
@@ -1041,6 +1141,7 @@
                 if (data.questState) questState = data.questState;
                 elfQuestActive = !!data.elfQuestActive; elfQuestDone = !!data.elfQuestDone;
                 dwarfQuestActive = !!data.dwarfQuestActive; dwarfQuestDone = !!data.dwarfQuestDone;
+                if (data.mainStory) { mainStory.chapter = data.mainStory.chapter || 1; mainStory.phase = data.mainStory.phase || 'intro'; mainStory.kills = data.mainStory.kills || 0; }
                 if (Array.isArray(data.shopArmorStock)) shopArmorStock = data.shopArmorStock;
 
                 if (Array.isArray(data.achievements)) {
@@ -1403,8 +1504,18 @@
             animate(); 
             updateScopeUI(); 
             updateQuestUI(); 
-            updateEquippedArmorDisplay(); // [NEW] 착용 장비 표시 초기화 (불러오기 시 복원된 장비 반영)
-            if (loadedFromSave) { updateUI(); showChat('시스템', '📂 저장된 게임을 불러왔습니다.'); }
+            updateChatBoxPosition();
+            updateEquippedArmorDisplay();
+            if (loadedFromSave) {
+                updateUI(); 
+                showChat('시스템', '📂 저장된 게임을 불러왔습니다.');
+                const ch = STORY_CHAPTERS[mainStory.chapter];
+                if (ch) setTimeout(() => showChat('시스템', `📖 현재: ${ch.label}`), 1500);
+            } else {
+                // 신규 게임 — 스토리 시작 안내
+                setTimeout(() => showChat('시스템', '🌍 [어둠의 핵심] 스토리 모드 시작!'), 1000);
+                setTimeout(() => showChat('시스템', '📖 제 1장: 생존자 레이든에게 대화하세요. (근처에 있습니다)'), 2800);
+            }
         }
         function showError(msg) { document.getElementById('loading-screen').innerHTML = `<div class="loading-text" style="color: #ff6666;">오류</div><div style="color:#fff;margin-top:20px;">${msg}</div>`; }
         function hideLoading() { document.getElementById('loading-screen').style.display = 'none'; }
@@ -2326,11 +2437,30 @@
             else if (boss.userData.bossType === 'necromancer') gameStats.necromancerKills++;
             else if (boss.userData.bossType === 'witch') gameStats.witchKills++;
             checkAchievements();
-            // 드워프 퀘스트: 골렘 처치 시 완료
-            if (boss.userData.bossType === 'golem' && dwarfQuestActive && !dwarfQuestDone) {
-                dwarfQuestDone = true;
-                gameStats.dwarfQuestsCompleted++; checkAchievements();
-                showChat('시스템', '⛏️ [드워프 퀘스트] 골렘을 처치했습니다! 드워프 대장장이에게 돌아가세요.');
+
+            // ── 메인스토리 보스 처치 연동 ──
+            const ch = STORY_CHAPTERS[mainStory.chapter];
+            if (ch && mainStory.phase === 'active') {
+                const bossTypeMap = {
+                    'kill_witch': 'witch',
+                    'kill_necromancer': 'necromancer',
+                    'kill_golem': 'golem',
+                    'kill_fire_demon': 'fire_demon',
+                };
+                if (bossTypeMap[ch.task] === boss.userData.bossType) {
+                    mainStory.kills++;
+                    if (mainStory.kills >= ch.target) {
+                        mainStory.phase = 'report';
+                        setTimeout(() => {
+                            showChat('시스템', `🎯 목표 달성! ${ch.npc}에게 보고하세요.`);
+                            updateQuestUI();
+                            // 챕터5 불의 악마 처치 = 즉시 엔딩
+                            if (mainStory.chapter === 5) {
+                                setTimeout(() => showEndingScreen(), 3000);
+                            }
+                        }, 1500);
+                    }
+                }
             }
             createDebrisEffect(boss.position, boss.userData.originalColor, 50); scene.remove(boss); bosses.splice(index, 1); objects = objects.filter(o => o !== boss); document.getElementById('boss-container').style.display = 'none'; 
             // [NEW] 보스 처치 시 높은 확률(70%)로 방어구 드랍, 티어도 아이언 이상으로 더 좋은 편이 나오게 함
@@ -3403,135 +3533,180 @@
             bullets.push(bullet); 
         }
 
-        function interact() {
-            if (playerInVehicle) { toggleVehicle(playerInVehicle); return; }
-            if (interactableObject) { const { type } = interactableObject.userData; if (type === 'item' || type === 'weapon' || type === 'scope') { pickupItem(interactableObject); } else if (type === 'npc') { const data = interactableObject.userData; gameStats.npcTalks++; checkAchievements(); if (data.name === '상인' || data.name === '방랑 상인') { openTradeModal(); } else if (data.name === '엘프 장로') {
-                    // 엘프 장로 대화 + 퀘스트
-                    if (!data.questGiven) {
-                        showChat('엘프 장로', data.dialogue[data.dialogueIndex % data.dialogue.length]);
-                        data.dialogueIndex++;
-                        if (data.dialogueIndex >= data.dialogue.length) {
-                            data.questGiven = true;
-                            setTimeout(() => {
-                                showChat('엘프 장로', '부탁이 하나 있소. 강도들이 우리 숲 근처에서 행패를 부리고 있소. 강도 두목 하나만 처치해 준다면 사례하겠소.');
-                                setTimeout(() => { showChat('시스템', '📜 [엘프 퀘스트] 강도 두목 처치 (0/1) — 보상: 300 몰록 + 경험치 150'); elfQuestActive = true; elfQuestDone = false; updateQuestUI(); }, 1500);
-                            }, 1200);
-                        }
-                    } else if (elfQuestActive && !elfQuestDone) {
-                        showChat('엘프 장로', '강도 두목을 아직 처치하지 못했소. 조심히 다녀오시오.');
-                    } else if (elfQuestDone) {
-                        if (!data.rewardGiven) {
-                            data.rewardGiven = true; elfQuestActive = false;
-                            showChat('엘프 장로', '오! 강도 두목을 처치했군요. 숲의 정령들이 당신을 축복하리다.');
-                            addMoloch(300); gainXP(150);
-                            showChat('시스템', '🌿 엘프 퀘스트 완료! (+300 몰록, +150 XP)');
-                        } else { showChat('엘프 장로', '숲의 평화를 지켜주어 감사하오, 이방인이여.'); }
-                    } else { showChat('엘프 장로', data.dialogue[data.dialogueIndex % data.dialogue.length]); data.dialogueIndex++; }
-                } else if (data.name === '드워프 대장장이') {
-                    // 드워프 대장장이 대화 + 퀘스트
-                    if (!data.questGiven) {
-                        showChat('드워프 대장장이', data.dialogue[data.dialogueIndex % data.dialogue.length]);
-                        data.dialogueIndex++;
-                        if (data.dialogueIndex >= data.dialogue.length) {
-                            data.questGiven = true;
-                            setTimeout(() => {
-                                showChat('드워프 대장장이', '한 가지 부탁이 있소. 이 근처 산에 골렘이 나타났소. 우리 광산을 위협하고 있는데, 처치해 준다면 특별 보상을 드리겠소!');
-                                setTimeout(() => { showChat('시스템', '📜 [드워프 퀘스트] 골렘 처치 (0/1) — 보상: 500 몰록 + 경험치 200'); dwarfQuestActive = true; dwarfQuestDone = false; updateQuestUI(); }, 1500);
-                            }, 1200);
-                        }
-                    } else if (dwarfQuestActive && !dwarfQuestDone) {
-                        showChat('드워프 대장장이', '아직 골렘을 처치하지 못했소? 조심하시오, 매우 강하다오.');
-                    } else if (dwarfQuestDone) {
-                        if (!data.rewardGiven) {
-                            data.rewardGiven = true; dwarfQuestActive = false;
-                            showChat('드워프 대장장이', '골렘을 해치웠소?! 대단하군! 약속한 대로 보상을 드리겠소!');
-                            addMoloch(500); gainXP(200);
-                            createRandomLoot(gameState.position.x + 2, gameState.position.z + 2, gameState.position.y);
-                            showChat('시스템', '⛏️ 드워프 퀘스트 완료! (+500 몰록, +200 XP, 아이템 지급!)');
-                        } else { showChat('드워프 대장장이', '덕분에 광산이 평화롭소. 언제든 또 오시오!'); }
-                    } else { showChat('드워프 대장장이', data.dialogue[data.dialogueIndex % data.dialogue.length]); data.dialogueIndex++; }
-                } else if (data.name === '생존자') { const claimable = achievements.filter(ach => ach.unlocked && !ach.claimed); if (claimable.length > 0) { const ach = claimable[0]; ach.claimed = true; gameStats.achievementsClaimed++; addMoloch(ach.reward); showChat('생존자', `오! '${ach.title}' 업적을 달성했군. 여기 보상일세.`); showChat('시스템', `도전과제 보상: ${ach.reward} 몰록 획득!`); return; } 
-            
-            // [MODIFIED] 첫 번째 퀘스트 완료 및 설명 대화 추가
-            if (questState.type === 'talk_survivor' && questState.status === 1) {
-                addMoloch(questState.rewardMoloch);
-                showChat('시스템', `퀘스트 완료: 생존자와 대화 (+${questState.rewardMoloch} 몰록)`);
-                showChat('생존자', "반갑네. 빈손으로 보내긴 뭐하니 이거라도 받게.");
-                
-                // 퀘스트 상태를 잠시 대기(설명 듣는 중)로 변경
-                questState = { status: 0, type: 'hunt_zombie', targetAmount: 1, currentAmount: 0, rewardMoloch: 500 };
-                updateQuestUI(); // UI 갱신 (퀘스트 목록에서 잠시 사라짐)
-
-                // [NEW] 종족별 특징 및 보스 설명 대화 체인 (색상 및 오크 중립 설명 추가)
-                const explainDelay = 3500; // 읽을 시간을 위해 딜레이 약간 증가
-                setTimeout(() => showChat('생존자', "이 세계에서 살아남으려면 적들의 색깔과 특징을 잘 기억해야 해."), explainDelay * 0.5);
-                
-                setTimeout(() => showChat('생존자', "🧟 [좀비]는 <span style='color:#00ff00'>초록색</span> 피부를 가졌어. 느리지만 떼로 덤비면 위험하니 머리를 노리게."), explainDelay * 1.5);
-                
-                setTimeout(() => showChat('생존자', "👹 [오크]는 <span style='color:#228B22'>진한 녹색</span>이고 군락을 이뤄 살지. 다행히 <span style='color:#ffff00'>중립적</span>이라 자네가 먼저 건드리지 않으면 공격하지 않을 걸세."), explainDelay * 2.5);
-                
-                setTimeout(() => showChat('생존자', "👺 [트롤]은 <span style='color:#2F4F2F'>어두운 쑥색</span> 거구야. 맷집이 좋고 재생 능력이 있어서 화력을 집중해야만 쓰러뜨릴 수 있어."), explainDelay * 3.5);
-                
-                setTimeout(() => showChat('생존자', "🧙‍♀️ [마녀] 보스는 <span style='color:#800080'>보라색</span> 옷을 입고 있어. 순간이동을 하고 하수인을 소환하니 아주 까다롭지."), explainDelay * 4.5);
-                
-                setTimeout(() => showChat('생존자', "🔥 [불의 악마 이그니스]는 <span style='color:#ff4500'>붉게 타오르는</span> 거대한 보스야. 3단계 페이즈가 있어서 체력이 낮을수록 더 사납게 공격해!"), explainDelay * 5.5);
-                setTimeout(() => showChat('생존자', "⚔️ [골렘 크라그]는 <span style='color:#888888'>산 속</span>에 살아. 지진과 바위 투척을 쓰니 발밑을 조심하게!"), explainDelay * 6.0);
-                setTimeout(() => showChat('생존자', "💰 [강도]들은 도로변에 캠프를 치고 있어. 총기와 전술을 쓰니 일반 적보다 위험하지만 더 많은 몰록을 갖고 있지."), explainDelay * 6.5);
-                setTimeout(() => showChat('생존자', "🌿 숲에서는 가끔 엘프 군락을, ⛏️ 산에서는 드워프 광산을 발견할 수 있어. 구경해봐!"), explainDelay * 7.0);
-                
-                // 설명이 끝난 후 다음 퀘스트(좀비 사냥) 부여
+        // ─── 메인스토리 NPC 대화 헬퍼 ───────────────────────────────────────
+        function storyTalkSequence(npcName, lines, onDone) {
+            // 여러 줄의 대화를 순차적으로 출력
+            lines.forEach((line, i) => {
                 setTimeout(() => {
-                    showChat('생존자', "설명은 이쯤 하고... 자네 실력을 좀 볼까?");
-                    setTimeout(() => { 
-                        showChat('생존자', "주변에 좀비가 너무 많아. 1마리만 처리해주면 보답하지."); 
-                        questState.status = 1; // 퀘스트 활성화
-                        questState.currentAmount = 0; 
-                        updateQuestUI(); 
-                    }, 2000);
-                }, explainDelay * 8.0);
-                return;
+                    showChat(npcName, line);
+                    if (i === lines.length - 1 && onDone) setTimeout(onDone, 2000);
+                }, i * 3200);
+            });
+        }
+
+        function advanceStoryChapter() {
+            // 챕터 클리어 후 다음 챕터로 진행
+            mainStory.chapter++;
+            mainStory.phase = 'intro';
+            mainStory.kills = 0;
+            if (mainStory.chapter <= 5) {
+                const next = STORY_CHAPTERS[mainStory.chapter];
+                setTimeout(() => {
+                    showChat('시스템', `📖 ${next.label} 시작! ${next.npc}에게 대화하세요.`);
+                    updateQuestUI();
+                }, 1500);
+            }
+        }
+
+        function handleStoryNpcTalk(npcName) {
+            const ch = STORY_CHAPTERS[mainStory.chapter];
+            if (!ch || ch.npc !== npcName) return false; // 현재 챕터 NPC 아님
+
+            if (mainStory.phase === 'intro') {
+                // 첫 대화: 챕터 인트로 출력 후 임무 활성화
+                mainStory.phase = 'talking';
+                updateQuestUI();
+                storyTalkSequence(npcName, ch.intro, () => {
+                    mainStory.phase = 'active';
+                    mainStory.kills = 0;
+                    const r = ch.reward;
+                    showChat('시스템', `📜 ${ch.label} — ${typeof ch.activeMsg === 'function' ? ch.activeMsg(0, ch.target) : ch.activeMsg}`);
+                    updateQuestUI();
+                });
+                return true;
             }
 
-            if (questState.status === 0) { 
-                // 설명 듣는 도중 말을 걸었을 때
-                showChat('생존자', "내 이야기를 잘 듣고 있게나. 아주 중요한 정보야."); 
-            } else if (questState.status === 1) { showChat('생존자', `아직 부탁한 걸 다 못 끝낸 것 같군. 좀비 ${questState.targetAmount - questState.currentAmount}마리만 더 부탁해.`); } else if (questState.status === 2) { showChat('생존자', "오! 정말 대단하군. 덕분에 한시름 놓았어. 이건 약속한 보상일세."); addMoloch(questState.rewardMoloch); showChat('시스템', `퀘스트 완료 보상: ${questState.rewardMoloch} 몰록 획득!`); questState.status = 3; updateQuestUI(); } else if (questState.status === 3) { const dialogue = ["항상 주변을 조심하게.", "자네 덕분에 오늘 밤은 편히 잘 수 있겠어.", "더 필요한 게 있으면 상인을 찾아가보게.", "이 근처에서 업적을 쌓으면 내게 오게나."]; const rnd = Math.floor(Math.random() * dialogue.length); showChat('생존자', dialogue[rnd]); } } else { if (data.tutorialDialogue && data.tutorialIndex < data.tutorialDialogue.length) { showChat(data.name, data.tutorialDialogue[data.tutorialIndex]); data.tutorialIndex++; } else { const { dialogue, dialogueIndex, name } = data; showChat(name, dialogue[dialogueIndex]); interactableObject.userData.dialogueIndex = (dialogueIndex + 1) % dialogue.length; } } } else if (type === 'vehicle') { toggleVehicle(interactableObject); } }
+            if (mainStory.phase === 'active') {
+                // 아직 목표 미달성
+                const remaining = ch.target - mainStory.kills;
+                if (ch.task === 'kill_zombie') showChat(npcName, `아직 ${remaining}마리 남았어. 힘내!`);
+                else showChat(npcName, `아직 임무를 완수하지 못했소. 조심히 다녀오시오.`);
+                return true;
+            }
+
+            if (mainStory.phase === 'report') {
+                // 목표 달성 후 보고
+                mainStory.phase = 'done';
+                const r = ch.reward;
+                showChat(npcName, ch.doneNpcMsg);
+                addMoloch(r.moloch); gainXP(r.xp);
+                showChat('시스템', `✅ ${ch.label} 완료! (+${r.moloch} 몰록, +${r.xp} XP)`);
+                // 다음 챕터 힌트
+                if (ch.doneMsg) {
+                    setTimeout(() => { showChat(npcName, ch.doneMsg); }, 3500);
+                }
+                setTimeout(advanceStoryChapter, 5500);
+                return true;
+            }
+
+            return false;
+        }
+
+        function interact() {
+            if (playerInVehicle) { toggleVehicle(playerInVehicle); return; }
+            if (interactableObject) {
+                const { type } = interactableObject.userData;
+                if (type === 'item' || type === 'weapon' || type === 'scope') {
+                    pickupItem(interactableObject);
+                } else if (type === 'npc') {
+                    const data = interactableObject.userData;
+                    gameStats.npcTalks++; checkAchievements();
+
+                    // ── 상인/방랑 상인 ─────────────────────────────
+                    if (data.name === '상인' || data.name === '방랑 상인') {
+                        // 챕터2 메인스토리 처리 (상인이 챕터 NPC)
+                        if (!handleStoryNpcTalk(data.name)) {
+                            openTradeModal();
+                        } else {
+                            // 인트로 대화 완료 후에는 상점도 열 수 있음
+                            if (mainStory.phase !== 'intro' && mainStory.phase !== 'talking') {
+                                setTimeout(() => openTradeModal(), 200);
+                            }
+                        }
+                        return;
+                    }
+
+                    // ── 생존자 (레이든) ────────────────────────────
+                    if (data.name === '생존자') {
+                        // 업적 보상 먼저 처리
+                        const claimable = achievements.filter(ach => ach.unlocked && !ach.claimed);
+                        if (claimable.length > 0) {
+                            const ach = claimable[0]; ach.claimed = true;
+                            gameStats.achievementsClaimed++;
+                            addMoloch(ach.reward);
+                            showChat('생존자', `오! '${ach.title}' 업적을 달성했군. 여기 보상일세.`);
+                            showChat('시스템', `도전과제 보상: ${ach.reward} 몰록 획득!`);
+                            return;
+                        }
+                        // 메인스토리
+                        if (handleStoryNpcTalk('생존자')) return;
+                        // 스토리 완료 후 한담
+                        const idle = ["항상 주변을 경계하게.", "화산 지대는 아직도 위험해.", "자네가 있어서 든든해.", "더 필요한 게 있으면 상인을 찾아가게."];
+                        showChat('생존자', idle[Math.floor(Math.random() * idle.length)]);
+                        return;
+                    }
+
+                    // ── 엘프 장로 ──────────────────────────────────
+                    if (data.name === '엘프 장로') {
+                        if (handleStoryNpcTalk('엘프 장로')) return;
+                        // 비스토리 시 일반 대화
+                        showChat('엘프 장로', data.dialogue[data.dialogueIndex % data.dialogue.length]);
+                        data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
+                        return;
+                    }
+
+                    // ── 드워프 대장장이 ────────────────────────────
+                    if (data.name === '드워프 대장장이') {
+                        if (handleStoryNpcTalk('드워프 대장장이')) return;
+                        showChat('드워프 대장장이', data.dialogue[data.dialogueIndex % data.dialogue.length]);
+                        data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
+                        return;
+                    }
+
+                    // ── 그 외 NPC ──────────────────────────────────
+                    if (data.tutorialDialogue && data.tutorialIndex < data.tutorialDialogue.length) {
+                        showChat(data.name, data.tutorialDialogue[data.tutorialIndex]);
+                        data.tutorialIndex++;
+                    } else {
+                        const { dialogue, dialogueIndex, name } = data;
+                        showChat(name, dialogue[dialogueIndex]);
+                        interactableObject.userData.dialogueIndex = (dialogueIndex + 1) % dialogue.length;
+                    }
+                } else if (type === 'vehicle') {
+                    toggleVehicle(interactableObject);
+                }
+            }
         }
         
-        // [MODIFIED] 퀘스트 UI 업데이트 함수 수정 (talk_survivor 타입 처리 추가)
+        // [STORY] 퀘스트 UI 업데이트 함수
         function updateQuestUI() { 
             const display = document.getElementById('quest-display'); 
             const list = document.getElementById('quest-list'); 
             const entries = [];
 
-            // 메인(생존자) 퀘스트
-            if (questState.status === 1 || questState.status === 2 || questState.type === 'talk_survivor') {
-                if (questState.type === 'talk_survivor') {
-                    entries.push({ label: '🧭 메인 임무', html: '생존자와 대화하세요', ready: true });
-                } else if (questState.status === 1) {
-                    entries.push({ label: '🧭 메인 임무', html: `- 좀비 처치: <span style="color:#00ff00">${questState.currentAmount}</span> / ${questState.targetAmount}`, ready: false });
-                } else if (questState.status === 2) {
-                    entries.push({ label: '🧭 메인 임무', html: '생존자에게 돌아가 보고하세요!', ready: true });
+            // ── 메인스토리 챕터 표시 ──
+            const ch = STORY_CHAPTERS[mainStory.chapter];
+            if (ch && mainStory.chapter <= 5) {
+                if (mainStory.phase === 'intro') {
+                    // NPC와 대화 전
+                    const npcName = ch.npc;
+                    entries.push({ label: ch.label, html: `<span style="color:#aaa;font-size:13px;">${npcName}</span>에게 대화하세요`, ready: true });
+                } else if (mainStory.phase === 'active') {
+                    // 목표 진행 중
+                    const msg = typeof ch.activeMsg === 'function'
+                        ? ch.activeMsg(mainStory.kills, ch.target)
+                        : ch.activeMsg;
+                    entries.push({ label: ch.label, html: msg, ready: false });
+                } else if (mainStory.phase === 'report') {
+                    // 보스/목표 완료, NPC에게 보고
+                    entries.push({ label: ch.label, html: `<span style="color:#aaa;font-size:13px;">${ch.npc}</span>에게 보고하세요!`, ready: true });
                 }
-            }
-
-            // 엘프 사이드 퀘스트
-            if (elfQuestActive && !elfQuestDone) {
-                entries.push({ label: '🌿 엘프 퀘스트', html: '강도 두목 처치 후 장로에게 보고', ready: false });
-            } else if (elfQuestActive && elfQuestDone) {
-                entries.push({ label: '🌿 엘프 퀘스트', html: '엘프 장로에게 보고하세요!', ready: true });
-            }
-
-            // 드워프 사이드 퀘스트
-            if (dwarfQuestActive && !dwarfQuestDone) {
-                entries.push({ label: '⛏️ 드워프 퀘스트', html: '골렘(보스) 처치 후 대장장이에게 보고', ready: false });
-            } else if (dwarfQuestActive && dwarfQuestDone) {
-                entries.push({ label: '⛏️ 드워프 퀘스트', html: '드워프 대장장이에게 보고하세요!', ready: true });
             }
 
             if (entries.length === 0) {
                 display.style.display = 'none';
                 list.innerHTML = '';
+                updateChatBoxPosition();
                 return;
             }
 
@@ -3539,6 +3714,20 @@
             list.innerHTML = entries.map(en => 
                 `<div class="quest-entry"><div class="quest-entry-label">${en.label}</div><div class="${en.ready ? 'quest-ready' : ''}">${en.html}</div></div>`
             ).join('');
+            requestAnimationFrame(updateChatBoxPosition);
+        }
+
+        function updateChatBoxPosition() {
+            const questDisplay = document.getElementById('quest-display');
+            const chatBox = document.getElementById('chat-box');
+            if (!chatBox) return;
+            if (questDisplay && questDisplay.style.display !== 'none') {
+                const rect = questDisplay.getBoundingClientRect();
+                const newTop = rect.bottom + 12;
+                chatBox.style.top = newTop + 'px';
+            } else {
+                chatBox.style.top = '150px';
+            }
         }
         function toggleVehicle(vehicle, isDestroyed = false) { if (playerInVehicle) { const rightDir = new THREE.Vector3(1, 0, 0).applyQuaternion(vehicle.quaternion); const exitPos = vehicle.position.clone().add(rightDir.multiplyScalar(2.0)); const exitY = getTerrainHeight(exitPos.x, exitPos.z) + 1.8; gameState.position.set(exitPos.x, exitY, exitPos.z); const vehicleRotationY = vehicle.rotation.y; gameState.rotation.y = vehicleRotationY; gameState.rotation.x = 0; scene.add(camera); camera.position.copy(gameState.position); camera.rotation.set(gameState.rotation.x, gameState.rotation.y, 0, 'YXZ'); playerGun.visible = true; playerInVehicle = null; if (isDestroyed) { gameState.health = Math.max(0, gameState.health - 25); showChat("시스템", "차량이 파괴되었습니다! 비상 탈출합니다!"); const newPlayerPos = gameState.position.clone(); [...zombies, ...rangedEnemies].forEach(enemy => { if (enemy.userData.health > 0) { enemy.userData.lastKnownPlayerPosition.copy(newPlayerPos); enemy.userData.state = 'chase'; } }); } else { showChat('시스템', '차량에서 하차했습니다.'); } } else { playerInVehicle = vehicle; vehicle.add(camera); camera.position.set(0, 1.2, -0.5); camera.rotation.set(0, 0, 0, 'YXZ'); playerGun.visible = false; gameStats.vehiclesDriven++; checkAchievements(); showChat('시스템', `차량에 탑승했습니다.`); } updateUI(); }
         function pickupItem(item) { 
@@ -3576,7 +3765,7 @@
             else if (name === '저주받은 마녀') nameSpan = `<span style="color:#800080; font-weight:bold;">${name}:</span>`; 
             else if (name.includes('오크')) nameSpan = `<span style="color:#228B22; font-weight:bold;">${name}:</span>`; 
             else nameSpan = `<span class="npc-name">${name}:</span>`; 
-            messageDiv.innerHTML = `${nameSpan} ${message}`; chatBox.appendChild(messageDiv); chatBox.style.display = 'flex'; while (chatBox.children.length > 5) { chatBox.removeChild(chatBox.firstChild); } setTimeout(() => { if (chatBox.contains(messageDiv)) { messageDiv.style.opacity = '0'; setTimeout(() => { if (chatBox.contains(messageDiv)) chatBox.removeChild(messageDiv); if (chatBox.children.length === 0) chatBox.style.display = 'none'; }, 500); } }, 5000); }
+            messageDiv.innerHTML = `${nameSpan} ${message}`; chatBox.appendChild(messageDiv); chatBox.style.display = 'flex'; updateChatBoxPosition(); while (chatBox.children.length > 5) { chatBox.removeChild(chatBox.firstChild); } setTimeout(() => { if (chatBox.contains(messageDiv)) { messageDiv.style.opacity = '0'; setTimeout(() => { if (chatBox.contains(messageDiv)) chatBox.removeChild(messageDiv); if (chatBox.children.length === 0) chatBox.style.display = 'none'; }, 500); } }, 5000); }
         function updateInteraction() {
             if (isPointerLocked === false || playerInVehicle || isTrading || isStatsOpen || isPaused || isEquipOpen) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
             const range = 3.5; let closestObject = null; let minDistance = range; const checkableObjects = [...items, ...vehicles, ...npcs]; checkableObjects.forEach(obj => { const dist = gameState.position.distanceTo(obj.position); if (dist < minDistance) { minDistance = dist; closestObject = obj; } });
@@ -4177,11 +4366,21 @@
                 // 원거리(50m+) 처치 추적 (저격 업적)
                 const killPos = playerInVehicle ? playerInVehicle.position : gameState.position;
                 if (enemy.position.distanceTo(killPos) >= 50) { gameStats.headshotKills++; checkAchievements(); }
-                if (questState.status === 1 && questState.type === 'hunt_zombie') { 
-                    questState.currentAmount++; 
-                    if (questState.currentAmount >= questState.targetAmount) { questState.currentAmount = questState.targetAmount; questState.status = 2; showChat('시스템', '퀘스트 목표 달성! 생존자에게 돌아가세요.'); } 
-                    updateQuestUI(); 
-                } 
+
+                // ── 메인스토리 챕터1: 좀비 처치 카운트 ──
+                const ch = STORY_CHAPTERS[mainStory.chapter];
+                if (ch && ch.task === 'kill_zombie' && mainStory.phase === 'active') {
+                    mainStory.kills++;
+                    updateQuestUI();
+                    if (mainStory.kills >= ch.target) {
+                        mainStory.phase = 'report';
+                        setTimeout(() => {
+                            showChat('시스템', `🎯 목표 달성! ${ch.npc}에게 보고하세요.`);
+                            updateQuestUI();
+                        }, 800);
+                    }
+                }
+
                 gameStats.zombieKills++; 
                 if (enemy.userData.isTroll) gameStats.trollKills++;
                 else if (enemy.userData.isOrc) gameStats.orcKills++;
@@ -4247,14 +4446,12 @@
         }
 
         function showEndingScreen() {
-            // 애니메이션 루프 중지 (선택 사항, 여기선 계속 돌리되 UI만 덮음)
-            // isGameOver = true; // 게임 오버 상태로 만들어 조작 완전 차단
-            
             document.exitPointerLock();
             const screen = document.getElementById('ending-screen');
             document.getElementById('end-kill-count').textContent = gameStats.zombieKills;
             document.getElementById('end-moloch-count').textContent = gameStats.totalMolochEarned;
-            
+            const levelEl = document.getElementById('end-level');
+            if (levelEl) levelEl.textContent = gameState.level;
             screen.style.display = 'flex';
         }
         
