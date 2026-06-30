@@ -540,7 +540,8 @@
             shotsFired: 0, headshotKills: 0, meleeKills: 0, maxComboKills: 0,
             tradesCompleted: 0, itemsLooted: 0, npcTalks: 0, wanderingMerchantsMet: 0,
             elfQuestsCompleted: 0, dwarfQuestsCompleted: 0, nightsSurvived: 0,
-            chunksExplored: 0, achievementsClaimed: 0
+            chunksExplored: 0, achievementsClaimed: 0,
+            sideQuestsCompleted: 0   // 세부 퀘스트 완료 횟수
         };
 
         const achievements = [
@@ -592,6 +593,8 @@
             { id: 'allyofall', title: '모두의 동맹', desc: '엘프와 드워프 퀘스트 모두 완료', condition: () => gameStats.elfQuestsCompleted >= 1 && gameStats.dwarfQuestsCompleted >= 1, reward: 1500, unlocked: false, claimed: false },
             { id: 'wanderfan', title: '단골 떠돌이', desc: '방랑 상인 3회 조우', condition: () => gameStats.wanderingMerchantsMet >= 3, reward: 800, unlocked: false, claimed: false },
             { id: 'chatty', title: '수다쟁이', desc: 'NPC와 10회 대화', condition: () => gameStats.npcTalks >= 10, reward: 400, unlocked: false, claimed: false },
+            { id: 'sidequester', title: '의뢰 해결사', desc: '세부 퀘스트 5회 완료', condition: () => gameStats.sideQuestsCompleted >= 5, reward: 1000, unlocked: false, claimed: false },
+            { id: 'sidequester2', title: '전설의 해결사', desc: '세부 퀘스트 20회 완료', condition: () => gameStats.sideQuestsCompleted >= 20, reward: 3500, unlocked: false, claimed: false },
             
             // ─── 레벨/성장 계열 ───
             { id: 'levelup5', title: '성장하는 생존자', desc: '레벨 5 달성', condition: () => gameState.level >= 5, reward: 500, unlocked: false, claimed: false },
@@ -699,7 +702,388 @@
                 doneMsg: null,
             },
         ];
-        
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // [SIDE QUEST] 세부 퀘스트 시스템
+        // ═══════════════════════════════════════════════════════════════════════
+
+        // 현재 활성화된 세부 퀘스트 목록 (NPC별 1개씩)
+        let sideQuests = {
+            survivor: null,   // 생존자 반복 퀘스트
+            elf: null,        // 엘프 장로 연쇄 퀘스트
+            dwarf: null,      // 드워프 대장장이 연쇄 퀘스트
+            merchant: null,   // 상인 의뢰 퀘스트
+            wanderer: null,   // 방랑 상인 퀘스트
+        };
+
+        // ── 생존자 반복 퀘스트 풀 ──────────────────────────────────────────
+        const SURVIVOR_QUEST_POOL = [
+            {
+                id: 'sq_surv_zombie10', title: '좀비 소탕 (소)', icon: '🧟',
+                desc: '주변 좀비 10마리를 처치하라',
+                type: 'kill_zombie', target: 10,
+                dialogue_give: ["이 구역에 좀비가 너무 많아. 10마리만 더 처치해 줘.", "보상은 충분히 할게."],
+                dialogue_active: (k, t) => `아직 ${t - k}마리 남았어. 힘내!`,
+                dialogue_done: "역시 믿을 만한 친구야. 고마워.",
+                reward: { moloch: 400, xp: 120 },
+            },
+            {
+                id: 'sq_surv_zombie25', title: '좀비 소탕 (중)', icon: '🧟',
+                desc: '좀비 25마리를 처치하라',
+                type: 'kill_zombie', target: 25,
+                dialogue_give: ["좀비 무리가 계속 몰려오고 있어. 25마리 좀 처치해 줄 수 있겠나?"],
+                dialogue_active: (k, t) => `${t - k}마리 더 처치해야 해.`,
+                dialogue_done: "이제 좀 살 만해졌군. 정말 고맙네.",
+                reward: { moloch: 800, xp: 250 },
+            },
+            {
+                id: 'sq_surv_troll', title: '트롤 사냥', icon: '👺',
+                desc: '트롤 2마리를 처치하라',
+                type: 'kill_troll', target: 2,
+                dialogue_give: ["트롤이 나타났어. 그놈들은 맷집이 좋으니 조심해. 2마리만 쓰러뜨려 줘."],
+                dialogue_active: (k, t) => `트롤 ${t - k}마리 더 처치해야 해. 재생 능력이 있으니 연속 사격해!`,
+                dialogue_done: "트롤을 처치하다니... 대단한 실력이야.",
+                reward: { moloch: 700, xp: 200 },
+            },
+            {
+                id: 'sq_surv_bandit', title: '강도 소탕', icon: '💰',
+                desc: '강도 캠프의 강도 5명을 처치하라',
+                type: 'kill_bandit', target: 5,
+                dialogue_give: ["근처에 강도 캠프가 있어. 5명만 처치해 주면 안전해질 텐데."],
+                dialogue_active: (k, t) => `강도 ${t - k}명 더 처치해야 해.`,
+                dialogue_done: "덕분에 이 길이 안전해졌어. 고마워!",
+                reward: { moloch: 600, xp: 180 },
+            },
+            {
+                id: 'sq_surv_heal', title: '의약품 수집', icon: '💊',
+                desc: '의료키트 3개를 획득하라 (루팅)',
+                type: 'collect_medkit', target: 3,
+                dialogue_give: ["부상자가 많아. 의료키트 3개만 구해다 줄 수 있겠나? 루팅하면 나올 거야."],
+                dialogue_active: (k, t) => `의료키트 ${t - k}개 더 필요해. 건물 내부를 뒤져봐.`,
+                dialogue_done: "의료키트를 구해줬군! 덕분에 살 수 있겠어.",
+                reward: { moloch: 500, xp: 150 },
+            },
+        ];
+
+        // ── 엘프 연쇄 퀘스트 (순서대로) ──────────────────────────────────
+        const ELF_QUEST_CHAIN = [
+            {
+                id: 'sq_elf_bandit_camp', title: '숲 정화 I', icon: '🌿',
+                desc: '숲 근처 강도 두목 1명을 처치하라',
+                type: 'kill_bandit_leader', target: 1,
+                dialogue_give: ["강도 두목이 우리 신성한 나무 근처를 어슬렁거리고 있소. 처치해 주시오."],
+                dialogue_active: () => '강도 두목을 처치하라 (0/1)',
+                dialogue_done: "숲이 조용해졌소. 감사하오.",
+                reward: { moloch: 450, xp: 140, item: '5.56mm' },
+            },
+            {
+                id: 'sq_elf_zombie15', title: '숲 정화 II', icon: '🌿',
+                desc: '숲에서 좀비 15마리를 처치하라',
+                type: 'kill_zombie', target: 15,
+                dialogue_give: ["좀비들이 숲까지 밀려들고 있소. 15마리를 물리쳐 주시오."],
+                dialogue_active: (k, t) => `좀비 ${t - k}마리 더 처치해야 하오.`,
+                dialogue_done: "숲의 정령들이 당신에게 감사하오.",
+                reward: { moloch: 600, xp: 200 },
+            },
+            {
+                id: 'sq_elf_orc3', title: '숲의 공존', icon: '🌿',
+                desc: '오크 3마리를 처치하라 (도발 시 공격)',
+                type: 'kill_orc', target: 3,
+                dialogue_give: ["일부 오크가 강령술사에게 홀렸소. 오염된 오크 3마리를 처치해 주시오."],
+                dialogue_active: (k, t) => `오염된 오크 ${t - k}마리 더 처치해야 하오.`,
+                dialogue_done: "오크 원로들이 소식을 듣고 감사를 전해 왔소.",
+                reward: { moloch: 800, xp: 280 },
+            },
+            {
+                id: 'sq_elf_troll2', title: '숲 정화 III', icon: '🌿',
+                desc: '트롤 2마리를 처치하라',
+                type: 'kill_troll', target: 2,
+                dialogue_give: ["트롤이 신성한 나무 뿌리를 훼손하고 있소. 제발 막아 주시오."],
+                dialogue_active: (k, t) => `트롤 ${t - k}마리 더 처치해야 하오.`,
+                dialogue_done: "세계수가 다시 빛을 발하기 시작했소. 경이롭소.",
+                reward: { moloch: 900, xp: 320 },
+            },
+        ];
+
+        // ── 드워프 연쇄 퀘스트 (순서대로) ────────────────────────────────
+        const DWARF_QUEST_CHAIN = [
+            {
+                id: 'sq_dwarf_bandit10', title: '광산 방위 I', icon: '⛏️',
+                desc: '광산 주변 강도 10명을 처치하라',
+                type: 'kill_bandit', target: 10,
+                dialogue_give: ["강도 놈들이 광산 주변을 포위하고 있소. 10명을 소탕해 줄 수 있겠소?"],
+                dialogue_active: (k, t) => `강도 ${t - k}명 더 처치해야 하오.`,
+                dialogue_done: "광산이 다시 안전해졌소! 당신 덕분이오.",
+                reward: { moloch: 650, xp: 200 },
+            },
+            {
+                id: 'sq_dwarf_zombie20', title: '광산 방위 II', icon: '⛏️',
+                desc: '좀비 20마리를 처치하라',
+                type: 'kill_zombie', target: 20,
+                dialogue_give: ["지하에서 좀비가 올라오고 있소. 20마리를 처치해 주시오."],
+                dialogue_active: (k, t) => `좀비 ${t - k}마리 더 처치해야 하오.`,
+                dialogue_done: "광부들이 안심했소. 정말 감사하오.",
+                reward: { moloch: 750, xp: 240 },
+            },
+            {
+                id: 'sq_dwarf_troll3', title: '철의 의지', icon: '⛏️',
+                desc: '트롤 3마리를 처치하라',
+                type: 'kill_troll', target: 3,
+                dialogue_give: ["트롤 3마리가 광산 출구를 막고 있소. 부탁드리오."],
+                dialogue_active: (k, t) => `트롤 ${t - k}마리 더 처치해야 하오.`,
+                dialogue_done: "이 빚은 반드시 갚겠소. 여기, 내 최고 작품일세.",
+                reward: { moloch: 1000, xp: 350, item: 'armor' },
+            },
+            {
+                id: 'sq_dwarf_bandit_leader2', title: '두목 사냥', icon: '⛏️',
+                desc: '강도 두목 2명을 처치하라',
+                type: 'kill_bandit_leader', target: 2,
+                dialogue_give: ["강도 두목 2명이 광산 지도를 훔쳐갔소. 처치하고 오시오."],
+                dialogue_active: (k, t) => `강도 두목 ${t - k}명 더 처치해야 하오.`,
+                dialogue_done: "지도를 되찾았소! 당신은 드워프 명예 시민이오.",
+                reward: { moloch: 1200, xp: 400 },
+            },
+        ];
+
+        // ── 상인 의뢰 퀘스트 풀 ──────────────────────────────────────────
+        const MERCHANT_QUEST_POOL = [
+            {
+                id: 'sq_mer_ammo556', title: '탄약 납품', icon: '🔫',
+                desc: '5.56mm 탄약 50발을 납품하라',
+                type: 'deliver_ammo', ammoType: '5.56mm', target: 50,
+                dialogue_give: ["재고가 떨어졌어. 5.56mm 탄약 50발을 납품해 주면 넉넉히 사지."],
+                dialogue_active: (k, t) => `5.56mm 탄약 ${t - k}발 더 필요해.`,
+                dialogue_done: "딱 맞게 왔군. 여기 약속한 몰록이야.",
+                reward: { moloch: 350, xp: 80 },
+            },
+            {
+                id: 'sq_mer_ammo762', title: '탄약 납품', icon: '🔫',
+                desc: '7.62mm 탄약 50발을 납품하라',
+                type: 'deliver_ammo', ammoType: '7.62mm', target: 50,
+                dialogue_give: ["7.62mm 탄약이 동났어. 50발만 구해다 줄 수 있겠나?"],
+                dialogue_active: (k, t) => `7.62mm 탄약 ${t - k}발 더 필요해.`,
+                dialogue_done: "고마워. 장사가 잘 될 것 같군.",
+                reward: { moloch: 350, xp: 80 },
+            },
+            {
+                id: 'sq_mer_bandit5', title: '현상금 의뢰', icon: '💀',
+                desc: '강도 5명을 처치하라',
+                type: 'kill_bandit', target: 5,
+                dialogue_give: ["강도들이 내 무역로를 막고 있어. 5명만 처치해 주면 사례하지."],
+                dialogue_active: (k, t) => `강도 ${t - k}명 더 처치해야 해.`,
+                dialogue_done: "이제 물건을 안전하게 운반할 수 있겠어. 고마워.",
+                reward: { moloch: 550, xp: 160 },
+            },
+            {
+                id: 'sq_mer_zombie15', title: '소탕 의뢰', icon: '🧟',
+                desc: '좀비 15마리를 처치하라',
+                type: 'kill_zombie', target: 15,
+                dialogue_give: ["이 구역 좀비들 좀 어떻게 해줄 수 있겠나? 15마리면 충분해."],
+                dialogue_active: (k, t) => `좀비 ${t - k}마리 더 처치해야 해.`,
+                dialogue_done: "쾌적해졌군. 덕분에 장사가 잘 될 것 같아.",
+                reward: { moloch: 500, xp: 140 },
+            },
+        ];
+
+        // ── 방랑 상인 특별 퀘스트 풀 ──────────────────────────────────────
+        const WANDERER_QUEST_POOL = [
+            {
+                id: 'sq_wand_zombie5', title: '빠른 의뢰', icon: '⚡',
+                desc: '좀비 5마리를 즉시 처치하라',
+                type: 'kill_zombie', target: 5,
+                dialogue_give: ["나 잠깐 부탁 하나 해도 될까? 5마리만 해치워 주면 특별 가격에 물건 팔지."],
+                dialogue_active: (k, t) => `좀비 ${t - k}마리 더 처치해야 해.`,
+                dialogue_done: "빠르군! 약속한 대로 특별 가격이야.",
+                reward: { moloch: 300, xp: 80 },
+            },
+            {
+                id: 'sq_wand_bandit3', title: '경호 의뢰', icon: '🛡️',
+                desc: '강도 3명을 처치하라',
+                type: 'kill_bandit', target: 3,
+                dialogue_give: ["강도 놈들이 날 계속 따라다녀. 3명만 처치해 줄 수 있어?"],
+                dialogue_active: (k, t) => `강도 ${t - k}명 더 처치해야 해.`,
+                dialogue_done: "이제 발 뻗고 잘 수 있겠어! 고마워.",
+                reward: { moloch: 400, xp: 110 },
+            },
+            {
+                id: 'sq_wand_troll1', title: '특급 의뢰', icon: '💎',
+                desc: '트롤 1마리를 처치하라',
+                type: 'kill_troll', target: 1,
+                dialogue_give: ["트롤 때문에 길이 막혀서 큰일이야. 한 마리만 처치해 줘. 두둑이 사례할게."],
+                dialogue_active: () => '트롤 1마리를 처치하라',
+                dialogue_done: "대단해! 정말 믿기 힘드네. 여기 특별 보상이야.",
+                reward: { moloch: 600, xp: 180 },
+            },
+        ];
+
+        // ── 세부 퀘스트 진행 카운터 ───────────────────────────────────────
+        let sqKills = {
+            zombie: 0, troll: 0, bandit: 0, banditLeader: 0, orc: 0,
+            medkits: 0,
+        };
+        let elfChainIndex = 0;    // 엘프 연쇄 다음 인덱스
+        let dwarfChainIndex = 0;  // 드워프 연쇄 다음 인덱스
+
+        // ── 세부 퀘스트 핵심 함수들 ───────────────────────────────────────
+        function getSideQuestLabel(q) {
+            if (!q) return '';
+            const total = q.target;
+            let cur = 0;
+            if (q.type === 'kill_zombie') cur = sqKills.zombie;
+            else if (q.type === 'kill_troll') cur = sqKills.troll;
+            else if (q.type === 'kill_bandit') cur = sqKills.bandit;
+            else if (q.type === 'kill_bandit_leader') cur = sqKills.banditLeader;
+            else if (q.type === 'kill_orc') cur = sqKills.orc;
+            else if (q.type === 'collect_medkit') cur = sqKills.medkits;
+            else if (q.type === 'deliver_ammo') cur = Math.min(gameState.ammoInventory[q.ammoType] || 0, total);
+            cur = Math.min(cur, total);
+            return `${q.icon} [${q.title}] ${typeof q.dialogue_active === 'function' ? q.dialogue_active(cur, total) : q.dialogue_active}`;
+        }
+
+        function isSideQuestComplete(q) {
+            if (!q || q.status === 'done') return false;
+            if (q.status === 'report') return true;
+            const t = q.target;
+            if (q.type === 'kill_zombie') return sqKills.zombie >= t;
+            if (q.type === 'kill_troll') return sqKills.troll >= t;
+            if (q.type === 'kill_bandit') return sqKills.bandit >= t;
+            if (q.type === 'kill_bandit_leader') return sqKills.banditLeader >= t;
+            if (q.type === 'kill_orc') return sqKills.orc >= t;
+            if (q.type === 'collect_medkit') return sqKills.medkits >= t;
+            if (q.type === 'deliver_ammo') return (gameState.ammoInventory[q.ammoType] || 0) >= t;
+            return false;
+        }
+
+        function completeSideQuest(slot, q) {
+            // 보상 지급
+            addMoloch(q.reward.moloch);
+            gainXP(q.reward.xp);
+            gameStats.sideQuestsCompleted++;
+            let rewardMsg = `+${q.reward.moloch} 몰록, +${q.reward.xp} XP`;
+            // 특별 아이템 보상
+            if (q.reward.item === 'armor') {
+                const piece = generateArmorPiece(null, rollBossArmorTier());
+                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) },
+                    gameState.position.x + 2, gameState.position.y, gameState.position.z + 2);
+                rewardMsg += ', 방어구 지급!';
+            } else if (q.reward.item) {
+                const amt = 50;
+                gameState.ammoInventory[q.reward.item] = (gameState.ammoInventory[q.reward.item] || 0) + amt;
+                rewardMsg += `, ${q.reward.item} ${amt}발 지급!`;
+            }
+            showChat('시스템', `✅ [세부 퀘스트] ${q.icon} ${q.title} 완료! (${rewardMsg})`);
+            sideQuests[slot] = null;
+            // 카운터 리셋 (이 퀘스트에 쓰인 것만)
+            resetSqCounter(q.type);
+            checkAchievements();
+            updateQuestUI();
+        }
+
+        function resetSqCounter(type) {
+            if (type === 'kill_zombie') sqKills.zombie = 0;
+            else if (type === 'kill_troll') sqKills.troll = 0;
+            else if (type === 'kill_bandit') sqKills.bandit = 0;
+            else if (type === 'kill_bandit_leader') sqKills.banditLeader = 0;
+            else if (type === 'kill_orc') sqKills.orc = 0;
+            else if (type === 'collect_medkit') sqKills.medkits = 0;
+            // deliver_ammo는 인벤토리에서 차감
+        }
+
+        function giveSideQuest(slot, questDef, npcName) {
+            // 카운터 초기화 후 퀘스트 할당
+            resetSqCounter(questDef.type);
+            sideQuests[slot] = { ...questDef, status: 'active', startedAt: Date.now() };
+            for (const line of questDef.dialogue_give) showChat(npcName, line);
+            setTimeout(() => {
+                showChat('시스템', `📋 [세부 퀘스트] ${questDef.icon} ${questDef.title} — ${questDef.desc}`);
+                updateQuestUI();
+            }, questDef.dialogue_give.length * 3000);
+        }
+
+        function tryReportSideQuest(slot, npcName) {
+            const q = sideQuests[slot];
+            if (!q) return false;
+            if (q.status === 'active' && isSideQuestComplete(q)) {
+                q.status = 'report';
+            }
+            if (q.status === 'report') {
+                showChat(npcName, q.dialogue_done);
+                // 탄약 납품: 실제 차감
+                if (q.type === 'deliver_ammo') {
+                    gameState.ammoInventory[q.ammoType] = Math.max(0, (gameState.ammoInventory[q.ammoType] || 0) - q.target);
+                    updateUI();
+                }
+                completeSideQuest(slot, q);
+                return true;
+            }
+            if (q.status === 'active') {
+                const hint = typeof q.dialogue_active === 'function'
+                    ? q.dialogue_active(getSquidCount(q), q.target)
+                    : q.dialogue_active;
+                showChat(npcName, hint);
+                return true;
+            }
+            return false;
+        }
+
+        function getSquidCount(q) {
+            if (q.type === 'kill_zombie') return sqKills.zombie;
+            if (q.type === 'kill_troll') return sqKills.troll;
+            if (q.type === 'kill_bandit') return sqKills.bandit;
+            if (q.type === 'kill_bandit_leader') return sqKills.banditLeader;
+            if (q.type === 'kill_orc') return sqKills.orc;
+            if (q.type === 'collect_medkit') return sqKills.medkits;
+            if (q.type === 'deliver_ammo') return Math.min(gameState.ammoInventory[q.ammoType] || 0, q.target);
+            return 0;
+        }
+
+        // 퀘스트 가능 여부 체크 + 랜덤 선택
+        function pickRandom(pool) { return pool[Math.floor(Math.random() * pool.length)]; }
+
+        // 세부 퀘스트가 특정 타입 킬에 반응하도록 처리
+        function onSqKill(killType) {
+            // sqKills 카운터 증가
+            if (killType === 'zombie') sqKills.zombie++;
+            else if (killType === 'troll') sqKills.troll++;
+            else if (killType === 'bandit') sqKills.bandit++;
+            else if (killType === 'banditLeader') { sqKills.bandit++; sqKills.banditLeader++; }
+            else if (killType === 'orc') sqKills.orc++;
+
+            // 활성 퀘스트 중 완료 조건 확인 후 UI 갱신
+            let anyDone = false;
+            for (const [slot, q] of Object.entries(sideQuests)) {
+                if (!q || q.status !== 'active') continue;
+                if (isSideQuestComplete(q)) {
+                    q.status = 'report';
+                    const npcName = slotToNpcName(slot);
+                    showChat('시스템', `🎯 [세부 퀘스트] ${q.icon} ${q.title} 목표 달성! ${npcName}에게 보고하세요.`);
+                    anyDone = true;
+                }
+            }
+            if (anyDone) updateQuestUI();
+        }
+
+        function slotToNpcName(slot) {
+            if (slot === 'survivor') return '생존자';
+            if (slot === 'elf') return '엘프 장로';
+            if (slot === 'dwarf') return '드워프 대장장이';
+            if (slot === 'merchant') return '상인';
+            if (slot === 'wanderer') return '방랑 상인';
+            return 'NPC';
+        }
+
+        function onMedkitPickup() {
+            sqKills.medkits++;
+            for (const [slot, q] of Object.entries(sideQuests)) {
+                if (!q || q.status !== 'active' || q.type !== 'collect_medkit') continue;
+                if (isSideQuestComplete(q)) {
+                    q.status = 'report';
+                    showChat('시스템', `🎯 [세부 퀘스트] ${q.icon} ${q.title} 완료! 생존자에게 보고하세요.`);
+                    updateQuestUI();
+                }
+            }
+        }
+
         const WEAPON_DATABASE = {
             "M416": { name: "M416", type: "AR", ammoType: "5.56mm", damage: 41, fireRate: 90, magSize: 30, bulletSpeed: 880, reloadTime: 2500, model: createMachineGunModel, effectiveRange: 60, maxRange: 450, minDamageMultiplier: 0.4 },
             "AKM": { name: "AKM", type: "AR", ammoType: "7.62mm", damage: 47, fireRate: 100, magSize: 30, bulletSpeed: 715, reloadTime: 2800, model: createMachineGunModel, effectiveRange: 70, maxRange: 380, minDamageMultiplier: 0.4 },
@@ -1077,6 +1461,7 @@
                 elfQuestActive: elfQuestActive, elfQuestDone: elfQuestDone,
                 dwarfQuestActive: dwarfQuestActive, dwarfQuestDone: dwarfQuestDone,
                 mainStory: { chapter: mainStory.chapter, phase: mainStory.phase, kills: mainStory.kills },
+                sideQuests: sideQuests, sqKills: sqKills, elfChainIndex: elfChainIndex, dwarfChainIndex: dwarfChainIndex,
                 achievements: achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed })),
                 shopArmorStock: shopArmorStock
             };
@@ -1142,6 +1527,10 @@
                 elfQuestActive = !!data.elfQuestActive; elfQuestDone = !!data.elfQuestDone;
                 dwarfQuestActive = !!data.dwarfQuestActive; dwarfQuestDone = !!data.dwarfQuestDone;
                 if (data.mainStory) { mainStory.chapter = data.mainStory.chapter || 1; mainStory.phase = data.mainStory.phase || 'intro'; mainStory.kills = data.mainStory.kills || 0; }
+                if (data.sideQuests) sideQuests = data.sideQuests;
+                if (data.sqKills) sqKills = data.sqKills;
+                elfChainIndex = data.elfChainIndex || 0;
+                dwarfChainIndex = data.dwarfChainIndex || 0;
                 if (Array.isArray(data.shopArmorStock)) shopArmorStock = data.shopArmorStock;
 
                 if (Array.isArray(data.achievements)) {
@@ -3613,9 +4002,21 @@
                     gameStats.npcTalks++; checkAchievements();
 
                     // ── 상인/방랑 상인 ─────────────────────────────
-                    if (data.name === '상인' || data.name === '방랑 상인') {
+                    if (data.name === '상인') {
                         // 챕터2 메인스토리 처리 (상인이 챕터 NPC)
                         if (!handleStoryNpcTalk(data.name)) {
+                            // 세부 퀘스트: 먼저 보고 가능한지 체크
+                            if (tryReportSideQuest('merchant', '상인')) return;
+                            // 진행 중인 퀘스트 있으면 힌트
+                            if (sideQuests.merchant && sideQuests.merchant.status === 'active') {
+                                showChat('상인', getSquidCount(sideQuests.merchant) >= 0 ? sideQuests.merchant.dialogue_active(getSquidCount(sideQuests.merchant), sideQuests.merchant.target) : '');
+                                return;
+                            }
+                            // 30% 확률로 새 의뢰 제공, 아니면 상점
+                            if (!sideQuests.merchant && Math.random() < 0.5) {
+                                giveSideQuest('merchant', pickRandom(MERCHANT_QUEST_POOL), '상인');
+                                return;
+                            }
                             openTradeModal();
                         } else {
                             // 인트로 대화 완료 후에는 상점도 열 수 있음
@@ -3623,6 +4024,22 @@
                                 setTimeout(() => openTradeModal(), 200);
                             }
                         }
+                        return;
+                    }
+
+                    // ── 방랑 상인 (특별 퀘스트 전용) ────────────────
+                    if (data.name === '방랑 상인') {
+                        if (tryReportSideQuest('wanderer', '방랑 상인')) return;
+                        if (sideQuests.wanderer && sideQuests.wanderer.status === 'active') {
+                            const q = sideQuests.wanderer;
+                            showChat('방랑 상인', typeof q.dialogue_active === 'function' ? q.dialogue_active(getSquidCount(q), q.target) : q.dialogue_active);
+                            return;
+                        }
+                        if (!sideQuests.wanderer && Math.random() < 0.6) {
+                            giveSideQuest('wanderer', pickRandom(WANDERER_QUEST_POOL), '방랑 상인');
+                            return;
+                        }
+                        openTradeModal();
                         return;
                     }
 
@@ -3640,6 +4057,18 @@
                         }
                         // 메인스토리
                         if (handleStoryNpcTalk('생존자')) return;
+                        // 세부 퀘스트: 보고 가능한지 체크
+                        if (tryReportSideQuest('survivor', '생존자')) return;
+                        if (sideQuests.survivor && sideQuests.survivor.status === 'active') {
+                            const q = sideQuests.survivor;
+                            showChat('생존자', typeof q.dialogue_active === 'function' ? q.dialogue_active(getSquidCount(q), q.target) : q.dialogue_active);
+                            return;
+                        }
+                        // 새 퀘스트 제공 (메인스토리 완료 후에만, 60% 확률)
+                        if (!sideQuests.survivor && mainStory.chapter > 1 && Math.random() < 0.6) {
+                            giveSideQuest('survivor', pickRandom(SURVIVOR_QUEST_POOL), '생존자');
+                            return;
+                        }
                         // 스토리 완료 후 한담
                         const idle = ["항상 주변을 경계하게.", "화산 지대는 아직도 위험해.", "자네가 있어서 든든해.", "더 필요한 게 있으면 상인을 찾아가게."];
                         showChat('생존자', idle[Math.floor(Math.random() * idle.length)]);
@@ -3649,6 +4078,21 @@
                     // ── 엘프 장로 ──────────────────────────────────
                     if (data.name === '엘프 장로') {
                         if (handleStoryNpcTalk('엘프 장로')) return;
+                        // 세부 퀘스트(연쇄): 보고 가능한지 체크
+                        if (tryReportSideQuest('elf', '엘프 장로')) {
+                            elfChainIndex++; // 다음 연쇄로 진행
+                            return;
+                        }
+                        if (sideQuests.elf && sideQuests.elf.status === 'active') {
+                            const q = sideQuests.elf;
+                            showChat('엘프 장로', typeof q.dialogue_active === 'function' ? q.dialogue_active(getSquidCount(q), q.target) : q.dialogue_active);
+                            return;
+                        }
+                        // 메인스토리 챕터3 완료 후 연쇄 퀘스트 시작
+                        if (!sideQuests.elf && mainStory.chapter > 3 && elfChainIndex < ELF_QUEST_CHAIN.length) {
+                            giveSideQuest('elf', ELF_QUEST_CHAIN[elfChainIndex], '엘프 장로');
+                            return;
+                        }
                         // 비스토리 시 일반 대화
                         showChat('엘프 장로', data.dialogue[data.dialogueIndex % data.dialogue.length]);
                         data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
@@ -3658,6 +4102,20 @@
                     // ── 드워프 대장장이 ────────────────────────────
                     if (data.name === '드워프 대장장이') {
                         if (handleStoryNpcTalk('드워프 대장장이')) return;
+                        if (tryReportSideQuest('dwarf', '드워프 대장장이')) {
+                            dwarfChainIndex++;
+                            return;
+                        }
+                        if (sideQuests.dwarf && sideQuests.dwarf.status === 'active') {
+                            const q = sideQuests.dwarf;
+                            showChat('드워프 대장장이', typeof q.dialogue_active === 'function' ? q.dialogue_active(getSquidCount(q), q.target) : q.dialogue_active);
+                            return;
+                        }
+                        // 메인스토리 챕터4 완료 후 연쇄 퀘스트 시작
+                        if (!sideQuests.dwarf && mainStory.chapter > 4 && dwarfChainIndex < DWARF_QUEST_CHAIN.length) {
+                            giveSideQuest('dwarf', DWARF_QUEST_CHAIN[dwarfChainIndex], '드워프 대장장이');
+                            return;
+                        }
                         showChat('드워프 대장장이', data.dialogue[data.dialogueIndex % data.dialogue.length]);
                         data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
                         return;
@@ -3700,6 +4158,19 @@
                 } else if (mainStory.phase === 'report') {
                     // 보스/목표 완료, NPC에게 보고
                     entries.push({ label: ch.label, html: `<span style="color:#aaa;font-size:13px;">${ch.npc}</span>에게 보고하세요!`, ready: true });
+                }
+            }
+
+            // ── 세부 퀘스트 표시 ──
+            for (const [slot, q] of Object.entries(sideQuests)) {
+                if (!q) continue;
+                const npcName = slotToNpcName(slot);
+                if (q.status === 'report') {
+                    entries.push({ label: `${q.icon} ${q.title}`, html: `<span style="color:#aaa;font-size:13px;">${npcName}</span>에게 보고하세요!`, ready: true });
+                } else {
+                    const cur = getSquidCount(q);
+                    const msg = typeof q.dialogue_active === 'function' ? q.dialogue_active(cur, q.target) : q.dialogue_active;
+                    entries.push({ label: `${q.icon} ${q.title}`, html: `${msg} <span style="color:#888;font-size:11px;">(${Math.min(cur, q.target)}/${q.target})</span>`, ready: false });
                 }
             }
 
@@ -3752,7 +4223,7 @@
                 const enchantTxt = data.armorData.enchantId ? ` <span style="color:#ffd700">[인첸트 있음]</span>` : '';
                 showChat('시스템', `<span style="color:#${tier.color.toString(16).padStart(6,'0')}; font-weight:bold;">${getArmorPieceLabel(data.armorData)}</span>을(를) 가방에 보관했습니다.${enchantTxt} (E키로 장착)`);
             } else if (data.name === '탄약') { if (gameState.ammoInventory.hasOwnProperty(data.subtype)) { gameState.ammoInventory[data.subtype] += data.amount; showChat('시스템', `<span class="item-name">${data.subtype}</span> ${data.amount}발을 획득했습니다.`); } } 
-            else if (data.name === '의료키트') { gameState.health = Math.min(getMaxHealth(), gameState.health + 500); showChat('시스템', `체력이 회복되었습니다!`); } 
+            else if (data.name === '의료키트') { gameState.health = Math.min(getMaxHealth(), gameState.health + 500); showChat('시스템', `체력이 회복되었습니다!`); onMedkitPickup(); } 
             else if (data.name === '음식') { playerStamina = Math.min(getMaxStamina(), playerStamina + 50); showChat('시스템', `<span class="item-name">음식</span>으로 스태미나를 회복했습니다!`); } 
             else if (data.name === '에너지드링크') { playerStamina = Math.min(getMaxStamina(), playerStamina + 40); showChat('시스템', `<span class="item-name" style="color:#00ffff">에너지드링크</span>를 마셔 활력을 되찾았습니다!`); } 
             scene.remove(item); items = items.filter(i => i !== item); updateUI(); 
@@ -3982,7 +4453,7 @@
                                         showChat('시스템', `로드킬! (${enemy.userData.name || '적'} 처치)`); 
                                         createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); 
                                         addMoloch(isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20); 
-                                        if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; checkAchievements(); }
+                                        if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; onSqKill(enemy.userData.isBanditLeader ? 'banditLeader' : 'bandit'); checkAchievements(); }
                                         if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) { elfQuestDone = true; gameStats.elfQuestsCompleted++; checkAchievements(); showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.'); }
                                         // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
                                         tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
@@ -4265,7 +4736,7 @@
                             const molochReward = isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20;
                             const xpReward = isBandit ? (enemy.userData.isBanditLeader ? 100 : 40) : 30;
                             addMoloch(molochReward); gainXP(xpReward);
-                            if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; checkAchievements(); }
+                            if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; onSqKill(enemy.userData.isBanditLeader ? 'banditLeader' : 'bandit'); checkAchievements(); }
                             // 엘프 퀘스트: 강도 두목 처치 시 완료
                             if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) {
                                 elfQuestDone = true;
@@ -4382,10 +4853,11 @@
                 }
 
                 gameStats.zombieKills++; 
-                if (enemy.userData.isTroll) gameStats.trollKills++;
-                else if (enemy.userData.isOrc) gameStats.orcKills++;
+                if (enemy.userData.isTroll) { gameStats.trollKills++; onSqKill('troll'); }
+                else if (enemy.userData.isOrc) { gameStats.orcKills++; onSqKill('orc'); }
                 else if (enemy.userData.isElfVillager) gameStats.elfVillagerKills++;
                 else if (enemy.userData.isDwarfVillager) gameStats.dwarfVillagerKills++;
+                else { onSqKill('zombie'); }
                 checkAchievements(); 
                 
                 // [NEW] 1000킬 달성 시 엔딩 트리거
