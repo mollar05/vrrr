@@ -525,6 +525,12 @@
         const BULLET_CHECK_DISTANCE_SQ = 50 * 50;
         const ACTIVE_RADIUS = 230;
         const ACTIVE_RADIUS_SQ = ACTIVE_RADIUS * ACTIVE_RADIUS;
+        // [PERF] 오브젝트 타입별 거리 컷오프
+        const NPC_ACTIVE_SQ       = 80 * 80;   // NPC AI·레이블: 80m 밖 정지
+        const HAZARD_VISIBLE_SQ   = 120 * 120; // 위험 구역 opacity 애니메이션
+        const DEBRIS_VISIBLE_SQ   = 60 * 60;   // 파편 파티클 렌더링
+        const LABEL_VISIBLE_SQ    = 50 * 50;   // 이름 레이블 표시
+        const VEHICLE_ACTIVE_SQ   = 150 * 150; // 차량 물리/충돌 (기존 230→150)
         const SAFE_ZONE_RADIUS = 200; 
         const LAVA_LEVEL = 5.0; 
         const SPAWN_POSITION = new THREE.Vector3(0, 0, 0); // [NEW] 부활 지점 (월드 원점, 세이프존 중심과 동일)
@@ -1962,6 +1968,18 @@
         const FREEZE_CHUNK_DISTANCE = 6; // [MODIFIED] 청크 크기가 100m로 절반이 된 만큼 동일한 실거리(약 600m)를 유지하도록 6으로 조정
         let frozenChunks = new Set();
 
+        // [PERF] 지면/구조물 레이캐스트용 "활성 구조물" 캐시.
+        // structures 배열은 청크가 쌓일수록 무한히 커지지만, 실제로 레이캐스트가 필요한 건
+        // 플레이어 근처(언프로즌)인 것뿐이다. freeze 상태가 바뀔 때만 캐시를 재계산해서
+        // 매 프레임 O(전체 구조물 수) 레이캐스트 비용을 O(활성 구조물 수)로 줄인다.
+        let activeStructuresCache = [];
+        let activeStructuresDirty = true;
+
+        function rebuildActiveStructuresCache() {
+            activeStructuresCache = structures.filter(s => !s.userData.isFrozen);
+            activeStructuresDirty = false;
+        }
+
         function setChunkFrozen(chunkKey, frozen) {
             const objs = chunkStaticObjects.get(chunkKey);
             if (!objs) return;
@@ -1972,6 +1990,7 @@
                 if (im && !seenMeshes.has(im)) { seenMeshes.add(im); im.visible = !frozen; }
                 else if (!im) { proxy.visible = !frozen; } // instancedMesh가 아닌 단독 오브젝트(세계수, 포탈 등)
             }
+            activeStructuresDirty = true; // 구조물 활성 상태가 바뀜 -> 캐시 갱신 필요
         }
 
         function updateChunkFreezing() {
@@ -2022,7 +2041,7 @@
                     const distToChunk = Math.sqrt(dx * dx + dz * dz);
                     if (distToChunk > PRELOAD_RADIUS + CHUNK_SIZE * 0.5) continue; // 반경 밖 청크 스킵
                     const chunkKey = `${x},${z}`; 
-                    if (!generatedChunks.has(chunkKey)) { generateChunk(x, z); generatedChunks.add(chunkKey); } 
+                    if (!generatedChunks.has(chunkKey)) { generateChunk(x, z); generatedChunks.add(chunkKey); activeStructuresDirty = true; } 
                 } 
             } 
             updateChunkFreezing(); 
@@ -2343,7 +2362,7 @@
                 lava.rotation.x = -Math.PI / 2; 
                 lava.position.set(chunkOriginX, 0, chunkOriginZ); 
                 lava.userData = { type: 'lava', isSteppable: true, mat: lavaMat, timeOffset: Math.random() * 100 };
-                scene.add(lava); lavaPlanes.push(lava); objects.push(lava);
+                scene.add(lava); lavaPlanes.push(lava); objects.push(lava); structures.push(lava);
                 registerChunkObject(chunkKey, lava);
                 
                 // 용암 조명: 화산 중심부에 강한 포인트 라이트
@@ -2810,9 +2829,20 @@
             const geometry = new THREE.CylinderGeometry(radius, radius, 0.2, 32); const material = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3 }); const zone = new THREE.Mesh(geometry, material); const groundY = getTerrainHeight(x, z); zone.position.set(x, groundY + 0.1, z); scene.add(zone); const hazard = { mesh: zone, expiry: Date.now() + duration, damage: damage, radius: radius, triggered: false }; hazardZones.push(hazard);
         }
         function updateHazardZones(now) {
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             for (let i = hazardZones.length - 1; i >= 0; i--) {
                 const zone = hazardZones[i]; const remaining = zone.expiry - now;
-                if (remaining > 0) { zone.mesh.material.opacity = 0.3 + Math.sin(now * 0.01) * 0.2; } else { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const distSq = zone.mesh.position.distanceToSquared(playerPos); createDebrisEffect(zone.mesh.position, new THREE.Color(0xff4500), 20); if (distSq < zone.radius * zone.radius) { attackPlayer(zone.damage); showChat('시스템', '마법 폭발에 휘말렸습니다!'); } scene.remove(zone.mesh); hazardZones.splice(i, 1); }
+                const distSq = zone.mesh.position.distanceToSquared(playerPos);
+                if (remaining > 0) {
+                    // 120m 이내만 opacity 애니메이션 계산
+                    if (distSq < HAZARD_VISIBLE_SQ) {
+                        zone.mesh.material.opacity = 0.3 + Math.sin(now * 0.01) * 0.2;
+                    }
+                } else {
+                    createDebrisEffect(zone.mesh.position, new THREE.Color(0xff4500), 20);
+                    if (distSq < zone.radius * zone.radius) { attackPlayer(zone.damage); showChat('시스템', '마법 폭발에 휘말렸습니다!'); }
+                    scene.remove(zone.mesh); hazardZones.splice(i, 1);
+                }
             }
         }
         function handleBossDeath(boss, index) { 
@@ -3036,23 +3066,25 @@
 
         function updateNPCs(delta) {
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
-            // NPC 이름 레이블 컨테이너
             const labelsEl = document.getElementById('npc-labels');
-            // 기존 레이블 제거 후 재생성
             labelsEl.innerHTML = '';
             const now = performance.now();
             for (let ni = npcs.length - 1; ni >= 0; ni--) {
                 const npc = npcs[ni];
                 const data = npc.userData;
-                // 방랑 상인 시간 만료 시 소멸
                 if (data.isWandering && data.despawnTime && now > data.despawnTime) {
                     scene.remove(npc); npcs.splice(ni, 1);
                     continue;
                 }
+                const distSq = npc.position.distanceToSquared(playerPos);
+                // 80m 밖: 렌더링 끄고 AI 정지
+                if (distSq > NPC_ACTIVE_SQ) { npc.visible = false; continue; }
+                npc.visible = true;
                 const inFrustum = isPositionInView(npc.position); let isVisible = false; if (inFrustum) { isVisible = checkLineOfSight(gameState.position, npc.position); }
                 if (isVisible) { npc.lookAt(playerPos.x, npc.position.y, playerPos.z); data.wanderTarget = null; } else { if (!data.wanderTarget) { const radius = 20; const angle = Math.random() * Math.PI * 2; const dist = Math.random() * radius; data.wanderTarget = new THREE.Vector3(data.spawnPosition.x + Math.cos(angle) * dist, data.spawnPosition.y, data.spawnPosition.z + Math.sin(angle) * dist); } const distToTarget = new THREE.Vector2(npc.position.x - data.wanderTarget.x, npc.position.z - data.wanderTarget.z).length(); if (distToTarget < 0.5) { if (Math.random() < 0.02) { data.wanderTarget = null; } } else { const direction = data.wanderTarget.clone().sub(npc.position).normalize(); direction.y = 0; const velocity = direction.multiplyScalar(data.speed * delta); npc.position.add(velocity); npc.lookAt(data.wanderTarget.x, npc.position.y, data.wanderTarget.z); const groundY = getTerrainHeight(npc.position.x, npc.position.z); npc.position.y = groundY + 1.0; } }
                 
-                // 이름 레이블 (상호작용 가능 NPC)
+                // 이름 레이블: 50m 이내만 표시
+                if (distSq > LABEL_VISIBLE_SQ) continue;
                 const nm = data.name || '';
                 let cls = '';
                 if (nm === '상인') cls = 'merchant';
@@ -3064,18 +3096,19 @@
                 renderEntityLabel(labelsEl, npc, nm, (data.isDwarf ? 2.0 : data.isElf ? 2.2 : 2.8), cls, hasQuest, playerPos);
             }
             
-            // 퀘스트 관련 몹(강도 두목)에게도 이름표 표시
+            // 강도 두목·보스 이름표: 50m 이내만
             rangedEnemies.forEach(enemy => {
                 if (enemy.userData.health <= 0) return;
                 if (enemy.userData.isBanditLeader) {
+                    if (enemy.position.distanceToSquared(playerPos) > LABEL_VISIBLE_SQ) return;
                     const isQuestTarget = elfQuestActive && !elfQuestDone;
                     renderEntityLabel(labelsEl, enemy, enemy.userData.name, 2.6 * (enemy.userData.scale || 1), 'quest-mob', isQuestTarget, playerPos);
                 }
             });
-            // 보스(골렘 등 퀘스트 대상)에게도 이름표 표시
             bosses.forEach(boss => {
                 if (boss.userData.health <= 0) return;
                 if (boss.userData.bossType === 'golem') {
+                    if (boss.position.distanceToSquared(playerPos) > LABEL_VISIBLE_SQ) return;
                     const isQuestTarget = dwarfQuestActive && !dwarfQuestDone;
                     renderEntityLabel(labelsEl, boss, boss.userData.name, 2.2 * (boss.userData.scale || 1), 'quest-mob', isQuestTarget, playerPos);
                 }
@@ -4422,7 +4455,7 @@
             const nearbyObjects = getNearbyStaticObjects(playerPos);
 
             for(let i = vehicles.length -1; i >= 0; i--) {
-                const vehicleA = vehicles[i]; if (!vehicleA.parent) continue; if (playerInVehicle !== vehicleA) { const distSq = vehicleA.position.distanceToSquared(playerPos); if (distSq > ACTIVE_RADIUS_SQ) { vehicleA.visible = false; continue; } vehicleA.visible = true; }
+                const vehicleA = vehicles[i]; if (!vehicleA.parent) continue; if (playerInVehicle !== vehicleA) { const distSq = vehicleA.position.distanceToSquared(playerPos); if (distSq > VEHICLE_ACTIVE_SQ) { vehicleA.visible = false; continue; } vehicleA.visible = true; }
                 for(let j = i - 1; j >= 0; j--) { const vehicleB = vehicles[j]; if (!vehicleB.parent) continue; if (vehicleA.position.distanceToSquared(vehicleB.position) > 100) continue; const boxA = vehicleA.userData.collisionBox.clone().translate(vehicleA.position); const boxB = vehicleB.userData.collisionBox.clone().translate(vehicleB.position); if(boxA.intersectsBox(boxB)) { const relativeSpeed = Math.abs(vehicleA.userData.speed) + Math.abs(vehicleB.userData.speed); const damage = relativeSpeed * 30 * 0.625; vehicleA.userData.health -= damage; vehicleB.userData.health -= damage; const tempSpeed = vehicleA.userData.speed; vehicleA.userData.speed = vehicleB.userData.speed * -0.5; vehicleB.userData.speed = tempSpeed * -0.5; } }
                 if (playerInVehicle === vehicleA) {
                     const data = vehicleA.userData; data.steering = THREE.MathUtils.lerp(data.steering, vehicleSteering, delta * 5); const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion).normalize(); const samplePos = vehicleA.position.clone().add(forwardDir.clone().multiplyScalar(2.0)); const currentH = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const nextH = getTerrainHeight(samplePos.x, samplePos.z); 
@@ -4471,7 +4504,7 @@
                     }
                     // [OPTIMIZATION] 차량 충돌도 nearbyObjects 사용
                     for (const object of nearbyObjects) { const distSq = vehicleA.position.distanceToSquared(object.position); if (distSq > COLLISION_CHECK_DISTANCE_SQ) continue; if (!object.geometry || !object.parent || object.geometry.type === 'PlaneGeometry' || object.userData.type === 'roof' || object.userData.type === 'lava') continue; if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); const objectBox = tempBox.setFromObject(object); if (vehicleBox.intersectsBox(objectBox)) { vehicleA.position.copy(oldPosition); const damage = Math.abs(oldSpeed) * 40 * 0.31; vehicleA.userData.health -= damage; vehicleA.userData.speed *= -0.5; break; } }
-                } else { raycaster.set(vehicleA.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const vehicleIntersects = raycaster.intersectObjects(objects, true); let vehicleGroundY = vehicleA.position.y; if (vehicleIntersects.length > 0) { const firstHit = vehicleIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object' || hit.object.userData.type === 'lava'); if(firstHit) vehicleGroundY = firstHit.point.y; } vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, vehicleGroundY + 0.4, 0.1); }
+                } else { raycaster.set(vehicleA.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const vehicleIntersects = raycaster.intersectObjects(activeStructuresCache, true); let vehicleGroundY = vehicleA.position.y; if (vehicleIntersects.length > 0) { const firstHit = vehicleIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object' || hit.object.userData.type === 'lava'); if(firstHit) vehicleGroundY = firstHit.point.y; } vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, vehicleGroundY + 0.4, 0.1); }
                 
                 // [MODIFIED] 차량 용암 데미지 로직 변경: 높이 비교 방식
                 const vLavaHeight = getLavaHeight(vehicleA.position.x, vehicleA.position.z);
@@ -4930,7 +4963,7 @@
         function checkLineOfSight(fromPos, toPos) { const eyePos = fromPos.clone().add(new THREE.Vector3(0, 2.0, 0)); const targetEyePos = toPos.clone().add(new THREE.Vector3(0, 1.0, 0)); const direction = targetEyePos.clone().sub(eyePos).normalize(); const distance = eyePos.distanceTo(targetEyePos); raycaster.set(eyePos, direction); raycaster.far = distance; 
             // [OPTIMIZATION]
             const nearby = getNearbyStaticObjects(eyePos);
-            const intersects = raycaster.intersectObjects([...nearby, ...structures], true); 
+            const intersects = raycaster.intersectObjects([...nearby, ...activeStructuresCache], true); 
             const hit = intersects.find(i => i.object.geometry.type !== 'PlaneGeometry' && i.object.userData.type !== 'roof' && i.object.userData.type !== 'floor' && i.distance > 1.0 ); return !hit || hit.distance > distance - 1; }
         function attackPlayer(damage) { 
             if (isGameOver || isRespawning) return; 
@@ -4948,7 +4981,27 @@
         }
         function updateItems(delta) { 
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
-            items.forEach(item => { if (item.position.distanceToSquared(playerPos) > ACTIVE_RADIUS_SQ) { item.visible = false; return; } item.visible = true; if (item.userData.type !== 'weapon') { item.rotation.y += 0.02; } if (item.userData.isGrounded) return; raycaster.far = 500; raycaster.set(item.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const itemIntersects = raycaster.intersectObjects(objects, true); let targetY = item.position.y; if (itemIntersects.length > 0) { const firstHit = itemIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object'); if(firstHit) { targetY = firstHit.point.y + 0.5; } } if (Math.abs(item.position.y - targetY) < 0.05) { item.position.y = targetY; item.userData.isGrounded = true; } else { item.position.y = THREE.MathUtils.lerp(item.position.y, targetY, 0.1); } item.userData.baseY = item.position.y; });
+            const ITEM_VISIBLE_SQ = 80 * 80;   // 80m 밖: 완전 숨김
+            const ITEM_ACTIVE_SQ  = 30 * 30;   // 30m 밖: 회전·정착 계산 생략
+            items.forEach(item => {
+                const distSq = item.position.distanceToSquared(playerPos);
+                if (distSq > ITEM_VISIBLE_SQ) { item.visible = false; return; }
+                item.visible = true;
+                if (distSq > ITEM_ACTIVE_SQ) return; // 멀리 있으면 회전·레이캐스트 스킵
+                if (item.userData.type !== 'weapon') { item.rotation.y += 0.02; }
+                if (item.userData.isGrounded) return;
+                raycaster.far = 500;
+                raycaster.set(item.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0));
+                const itemIntersects = raycaster.intersectObjects(activeStructuresCache, true);
+                let targetY = item.position.y;
+                if (itemIntersects.length > 0) {
+                    const firstHit = itemIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object');
+                    if (firstHit) { targetY = firstHit.point.y + 0.5; }
+                }
+                if (Math.abs(item.position.y - targetY) < 0.05) { item.position.y = targetY; item.userData.isGrounded = true; }
+                else { item.position.y = THREE.MathUtils.lerp(item.position.y, targetY, 0.1); }
+                item.userData.baseY = item.position.y;
+            });
         }
         
         function animate() {
@@ -5094,29 +5147,16 @@
             updateVehicles(delta); updateItems(delta); updateNPCs(delta); updateFlares(delta); updateDebris(delta);
             updateBosses(delta, now, gameState.position); updateHazardZones(now);
             updateInteraction();
-            // 용암 애니메이션 (발광 강도 맥동 + 지형지물처럼 위아래로 출렁임) - 플레이어 근처 300m 이내만 처리하여 화산 렉 최소화
-            lavaBobTime = now * 0.001;
-            if (frameCount % 4 === 0) {
+            // 용암 조명 맥동 (발판/이동 없음 - 정적 유지, 광원만 약하게)
+            if (frameCount % 8 === 0) {
                 const t = now * 0.001;
                 const lavaPlayerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
-                const LAVA_ANIM_RADIUS_SQ = 300 * 300;
-                lavaPlanes.forEach(lp => {
-                    if (!lp.userData.mat) return;
-                    const dx = lp.position.x - lavaPlayerPos.x;
-                    const dz = lp.position.z - lavaPlayerPos.z;
-                    if (dx * dx + dz * dz > LAVA_ANIM_RADIUS_SQ) return; // 먼 용암은 스킵
-                    lp.userData.mat.emissiveIntensity = 0.6 + Math.sin(t * 2.0 + (lp.userData.timeOffset || 0)) * 0.35;
-                    // 용암판 전체를 살짝 위아래로 출렁여서 마치 부풀어오르는 지형처럼 보이게 함
-                    if (lp.userData.baseY === undefined) lp.userData.baseY = lp.position.y;
-                    lp.position.y = lp.userData.baseY + getLavaBobOffset(lp.position.x, lp.position.z);
-                });
-                // 용암 조명도 근처만 업데이트
-                const LIGHT_ANIM_RADIUS_SQ = 200 * 200;
+                const LIGHT_ANIM_RADIUS_SQ = 150 * 150;
                 lavaLights.forEach(ll => {
                     const ldx = ll.light.position.x - lavaPlayerPos.x;
                     const ldz = ll.light.position.z - lavaPlayerPos.z;
                     if (ldx * ldx + ldz * ldz > LIGHT_ANIM_RADIUS_SQ) return;
-                    ll.light.intensity = ll.baseIntensity + Math.sin(t * 3.0 + ll.light.position.x) * 1.0;
+                    ll.light.intensity = ll.baseIntensity + Math.sin(t * 2.0 + ll.light.position.x) * 0.3;
                 });
             }
             
@@ -5138,6 +5178,8 @@
                 }
                 updateWorldChunks._lastCheckPos.copy(cPos);
                 updateWorldChunks(); 
+                // freeze 상태가 바뀌었을 때만 구조물 캐시 재계산 (매 프레임 X)
+                if (activeStructuresDirty) rebuildActiveStructuresCache();
             }
 
             renderer.render(scene, camera);
@@ -5194,9 +5236,17 @@
             for(let i=0; i<count; i++) { const p = new THREE.Mesh(debrisSharedGeo, mat); p.position.copy(pos); p.userData.velocity = new THREE.Vector3((Math.random()-0.5)*10, Math.random()*10, (Math.random()-0.5)*10); p.userData.life = 1.0; scene.add(p); debrisParticles.push(p); } 
         }
         function updateDebris(delta) { 
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             // [OPTIMIZATION] 디버리 파티클 최대 개수 제한 (보스 스킬 다발 시 렉 방지)
             while (debrisParticles.length > 150) { const old = debrisParticles.shift(); if (old && old.parent) scene.remove(old); }
-            for(let i=debrisParticles.length-1; i>=0; i--) { const p = debrisParticles[i]; p.userData.life -= delta; p.userData.velocity.y -= 20 * delta; p.position.add(p.userData.velocity.clone().multiplyScalar(delta)); if(p.userData.life <= 0 || p.position.y < -50) { scene.remove(p); debrisParticles.splice(i, 1); } } 
+            for(let i=debrisParticles.length-1; i>=0; i--) {
+                const p = debrisParticles[i];
+                p.userData.life -= delta;
+                if(p.userData.life <= 0 || p.position.y < -50) { scene.remove(p); debrisParticles.splice(i, 1); continue; }
+                p.userData.velocity.y -= 20 * delta;
+                p.position.add(p.userData.velocity.clone().multiplyScalar(delta));
+                p.visible = p.position.distanceToSquared(playerPos) < DEBRIS_VISIBLE_SQ;
+            }
         }
         
         // [FIX] 데미지 텍스트가 겹치지 않도록 위치에 약간의 랜덤 오프셋 추가
