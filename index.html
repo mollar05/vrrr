@@ -123,6 +123,7 @@
         #stamina-bar { height: 15px; border-radius: 8px; }
         #stamina-fill { height: 100%; background: #2196F3; transition: width 0.1s ease; width: 100%; }
         #mana-fill { height: 100%; background: linear-gradient(90deg, #7b2ff7, #b388ff); transition: width 0.3s ease; width: 0%; box-shadow: 0 0 8px rgba(179,136,255,0.7); }
+        #qi-fill { height: 100%; background: linear-gradient(90deg, #ffb300, #ffe082); transition: width 0.3s ease; width: 0%; box-shadow: 0 0 8px rgba(255,224,130,0.7); }
         #vehicle-health-bar { height: 15px; border-radius: 8px; }
         #vehicle-health-fill { height: 100%; background: #3498db; transition: width 0.3s ease; width: 100%; }
         #vehicle-status-row { display: none; }
@@ -431,9 +432,14 @@
                     <div id="stamina-text" class="status-text">100 / 100</div>
                 </div>
                 <div class="status-row" id="mana-status-row" style="display:none;">
-                    <div class="status-label" id="mana-label">마력</div>
+                    <div class="status-label">마력</div>
                     <div id="mana-bar" class="bar-container"><div id="mana-fill"></div></div>
                     <div id="mana-text" class="status-text">0 / 0</div>
+                </div>
+                <div class="status-row" id="cultivation-status-row" style="display:none;">
+                    <div class="status-label" id="realm-label">삼류</div>
+                    <div id="qi-bar" class="bar-container"><div id="qi-fill"></div></div>
+                    <div id="qi-text" class="status-text">0 / 0</div>
                 </div>
                 <div class="status-row" id="vehicle-status-row">
                     <div class="status-label">차량 내구도</div>
@@ -514,6 +520,8 @@
         
         // [OPTIMIZATION] 청크별 오브젝트 맵 (충돌 검사 최적화)
         let chunkStaticObjects = new Map(); // Key: "x,z", Value: [Object3D, ...]
+        // [NEW] 청크별 아이템 맵 (아이템도 구조물처럼 청크 단위로 인덱싱하여, 맵 전체를 돌지 않고 주변 청크만 검사)
+        let chunkItems = new Map(); // Key: "x,z", Value: [itemMesh, ...]
         let lavaLights = []; // 용암 광원 애니메이션용
 
         // [NEW] 청크 기반 몹 휴면 시스템
@@ -581,6 +589,7 @@
         const DEBRIS_VISIBLE_SQ   = 60 * 60;   // 파편 파티클 렌더링
         const LABEL_VISIBLE_SQ    = 50 * 50;   // 이름 레이블 표시
         const VEHICLE_ACTIVE_SQ   = 150 * 150; // 차량 물리/충돌 (기존 230→150)
+        const MIN_FORWARD_VEHICLE_SPEED = 2.5; // [NEW] W키만 눌렀을 때 경사와 무관하게 보장되는 최소 전진 속도
         const SAFE_ZONE_RADIUS = 200; 
         const LAVA_LEVEL = 5.0; 
         const SPAWN_POSITION = new THREE.Vector3(0, 0, 0); // [NEW] 부활 지점 (월드 원점, 세이프존 중심과 동일)
@@ -1537,22 +1546,11 @@
         function rollArmorTier() {
             const totalWeight = ARMOR_TIERS.reduce((sum, t) => sum + t.spawnWeight, 0);
             let roll = Math.random() * totalWeight;
-            let tier = ARMOR_TIERS[0];
-            for (const t of ARMOR_TIERS) {
-                if (roll < t.spawnWeight) { tier = t; break; }
-                roll -= t.spawnWeight;
+            for (const tier of ARMOR_TIERS) {
+                if (roll < tier.spawnWeight) return tier;
+                roll -= tier.spawnWeight;
             }
-            return applyLuckTierUpgrade(tier);
-        }
-        // [NEW] 숨겨진 행운 스탯: 확률적으로 방어구 티어를 한 단계 끌어올림 (행운 1당 2%, 최대 40%)
-        function applyLuckTierUpgrade(tier) {
-            if (!gameState.luck) return tier;
-            const upgradeChance = Math.min(0.4, gameState.luck * 0.02);
-            if (Math.random() < upgradeChance) {
-                const idx = ARMOR_TIERS.indexOf(tier);
-                return ARMOR_TIERS[Math.min(idx + 1, ARMOR_TIERS.length - 1)];
-            }
-            return tier;
+            return ARMOR_TIERS[0];
         }
 
         // [NEW] 보스 전용 티어 굴림: 브론즈를 제외하고(아이언 이상) 굴려서 평균적으로 더 좋은 장비가 나오게 함
@@ -1560,12 +1558,11 @@
             const pool = ARMOR_TIERS.filter(t => t.id !== 'bronze');
             const totalWeight = pool.reduce((sum, t) => sum + t.spawnWeight, 0);
             let roll = Math.random() * totalWeight;
-            let tier = pool[0];
-            for (const t of pool) {
-                if (roll < t.spawnWeight) { tier = t; break; }
-                roll -= t.spawnWeight;
+            for (const tier of pool) {
+                if (roll < tier.spawnWeight) return tier;
+                roll -= tier.spawnWeight;
             }
-            return applyLuckTierUpgrade(tier);
+            return pool[0];
         }
 
         // 새 방어구 아이템을 생성 (슬롯, 티어를 지정하거나 무작위로 굴림)
@@ -1657,64 +1654,61 @@
             armor: { helmet: null, chest: null, pants: null, boots: null },
             bag: [],
             // ── [NEW] 히든 스탯: 마력(심법) — 심법책을 얻기 전까지는 존재하지 않는 것처럼 취급됨
-            // cultivationStage: 0=미각성, 1~4=심법 경지 단계 / cultivationExp: 경지 승급용 숨겨진 수련치
-            // baseMaxMana: 경지에 따른 마력 그릇 / bonusMaxMana: 천잠고치 등으로 얻는 영구 보너스 마력 그릇
-            hasCultivation: false, mana: 0, maxMana: 0, baseMaxMana: 0, bonusMaxMana: 0,
-            cultivationStage: 0, cultivationExp: 0, cocoonCount: 0,
-            lastSlashTime: 0, lastMagicTime: 0, lastHealMagicTime: 0, lastUltimateTime: 0,
-            stillSince: 0, lastMeditationTick: 0,
-            // ── [NEW] 히든 스탯: 행운 — UI/스탯창 어디에도 표시되지 않고 오직 네잎클로버로만 알 수 있음
-            luck: 0,
-            // ── [NEW] 히든 반복 숙련: 특정 행위를 아주 많이(수천 회) 반복해야만 각성하는 영구 패시브 ──
-            fistMasteryUnlocked: false, reloadMasteryUnlocked: false,
+            hasCultivation: false, mana: 0, maxMana: 0, lastSlashTime: 0, lastMagicTime: 0, lastHealMagicTime: 0, stillSince: 0,
+            // ── [NEW] 심법 경지(내공) 시스템 ──
+            realm: 0, qi: 0, deviationUntil: 0, lastBurstTime: 0, lastUltimateTime: 0, invulnerableUntil: 0,
+            meditateSince: 0, lastMeditateParticle: 0, wasMeditating: false,
         };
 
-        // ── [NEW] 심법(마력) 경지 테이블: 수련치가 쌓일수록 더 깊은 경지로 각성함 ──
-        const CULTIVATION_STAGES = [
-            { stage: 1, name: '1경지 (입문)',   expNeeded: 0,   maxMana: 100, manaRegen: 3.0, cooldownMult: 1.0,  unlocksUltimate: false },
-            { stage: 2, name: '2경지 (숙련)',   expNeeded: 40,  maxMana: 160, manaRegen: 4.0, cooldownMult: 0.9,  unlocksUltimate: false },
-            { stage: 3, name: '3경지 (상급)',   expNeeded: 110, maxMana: 230, manaRegen: 5.5, cooldownMult: 0.8,  unlocksUltimate: false },
-            { stage: 4, name: '4경지 (대성)',   expNeeded: 240, maxMana: 320, manaRegen: 7.0, cooldownMult: 0.65, unlocksUltimate: true  }
+        // ── [NEW] 심법 경지(무협풍 9단계) 데이터베이스 ──
+        // qiToNext: 해당 경지에서 다음 경지로 돌파하는 데 필요한 내공(qi), maxMana/manaRegenMult/dmgMult: 경지별 보정치
+        const CULTIVATION_REALMS = [
+            { id: 1, name: '삼류', qiToNext: 120,  maxMana: 100, manaRegenMult: 1.0, dmgMult: 1.0,  unlockMsg: '' },
+            { id: 2, name: '이류', qiToNext: 220,  maxMana: 130, manaRegenMult: 1.15, dmgMult: 1.15, unlockMsg: '' },
+            { id: 3, name: '일류', qiToNext: 380,  maxMana: 165, manaRegenMult: 1.3, dmgMult: 1.3,  unlockMsg: '참격의 사거리가 넓어집니다.' },
+            { id: 4, name: '절정', qiToNext: 600,  maxMana: 210, manaRegenMult: 1.5, dmgMult: 1.5,  unlockMsg: '' },
+            { id: 5, name: '초절정', qiToNext: 900,  maxMana: 260, manaRegenMult: 1.7, dmgMult: 1.7,  unlockMsg: '새로운 심법 스킬 [폭렬장 - K]을 사용할 수 있습니다!' },
+            { id: 6, name: '화경', qiToNext: 1300, maxMana: 320, manaRegenMult: 1.9, dmgMult: 1.9,  unlockMsg: '' },
+            { id: 7, name: '생사경', qiToNext: 1800, maxMana: 390, manaRegenMult: 2.1, dmgMult: 2.1,  unlockMsg: '호신강기가 각성하여 받는 피해가 자동으로 줄어듭니다.' },
+            { id: 8, name: '현경', qiToNext: 2500, maxMana: 470, manaRegenMult: 2.4, dmgMult: 2.4,  unlockMsg: '' },
+            { id: 9, name: '우화등선', qiToNext: Infinity, maxMana: 600, manaRegenMult: 2.8, dmgMult: 2.8, unlockMsg: '필살기 [천마유성권 - L]을 각성했습니다!' },
         ];
-        // 현재 경지 설정을 반환 (미각성이면 null)
-        function getCultivationConfig() {
-            if (gameState.cultivationStage <= 0) return null;
-            return CULTIVATION_STAGES[gameState.cultivationStage - 1];
-        }
-        // baseMaxMana + bonusMaxMana(천잠고치)를 합산해 실제 마력 그릇을 갱신
-        function recalcMaxMana() {
-            gameState.maxMana = gameState.baseMaxMana + gameState.bonusMaxMana;
-            if (gameState.mana > gameState.maxMana) gameState.mana = gameState.maxMana;
-        }
-        // 히든 스킬 사용/수련(정좌)으로 수련치를 얻고, 임계치를 넘으면 경지가 상승함
-        function gainCultivationExp(amount) {
-            if (!gameState.hasCultivation || amount <= 0) return;
-            gameState.cultivationExp += amount;
-            if (gameState.cultivationStage >= CULTIVATION_STAGES.length) return; // 이미 최고 경지
-            const next = CULTIVATION_STAGES[gameState.cultivationStage]; // 다음 경지 (배열은 0-indexed)
-            if (next && gameState.cultivationExp >= next.expNeeded) {
-                gameState.cultivationStage = next.stage;
-                gameState.baseMaxMana = next.maxMana;
-                recalcMaxMana();
+        function getRealmData() { return gameState.realm > 0 ? CULTIVATION_REALMS[gameState.realm - 1] : null; }
+        // 내공(qi) 획득 및 경지 돌파 처리 (한 번에 여러 경지 돌파도 안전하게 처리됨)
+        function gainQi(amount) {
+            if (!gameState.hasCultivation || gameState.realm >= CULTIVATION_REALMS.length || amount <= 0) { updateCultivationUI(); return; }
+            gameState.qi += amount;
+            while (gameState.realm < CULTIVATION_REALMS.length && gameState.qi >= CULTIVATION_REALMS[gameState.realm - 1].qiToNext) {
+                gameState.qi -= CULTIVATION_REALMS[gameState.realm - 1].qiToNext;
+                gameState.realm++;
+                const next = CULTIVATION_REALMS[gameState.realm - 1];
+                gameState.maxMana = next.maxMana;
                 gameState.mana = gameState.maxMana;
-                const ultimateTxt = next.unlocksUltimate ? ' <span style="color:#ffd700">(Shift+G: 「만월경파」 사용 가능)</span>' : '';
-                showChat('시스템', `✨ 심법이 <span style="color:#b388ff; font-weight:bold;">${next.name}</span> 경지에 도달했습니다!${ultimateTxt}`);
-                updateUI();
+                showChat('시스템', `✨ <span style="color:#ffd700; font-weight:bold;">돌파!</span> 심법의 경지가 <span style="color:#b388ff; font-weight:bold;">${next.name}</span>(으)로 상승했습니다! ${next.unlockMsg}`);
+                const flashPos = (playerInVehicle ? playerInVehicle.position : gameState.position).clone(); flashPos.y += 1;
+                createDebrisEffect(flashPos, new THREE.Color(0xffe082), 26);
+            }
+            updateCultivationUI();
+        }
+        // 무리한 내공 사용에 따른 주화입마(부작용) 판정 - 마력이 바닥나면 일정 확률로 발동
+        function maybeTriggerDeviation() {
+            if (gameState.deviationUntil > Date.now()) return;
+            if (gameState.mana < gameState.maxMana * 0.1 && Math.random() < 0.2) {
+                gameState.deviationUntil = Date.now() + 4000;
+                showChat('시스템', `⚠️ <span style="color:#ff5555; font-weight:bold;">주화입마!</span> 무리하게 기를 끌어올려 잠시 몸이 뒤틀립니다...`);
             }
         }
-        // 네잎클로버로 얻는 숨겨진 행운 스탯 증가 (최대치 존재, UI에는 절대 표시 안 함)
-        function gainLuck(amount) {
-            const before = gameState.luck;
-            gameState.luck = Math.min(20, gameState.luck + amount);
-            if (gameState.luck > before) {
-                showChat('시스템', `🍀 왠지 모르게... 몸속에 행운이 깃드는 기분이 든다.`);
-            }
-        }
-        // 히든 스킬의 숨겨진 치명타 확률/배율 (행운 스탯 기반, 최대 35%)
-        function rollSkillCrit(damage) {
-            const critChance = Math.min(0.35, gameState.luck * 0.015);
-            if (Math.random() < critChance) return { damage: Math.floor(damage * 1.75), isCrit: true };
-            return { damage, isCrit: false };
+        // 심법 상태 UI(경지/내공 게이지) 갱신 - 값이 바뀔 때만 호출되므로 매 프레임 비용 없음
+        function updateCultivationUI() {
+            const row = document.getElementById('cultivation-status-row');
+            if (!gameState.hasCultivation) { if (row) row.style.display = 'none'; return; }
+            if (row) row.style.display = 'flex';
+            const realmData = getRealmData();
+            const label = document.getElementById('realm-label'); if (label) label.textContent = realmData ? realmData.name : '심법';
+            const qiToNext = realmData ? realmData.qiToNext : 1;
+            const qiPercent = qiToNext === Infinity ? 100 : Math.min(100, (gameState.qi / qiToNext) * 100);
+            const qiFill = document.getElementById('qi-fill'); if (qiFill) qiFill.style.width = `${qiPercent}%`;
+            const qiText = document.getElementById('qi-text'); if (qiText) qiText.textContent = qiToNext === Infinity ? '극(極)' : `${Math.floor(gameState.qi)} / ${qiToNext}`;
         }
 
         // [NEW] 장착한 방어구의 합산 효과 계산
@@ -1838,7 +1832,11 @@
 
         function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10) + getEquippedArmorBonuses().vitalityBonus; }
         function getMaxStamina() { return BASE_PLAYER_STAMINA + (gameState.stats.endurance * 20) + getEquippedArmorBonuses().enduranceBonus; }
-        function getMoveSpeed() { return 10 * (1 + (gameState.stats.agility + getEquippedArmorBonuses().agilityBonus) * 0.05) * (activeSkillEffects.speedBurstUntil > Date.now() ? 1.6 : 1); }
+        function getMoveSpeed() {
+            let mult = activeSkillEffects.speedBurstUntil > Date.now() ? 1.6 : 1;
+            if (gameState.hasCultivation && gameState.deviationUntil > Date.now()) mult *= 0.75; // [NEW] 주화입마 중에는 이동속도 감소
+            return 10 * (1 + (gameState.stats.agility + getEquippedArmorBonuses().agilityBonus) * 0.05) * mult;
+        }
 
         function checkLevelUp() {
             if (gameState.xp >= gameState.xpToNextLevel) {
@@ -1924,10 +1922,7 @@
                     armor: gameState.armor,
                     bag: gameState.bag,
                     hasCultivation: gameState.hasCultivation, mana: gameState.mana, maxMana: gameState.maxMana,
-                    baseMaxMana: gameState.baseMaxMana, bonusMaxMana: gameState.bonusMaxMana,
-                    cultivationStage: gameState.cultivationStage, cultivationExp: gameState.cultivationExp,
-                    cocoonCount: gameState.cocoonCount, luck: gameState.luck,
-                    fistMasteryUnlocked: gameState.fistMasteryUnlocked, reloadMasteryUnlocked: gameState.reloadMasteryUnlocked
+                    realm: gameState.realm, qi: gameState.qi
                 },
                 playerStamina: playerStamina,
                 unlockedScopeIndex: unlockedScopeIndex,
@@ -1995,19 +1990,13 @@
                 if (Array.isArray(gs.bag)) gameState.bag = gs.bag;
                 if (gs.hasCultivation) {
                     gameState.hasCultivation = true;
-                    gameState.cultivationStage = typeof gs.cultivationStage === 'number' ? gs.cultivationStage : 1;
-                    gameState.cultivationExp = typeof gs.cultivationExp === 'number' ? gs.cultivationExp : 0;
-                    gameState.cocoonCount = typeof gs.cocoonCount === 'number' ? gs.cocoonCount : 0;
-                    const fallbackStageCfg = CULTIVATION_STAGES[Math.max(0, gameState.cultivationStage - 1)] || CULTIVATION_STAGES[0];
-                    gameState.baseMaxMana = typeof gs.baseMaxMana === 'number' ? gs.baseMaxMana : fallbackStageCfg.maxMana;
-                    gameState.bonusMaxMana = typeof gs.bonusMaxMana === 'number' ? gs.bonusMaxMana : 0;
-                    recalcMaxMana();
-                    gameState.mana = typeof gs.mana === 'number' ? Math.min(gs.mana, gameState.maxMana) : gameState.maxMana;
+                    gameState.maxMana = typeof gs.maxMana === 'number' ? gs.maxMana : 100;
+                    gameState.mana = typeof gs.mana === 'number' ? gs.mana : gameState.maxMana;
+                    gameState.realm = typeof gs.realm === 'number' ? gs.realm : 1;
+                    gameState.qi = typeof gs.qi === 'number' ? gs.qi : 0;
                     const manaRow = document.getElementById('mana-status-row'); if (manaRow) manaRow.style.display = 'flex';
+                    updateCultivationUI();
                 }
-                gameState.luck = typeof gs.luck === 'number' ? gs.luck : 0;
-                gameState.fistMasteryUnlocked = !!gs.fistMasteryUnlocked;
-                gameState.reloadMasteryUnlocked = !!gs.reloadMasteryUnlocked;
                 gameState.velocityY = 0; gameState.onGround = true; gameState.isReloading = false;
 
                 if (typeof data.playerStamina === 'number') playerStamina = data.playerStamina;
@@ -2338,21 +2327,7 @@
             } else { showError('라이브러리 로드 실패'); }
         }
 
-        function checkAchievements() { achievements.forEach(ach => { if (!ach.unlocked && ach.condition()) { ach.unlocked = true; showAchievementPopup(ach); } }); checkHiddenMilestones(); }
-        // ── [NEW] 히든 반복 숙련 시스템: 겉으로 드러난 업적과 별개로, 특정 행위를 아주 많이(수백~수천 회) 반복해야만 발동되는 영구 각성 ──
-        // 업적창에는 절대 노출되지 않고, 조건을 만족하는 순간 우연히 "깨달음을 얻은 것처럼" 시스템 메시지로만 알려줌
-        function checkHiddenMilestones() {
-            // 맨손(Fist)으로 1000마리 처치 시 영구적으로 맨손 데미지 +30% ("권성" 각성)
-            if (!gameState.fistMasteryUnlocked && gameStats.meleeKills >= 1000) {
-                gameState.fistMasteryUnlocked = true;
-                showChat('시스템', `🥊 <span style="color:#ffd700; font-weight:bold;">깨달음</span>: 천 번의 맨손 격투 끝에 「권성(拳聖)」의 경지에 이르렀습니다. 맨손 데미지가 영구적으로 30% 증가합니다.`);
-            }
-            // 총알을 10000발 발사 시 영구적으로 재장전 속도 +25% ("탄환의 마스터" 각성)
-            if (!gameState.reloadMasteryUnlocked && gameStats.shotsFired >= 10000) {
-                gameState.reloadMasteryUnlocked = true;
-                showChat('시스템', `🔫 <span style="color:#ffd700; font-weight:bold;">깨달음</span>: 만 발의 사격 끝에 손이 저절로 움직이기 시작합니다. 재장전 속도가 영구적으로 25% 빨라집니다.`);
-            }
-        }
+        function checkAchievements() { achievements.forEach(ach => { if (!ach.unlocked && ach.condition()) { ach.unlocked = true; showAchievementPopup(ach); } }); }
         function showAchievementPopup(ach) { const popup = document.getElementById('achievement-popup'); document.getElementById('achievement-title').textContent = ach.title; document.getElementById('achievement-desc').textContent = ach.desc; popup.style.display = 'block'; setTimeout(() => { popup.style.transform = 'translateX(0)'; }, 50); setTimeout(() => { popup.style.transform = 'translateX(100%)'; setTimeout(() => { popup.style.display = 'none'; }, 500); }, 10000); }
 
         function startLoading() {
@@ -2920,8 +2895,6 @@
                 if (data.name === '음식') { color = 0xffa500; }
                 if (data.name === '심법책') { color = 0x2a0845; geo = new THREE.BoxGeometry(0.4, 0.55, 0.08); }
                 if (data.name === '마력 회복단') { color = 0xb388ff; geo = new THREE.SphereGeometry(0.18, 10, 10); }
-                if (data.name === '네잎클로버') { color = 0x00ff7f; geo = new THREE.SphereGeometry(0.16, 8, 8); }
-                if (data.name === '천잠고치') { color = 0xfff2cc; geo = new THREE.SphereGeometry(0.2, 10, 10); }
                 mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color }));
                 if (data.name === '의료키트') {
                     const v = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), new THREE.MeshBasicMaterial({color: 0xff0000}));
@@ -2933,23 +2906,33 @@
                     glow.position.set(0, 0.2, 0);
                     mesh.add(glow);
                 }
-                if (data.name === '네잎클로버') {
-                    const glow = new THREE.PointLight(0x00ff7f, 1.3, 3.5);
-                    glow.position.set(0, 0.2, 0);
-                    mesh.add(glow);
-                }
-                if (data.name === '천잠고치') {
-                    const glow = new THREE.PointLight(0xffe9a8, 1.6, 4.5);
-                    glow.position.set(0, 0.2, 0);
-                    mesh.add(glow);
-                }
             }
             mesh.position.set(x, y, z); 
             // [수정] 아이템 그림자 제거
             mesh.castShadow = false; 
+            mesh.visible = false; // [NEW] 처음엔 숨김 처리 - 플레이어 근처 청크로 들어와야 updateItems에서 거리 판정 후 보이게 됨 (원거리 아이템이 계속 렌더 대상에 남는 것 방지)
             
             mesh.userData = { ...data, isGrounded: false, velocityY: 0 };
             scene.add(mesh); items.push(mesh);
+            // [NEW] 아이템을 청크 단위로도 인덱싱 (전체 items 배열을 매 프레임 순회하지 않기 위함)
+            const itemChunkKey = `${Math.round(x / CHUNK_SIZE)},${Math.round(z / CHUNK_SIZE)}`;
+            mesh.userData.chunkKey = itemChunkKey;
+            if (!chunkItems.has(itemChunkKey)) chunkItems.set(itemChunkKey, []);
+            chunkItems.get(itemChunkKey).push(mesh);
+        }
+
+        // [NEW] 플레이어 주변 3x3 청크 안의 아이템만 모아 반환 (구조물의 getNearbyStaticObjects와 동일한 패턴)
+        function getNearbyItems(pos) {
+            const nearby = [];
+            const chunkX = Math.round(pos.x / CHUNK_SIZE);
+            const chunkZ = Math.round(pos.z / CHUNK_SIZE);
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dz = -1; dz <= 1; dz++) {
+                    const key = `${chunkX + dx},${chunkZ + dz}`;
+                    if (chunkItems.has(key)) nearby.push(...chunkItems.get(key));
+                }
+            }
+            return nearby;
         }
 
         function createRandomLoot(x, z, y) {
@@ -2958,19 +2941,9 @@
                 spawnItem({ type: 'item', name: '심법책', amount: 1 }, x, y, z);
                 return;
             }
-            // [NEW] 히든 스탯 '행운'의 존재를 암시하는 극희귀 아이템. 심법 여부와 무관하게 어디서나 등장 가능
-            if (Math.random() < 0.001) {
-                spawnItem({ type: 'item', name: '네잎클로버', amount: 1 }, x, y, z);
-                return;
-            }
             // [NEW] 심법을 각성한 이후에만 등장하는 마력 회복단
             if (gameState.hasCultivation && Math.random() < 0.1) {
                 spawnItem({ type: 'item', name: '마력 회복단', amount: 1 }, x, y, z);
-                return;
-            }
-            // [NEW] 2경지 이상 도달해야만 극히 낮은 확률로 등장하는 히든 아이템 '천잠고치' (마력 그릇을 영구 확장)
-            if (gameState.cultivationStage >= 2 && gameState.cocoonCount < 3 && Math.random() < 0.002) {
-                spawnItem({ type: 'item', name: '천잠고치', amount: 1 }, x, y, z);
                 return;
             }
             const rand = Math.random();
@@ -2987,8 +2960,8 @@
                 const key = keys[Math.floor(Math.random() * keys.length)];
                 spawnItem({ type: 'weapon', name: key }, x, y, z);
             } else if (rand < 0.75) {
-                // [NEW] 스코프 드랍 (숨겨진 행운 스탯이 높을수록 고배율 스코프 확률 소폭 증가)
-                const scopeRoll = Math.min(0.999, Math.random() + gameState.luck * 0.01);
+                // [NEW] 스코프 드랍
+                const scopeRoll = Math.random();
                 let level = 0; // 1x
                 if (scopeRoll > 0.9) level = 3; // 8x
                 else if (scopeRoll > 0.7) level = 2; // 4x
@@ -3044,7 +3017,9 @@
                 mesh.setMatrixAt(i, matrices[i]); const proxy = proxies[i]; proxy.userData.instancedMesh = mesh; proxy.userData.instanceId = i; 
                 registerChunkObject(chunkKey, proxy); 
             } 
-            mesh.instanceMatrix.needsUpdate = true; scene.add(mesh);
+            mesh.instanceMatrix.needsUpdate = true;
+            mesh.matrixAutoUpdate = false; mesh.updateMatrix(); // [NEW] 건물/나무/돌 배치 전체가 생성 후 절대 움직이지 않으므로 컨테이너 행렬도 고정
+            scene.add(mesh);
         }
 
         function generateChunk(chunkX, chunkZ) {
@@ -3157,6 +3132,7 @@
                 lava.rotation.x = -Math.PI / 2; 
                 lava.position.set(chunkOriginX, 0, chunkOriginZ); 
                 lava.userData = { type: 'lava', isSteppable: true, mat: lavaMat, timeOffset: Math.random() * 100 };
+                lava.matrixAutoUpdate = false; lava.updateMatrix(); // [NEW] 용암 평면도 위치가 고정이므로 매 프레임 행렬 재계산 불필요
                 scene.add(lava); lavaPlanes.push(lava); objects.push(lava); structures.push(lava);
                 registerChunkObject(chunkKey, lava);
                 
@@ -3165,9 +3141,10 @@
                     const lavaLight = new THREE.PointLight(0xff4400, 2.5, 120); 
                     lavaLight.position.set(chunkOriginX, LAVA_LEVEL + 8, chunkOriginZ); 
                     lavaLight.castShadow = false; 
+                    lavaLight.matrixAutoUpdate = false; lavaLight.updateMatrix(); // [NEW] 조명 위치도 고정이므로 행렬 재계산 불필요
                     scene.add(lavaLight); 
-                    // 용암 빛 배열에 저장해서 애니메이션 가능하게
-                    lavaLights.push({ light: lavaLight, baseIntensity: 2.5 });
+                    // [MODIFIED] 용암 조명은 더 이상 애니메이션(맥동)하지 않고 고정 밝기로만 은은하게 빛남 (isLava 플래그로 애니메이션 루프에서 제외)
+                    lavaLights.push({ light: lavaLight, baseIntensity: 2.5, isLava: true });
                 }
             }
             } // end volcano lava check
@@ -3424,9 +3401,10 @@
 
             bosses.forEach((boss, index) => {
                 if (boss.userData.health <= 0) { handleBossDeath(boss, index); return; }
-                // 비활성 청크의 보스: 렌더링 끄고 AI 계산 완전 정지
+                // 비활성 청크의 보스: 렌더링 끄고 AI 계산 완전 정지 + 체력을 만땅으로 되돌려 놓음
                 if (!isEnemyInActiveChunk(boss)) {
                     boss.visible = false;
+                    if (boss.userData.health < boss.userData.maxHealth) boss.userData.health = boss.userData.maxHealth; // [NEW] 로딩 안 되는 범위로 나가면 체력 완전 회복
                     return;
                 }
                 boss.visible = true;
@@ -3872,6 +3850,8 @@
         function addBoxInstance(matrices, proxies, x, y, z, w, h, d, userDataBase, originalColor) {
             dummy.position.set(x, y, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(w, h, d); dummy.updateMatrix(); matrices.push(dummy.matrix.clone());
             const proxy = new THREE.Mesh(sharedBoxGeo, invisibleMat); proxy.position.copy(dummy.position); proxy.rotation.copy(dummy.rotation); proxy.scale.copy(dummy.scale); proxy.visible = true; proxy.userData = { ...userDataBase, originalColor: originalColor }; scene.add(proxy); objects.push(proxy); proxies.push(proxy);
+            // [NEW] 건물 충돌 프록시는 생성 후 절대 움직이지 않으므로 매 프레임 행렬 재계산을 꺼서 렉을 줄임 (형태/위치는 완전히 동일하게 유지됨)
+            proxy.matrixAutoUpdate = false; proxy.updateMatrix();
             if (userDataBase.type === 'floor' || userDataBase.type === 'roof') { structures.push(proxy); }
         }
 
@@ -3880,6 +3860,7 @@
             addBoxInstance(wallMatrices, wallProxies, x, centerY, z, size.width, totalHeight, size.depth, userData, color);
             const roofHeight = 3; dummy.position.set(x, yBase + size.height + (roofHeight / 2), z); dummy.rotation.set(0, Math.PI / 4, 0); dummy.scale.set(1, 1, 1); dummy.updateMatrix(); roofMatrices.push(dummy.matrix.clone());
             const roofProxy = new THREE.Mesh(sharedConeGeo, invisibleMat); roofProxy.position.copy(dummy.position); roofProxy.rotation.copy(dummy.rotation); roofProxy.visible = true; roofProxy.userData = { type: 'roof', originalColor: sharedRoofMat.color.clone() }; scene.add(roofProxy); objects.push(roofProxy); roofProxies.push(roofProxy); structures.push(roofProxy);
+            roofProxy.matrixAutoUpdate = false; roofProxy.updateMatrix(); // [NEW] 지붕도 정적이므로 동일하게 최적화
             // [MODIFIED] 저층 건물의 입구->옥상 직통 포탈 제거: 좀비가 이 포탈을 타고 옥상까지 올라가는 걸 막기 위함 (고층 빌딩에만 단계별 포탈 유지)
         }
 
@@ -3960,6 +3941,7 @@
                     const triggerUp = new THREE.Mesh(triggerGeo, triggerMatUp); 
                     triggerUp.position.set(x + dim.w/2 - 5, y + dim.h/2, z); 
                     triggerUp.userData = { type: 'teleporter', targetPosition: new THREE.Vector3(x, (i + 1) * dim.h + 1.8 + yOffset, z) }; 
+                    triggerUp.matrixAutoUpdate = false; triggerUp.updateMatrix(); // [NEW] 계단 트리거도 정적 - 매 프레임 행렬 재계산 불필요
                     scene.add(triggerUp); stairTriggers.push(triggerUp); 
                     
                     const pEntrance = new THREE.Vector3(x + dim.w/2 - 5, y + 0.5, z); 
@@ -3971,6 +3953,7 @@
                     triggerRoof.position.set(x + dim.w/2 - 5, y + dim.h/2, z); 
                     const roofY = dim.floors * dim.h + yOffset; 
                     triggerRoof.userData = { type: 'teleporter', targetPosition: new THREE.Vector3(x, roofY + 1.8, z) }; 
+                    triggerRoof.matrixAutoUpdate = false; triggerRoof.updateMatrix(); // [NEW]
                     scene.add(triggerRoof); stairTriggers.push(triggerRoof); 
                     
                     const pEntrance = new THREE.Vector3(x + dim.w/2 - 5, y + 0.5, z); 
@@ -4960,9 +4943,11 @@
                     case 'KeyF': interact(); break; 
                     case 'KeyP': toggleStatsModal(); break;
                     case 'KeyM': toggleMinimap(); break; // [NEW] 미니맵 토글 키
-                    case 'KeyG': if (e.shiftKey && gameState.cultivationStage >= 4) { useUltimateSkill(); } else { useSlashSkill(); } break; // [NEW] 히든 스킬: 참격 / Shift+G: 4경지 대성 시 히든 궁극기 「만월경파」
+                    case 'KeyG': useSlashSkill(); break; // [NEW] 히든 스킬: 참격 (심법 각성 전엔 아무 반응 없음)
                     case 'KeyH': useMagicSkill(); break; // [NEW] 히든 스킬: 마법 (심법 각성 전엔 아무 반응 없음)
                     case 'KeyJ': useHealMagicSkill(); break; // [NEW] 히든 스킬: 치유 마법 (마력 대량 소모)
+                    case 'KeyK': useBurstSkill(); break; // [NEW] 히든 스킬: 폭렬장 (초절정 경지 이상 해금)
+                    case 'KeyL': useUltimateSkill(); break; // [NEW] 히든 필살기: 천마유성권 (우화등선 경지 전용)
                     case 'KeyT': cycleScope(); break; // [NEW] 스코프 교체 키
                     // [NEW] 방어구 인첸트 액티브 스킬: 부위별로 다른 키
                     case 'KeyQ': activateArmorSkill('helmet'); break;
@@ -5074,11 +5059,10 @@
             if (gameState.isReloading || isTrading) return;
             const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; const weaponData = WEAPON_DATABASE[weaponObj.key]; if (weaponData.type === 'Melee') return; if (weaponObj.magAmmo >= weaponData.magSize) return; const ammoType = weaponData.ammoType; if (!ammoType) return; const inventoryAmmo = gameState.ammoInventory[ammoType] || 0; if (inventoryAmmo <= 0) { showChat('시스템', '탄약이 부족합니다!'); return; }
             gameState.isReloading = true; showChat('시스템', '재장전 중...'); document.getElementById('reload-prompt').textContent = '재장전 중...'; document.getElementById('reload-prompt').style.display = 'block';
-            const effectiveReloadTime = gameState.reloadMasteryUnlocked ? weaponData.reloadTime * 0.75 : weaponData.reloadTime;
             setTimeout(() => {
                 const needed = weaponData.magSize - weaponObj.magAmmo; const toLoad = Math.min(needed, inventoryAmmo); weaponObj.magAmmo += toLoad; gameState.ammoInventory[ammoType] -= toLoad;
                 gameState.isReloading = false; document.getElementById('reload-prompt').textContent = '[R] 재장전 필요'; updateUI(); showChat('시스템', '재장전 완료!');
-            }, effectiveReloadTime);
+            }, weaponData.reloadTime);
         }
 
         function shoot() {
@@ -5336,7 +5320,6 @@
             let damage = weaponData.damage; 
             if (weaponData.type === 'Melee') {
                 damage += ((gameState.stats.strength + getEquippedArmorBonuses().strengthBonus) * 2);
-                if (gameState.fistMasteryUnlocked) damage *= 1.3; // [NEW] 히든: 맨손 1000킬 각성 - 영구 데미지 +30%
             }
             
             const range = weaponData.range; const direction = new THREE.Vector3(); camera.getWorldDirection(direction); raycaster.set(gameState.position, direction); raycaster.far = range;
@@ -5399,7 +5382,9 @@
             if (!target.parent) return;
             if (target.userData.type === 'zombie') {
                 if (target.userData.health <= 0) return;
+                const willKill = target.userData.health <= damage;
                 hitZombie(target, damage, null);
+                gainQi(willKill ? 12 : 2.5); // [NEW] 심법 스킬로 적중/처치 시 내공 획득
             } else if (target.userData.type === 'enemy') {
                 const enemy = target; if (enemy.userData.health <= 0) return;
                 enemy.userData.health -= damage; showDamage(enemy.position, damage);
@@ -5410,17 +5395,20 @@
                     const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position;
                     enemy.userData.lastKnownPlayerPosition.copy(targetPos);
                     enemy.userData.customTarget = null;
+                    gainQi(2.5); // [NEW]
                 } else {
                     addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50);
                     tryDropArmor(enemy.position, 0.08, false);
                     createDebrisEffect(enemy.position, enemy.material.color);
                     scene.remove(enemy); const idx = rangedEnemies.indexOf(enemy); if (idx !== -1) rangedEnemies.splice(idx, 1);
+                    gainQi(12); // [NEW]
                 }
             } else if (target.userData.type === 'npc') {
                 damageNpc(target, damage);
             } else if (target.userData.type === 'boss') {
                 if (target.userData.health <= 0) return;
                 target.userData.health -= damage; showDamage(target.position, damage);
+                gainQi(4); // [NEW] 보스 상대로는 더 큰 깨달음을 얻음
                 const bd = target.userData;
                 if (!bd.combatStartTime) bd.combatStartTime = Date.now();
                 const nowMs = Date.now();
@@ -5438,16 +5426,16 @@
         function useSlashSkill() {
             if (!gameState.hasCultivation) return;
             if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
-            const stageCfg = getCultivationConfig();
-            const now = Date.now(); const cooldown = 2200 * (stageCfg ? stageCfg.cooldownMult : 1), cost = 25;
+            if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
+            const now = Date.now(); const cooldown = 2200, cost = 25;
             if (now - gameState.lastSlashTime < cooldown) return;
             if (gameState.mana < cost) { showChat('시스템', '마력이 부족합니다.'); return; }
-            gameState.mana -= cost; gameState.lastSlashTime = now; updateUI();
+            gameState.mana -= cost; gameState.lastSlashTime = now; updateUI(); maybeTriggerDeviation();
             const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; if (dir.lengthSq() > 0.0001) dir.normalize();
-            const range = 7, angleThreshold = Math.cos(Math.PI / 2.4); // 약 150도 부채꼴
-            const baseDamage = 90 + gameState.stats.strength * 3;
+            const realmData = getRealmData(); const dmgMult = realmData ? realmData.dmgMult : 1.0;
+            const range = gameState.realm >= 3 ? 9 : 7, angleThreshold = Math.cos(Math.PI / 2.4); // 일류 경지 이상부터 사거리 증가 (약 150도 부채꼴)
+            const damage = (90 + gameState.stats.strength * 3) * dmgMult;
             const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
-            let hitAny = false;
             targets.forEach(t => {
                 if (!t.parent || t.userData.health <= 0) return;
                 const toTarget = t.position.clone().sub(gameState.position); toTarget.y = 0;
@@ -5455,13 +5443,9 @@
                 if (dist > range || dist < 0.01) return;
                 toTarget.normalize();
                 if (toTarget.dot(dir) < angleThreshold) return;
-                const { damage, isCrit } = rollSkillCrit(baseDamage);
                 applySkillDamage(t, damage);
-                if (isCrit) createDebrisEffect(t.position, new THREE.Color(0xffd700), 6);
-                hitAny = true;
             });
             spawnSlashEffect(dir);
-            gainCultivationExp(hitAny ? 3 : 1);
         }
 
         function spawnSlashEffect(dir) {
@@ -5478,71 +5462,93 @@
         function useMagicSkill() {
             if (!gameState.hasCultivation) return;
             if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
-            const stageCfg = getCultivationConfig();
-            const now = Date.now(); const cooldown = 3200 * (stageCfg ? stageCfg.cooldownMult : 1), cost = 40;
+            if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
+            const now = Date.now(); const cooldown = 3200, cost = 40;
             if (now - gameState.lastMagicTime < cooldown) return;
             if (gameState.mana < cost) { showChat('시스템', '마력이 부족합니다.'); return; }
-            gameState.mana -= cost; gameState.lastMagicTime = now; updateUI();
+            gameState.mana -= cost; gameState.lastMagicTime = now; updateUI(); maybeTriggerDeviation();
             const direction = new THREE.Vector3(); camera.getWorldDirection(direction);
             const spawnPos = new THREE.Vector3();
             if (muzzle) muzzle.getWorldPosition(spawnPos); else spawnPos.copy(gameState.position);
             const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), new THREE.MeshBasicMaterial({ color: 0xb388ff }));
             bullet.add(new THREE.PointLight(0xb388ff, 2, 12));
             bullet.position.copy(spawnPos);
-            bullet.userData = { velocity: direction, spawnPosition: bullet.position.clone(), weaponKey: 'MagicBolt', speed: WEAPON_DATABASE['MagicBolt'].bulletSpeed, owner: 'player' };
+            const realmData = getRealmData(); const dmgMult = realmData ? realmData.dmgMult : 1.0;
+            bullet.userData = { velocity: direction, spawnPosition: bullet.position.clone(), weaponKey: 'MagicBolt', speed: WEAPON_DATABASE['MagicBolt'].bulletSpeed, owner: 'player', skillDmgMult: dmgMult };
             scene.add(bullet); bullets.push(bullet);
-            gainCultivationExp(2); // 마법 시전 자체가 수련이 됨 (명중 여부와 무관)
         }
 
         // ── [NEW] 히든 스킬 3: 치유 마법 (J키) - 공격 마법보다 훨씬 많은 마력을 소모함 ──
         function useHealMagicSkill() {
             if (!gameState.hasCultivation) return;
             if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
-            const stageCfg = getCultivationConfig();
-            const now = Date.now(); const cooldown = 6000 * (stageCfg ? stageCfg.cooldownMult : 1), cost = 70;
+            if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
+            const now = Date.now(); const cooldown = 6000, cost = 70;
             if (now - gameState.lastHealMagicTime < cooldown) return;
             if (gameState.mana < cost) { showChat('시스템', '마력이 부족합니다.'); return; }
             const maxHealth = getMaxHealth();
             if (gameState.health >= maxHealth) { showChat('시스템', '이미 체력이 가득 찼습니다.'); return; }
-            gameState.mana -= cost; gameState.lastHealMagicTime = now;
-            const healAmount = 500;
+            gameState.mana -= cost; gameState.lastHealMagicTime = now; maybeTriggerDeviation();
+            const realmData = getRealmData(); const healAmount = 500 * (realmData ? realmData.dmgMult : 1.0);
             gameState.health = Math.min(maxHealth, gameState.health + healAmount);
+            gainQi(3); // [NEW] 치유 역시 심법의 깨달음을 조금씩 더해줌
             updateUI();
             showChat('시스템', `<span style="color:#7CFC00">치유의 마법</span>으로 체력을 회복했습니다.`);
             // 시각 효과: 플레이어 주변에 녹색 치유 파티클
             const healPos = gameState.position.clone(); healPos.y += 1;
             createDebrisEffect(healPos, new THREE.Color(0x7CFC00), 18);
-            gainCultivationExp(2);
         }
 
-        // ── [NEW] 히든 스킬 4: 만월경파 (Shift+G) - 오직 심법 4경지(대성)에 도달해야만 발동됨 ──
-        function useUltimateSkill() {
-            if (!gameState.hasCultivation || gameState.cultivationStage < 4) return;
+        // ── [NEW] 히든 스킬 4: 폭렬장 (K키) - 초절정(5경지) 이상부터 사용 가능한 광역 폭발기 ──
+        function useBurstSkill() {
+            if (!gameState.hasCultivation) return;
             if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
-            const now = Date.now(); const cooldown = 45000, cost = 150;
-            if (now - gameState.lastUltimateTime < cooldown) {
-                const remain = ((cooldown - (now - gameState.lastUltimateTime)) / 1000).toFixed(1);
-                showChat('시스템', `⏳ 만월경파 재사용 대기 중... (${remain}초)`);
-                return;
-            }
+            if (gameState.realm < 5) { showChat('시스템', '아직 폭렬장을 다룰 경지에 이르지 못했습니다. (필요 경지: 초절정)'); return; }
+            if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
+            const now = Date.now(); const cooldown = 8000, cost = 55;
+            if (now - gameState.lastBurstTime < cooldown) return;
             if (gameState.mana < cost) { showChat('시스템', '마력이 부족합니다.'); return; }
-            gameState.mana -= cost; gameState.lastUltimateTime = now; updateUI();
-            const range = 12;
-            const baseDamage = 260 + gameState.stats.strength * 4;
+            gameState.mana -= cost; gameState.lastBurstTime = now; updateUI(); maybeTriggerDeviation();
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+            const origin = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const targetPoint = origin.clone().addScaledVector(dir, 12); // 조준 방향으로 12m 지점에 폭발 생성
+            const realmData = getRealmData(); const dmgMult = realmData ? realmData.dmgMult : 1.0;
+            const radius = 6, damage = (160 + gameState.stats.strength * 4) * dmgMult;
             const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
-            let hitAny = false;
+            let hitCount = 0;
             targets.forEach(t => {
                 if (!t.parent || t.userData.health <= 0) return;
-                if (t.position.distanceTo(gameState.position) > range) return;
-                const { damage, isCrit } = rollSkillCrit(baseDamage);
+                if (t.position.distanceTo(targetPoint) > radius) return;
                 applySkillDamage(t, damage);
-                if (isCrit) createDebrisEffect(t.position, new THREE.Color(0xffd700), 8);
-                hitAny = true;
+                hitCount++;
             });
-            const burstPos = gameState.position.clone(); burstPos.y += 1;
-            createDebrisEffect(burstPos, new THREE.Color(0xe0d0ff), 30);
-            showChat('시스템', `🌕 <span style="color:#ffd700; font-weight:bold;">만월경파</span>를 펼쳤습니다!`);
-            gainCultivationExp(hitAny ? 4 : 1);
+            createDebrisEffect(targetPoint, new THREE.Color(0xffa000), 26);
+            showChat('시스템', `💥 <span style="color:#ffa000; font-weight:bold;">폭렬장</span>을(를) 시전했습니다! (${hitCount}명 적중)`);
+        }
+
+        // ── [NEW] 히든 스킬 5: 천마유성권 (L키) - 우화등선(9경지, 최고 경지)에서만 각성하는 필살기 ──
+        function useUltimateSkill() {
+            if (!gameState.hasCultivation) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
+            if (gameState.realm < 9) { showChat('시스템', '필살기는 우화등선의 경지에 이르러야만 사용할 수 있습니다.'); return; }
+            const now = Date.now(); const cooldown = 90000;
+            if (now - gameState.lastUltimateTime < cooldown) { showChat('시스템', `천마유성권은 아직 준비되지 않았습니다. (${Math.ceil((cooldown - (now - gameState.lastUltimateTime)) / 1000)}초 남음)`); return; }
+            const cost = Math.floor(gameState.maxMana * 0.9);
+            if (gameState.mana < cost) { showChat('시스템', '천마유성권을 펼치기엔 마력이 부족합니다.'); return; }
+            gameState.mana -= cost; gameState.lastUltimateTime = now; updateUI();
+            gameState.invulnerableUntil = now + 2500; // 시전 직후 2.5초간 무적
+            const origin = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const radius = 11, damage = 260 + gameState.stats.strength * 6;
+            const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+            let hitCount = 0;
+            targets.forEach(t => {
+                if (!t.parent || t.userData.health <= 0) return;
+                if (t.position.distanceTo(origin) > radius) return;
+                applySkillDamage(t, damage);
+                hitCount++;
+            });
+            createDebrisEffect(origin, new THREE.Color(0xff3366), 40);
+            showChat('시스템', `☄️ <span style="color:#ff3366; font-weight:bold;">천마유성권!</span> 사방의 적 ${hitCount}명을 강타했습니다. (2.5초간 무적)`);
         }
 
         // [FIXED] 중복 및 문법 오류 수정
@@ -6000,13 +6006,13 @@
             else if (data.name === '에너지드링크') { playerStamina = Math.min(getMaxStamina(), playerStamina + 40); showChat('시스템', `<span class="item-name" style="color:#00ffff">에너지드링크</span>를 마셔 활력을 되찾았습니다!`); } 
             else if (data.name === '심법책') {
                 gameState.hasCultivation = true;
-                gameState.cultivationStage = 1;
-                gameState.cultivationExp = 0;
-                gameState.baseMaxMana = CULTIVATION_STAGES[0].maxMana;
-                recalcMaxMana();
+                gameState.realm = 1; gameState.qi = 0;
+                gameState.maxMana = CULTIVATION_REALMS[0].maxMana;
                 gameState.mana = gameState.maxMana;
                 document.getElementById('mana-status-row').style.display = 'flex';
-                showChat('시스템', `📖 알 수 없는 심법책을 읽었습니다... 몸 속에서 낯선 기운이 깨어납니다.`);
+                updateCultivationUI();
+                showChat('시스템', `📖 알 수 없는 심법책을 읽었습니다... 몸 속에서 낯선 기운이 깨어납니다. (경지: ${CULTIVATION_REALMS[0].name})`);
+                showChat('시스템', `G(참격) / H(마법) / J(치유) 키로 심법 스킬을 사용할 수 있습니다. 가만히 서 있으면 마력이 회복됩니다.`);
             }
             else if (data.name === '마력 회복단') {
                 if (gameState.hasCultivation) {
@@ -6014,19 +6020,13 @@
                     showChat('시스템', `<span style="color:#b388ff">마력 회복단</span>을 복용하여 기운을 되찾았습니다.`);
                 }
             }
-            else if (data.name === '네잎클로버') {
-                gainLuck(1);
+            scene.remove(item); items = items.filter(i => i !== item);
+            // [NEW] 청크 아이템 맵에서도 제거 (안 지우면 사라진 아이템이 유령 참조로 계속 남아 나중에 순회 비용이 됨)
+            if (item.userData && item.userData.chunkKey && chunkItems.has(item.userData.chunkKey)) {
+                const bucket = chunkItems.get(item.userData.chunkKey);
+                const bi = bucket.indexOf(item); if (bi !== -1) bucket.splice(bi, 1);
             }
-            else if (data.name === '천잠고치') {
-                if (gameState.hasCultivation && gameState.cocoonCount < 3) {
-                    gameState.cocoonCount++;
-                    gameState.bonusMaxMana += 15;
-                    recalcMaxMana();
-                    gameState.mana = gameState.maxMana;
-                    showChat('시스템', `🧵 <span style="color:#fff2cc; font-weight:bold;">천잠고치</span>를 흡수하여 마력 그릇이 영구히 넓어졌습니다! (+15 마력)`);
-                }
-            }
-            scene.remove(item); items = items.filter(i => i !== item); updateUI(); 
+            updateUI(); 
         }
         function showChat(name, message) { const chatBox = document.getElementById('chat-box'); const messageDiv = document.createElement('div'); messageDiv.className = 'chat-message'; let nameSpan; 
             if (name === '시스템') nameSpan = `<span class="system-name">${name}:</span>`; 
@@ -6039,10 +6039,10 @@
             messageDiv.innerHTML = `${nameSpan} ${message}`; chatBox.appendChild(messageDiv); chatBox.style.display = 'flex'; updateChatBoxPosition(); while (chatBox.children.length > 5) { chatBox.removeChild(chatBox.firstChild); } setTimeout(() => { if (chatBox.contains(messageDiv)) { messageDiv.style.opacity = '0'; setTimeout(() => { if (chatBox.contains(messageDiv)) chatBox.removeChild(messageDiv); if (chatBox.children.length === 0) chatBox.style.display = 'none'; }, 500); } }, 5000); }
         function updateInteraction() {
             if (isPointerLocked === false || playerInVehicle || isTrading || isStatsOpen || isPaused || isEquipOpen) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
-            const range = 3.5; let closestObject = null; let minDistance = range; const checkableObjects = [...items, ...vehicles, ...npcs]; checkableObjects.forEach(obj => { const dist = gameState.position.distanceTo(obj.position); if (dist < minDistance) { minDistance = dist; closestObject = obj; } });
+            const range = 3.5; let closestObject = null; let minDistance = range; const checkableObjects = [...getNearbyItems(gameState.position), ...vehicles, ...npcs]; checkableObjects.forEach(obj => { if (!obj.parent) return; const dist = gameState.position.distanceTo(obj.position); if (dist < minDistance) { minDistance = dist; closestObject = obj; } });
             if (closestObject) { const direction = closestObject.position.clone().sub(gameState.position).normalize(); raycaster.set(gameState.position, direction); raycaster.far = range; const intersects = raycaster.intersectObjects([closestObject], true); if (intersects.length > 0 && intersects[0].object) { let target = intersects[0].object; while (target.parent && target.parent !== scene) { target = target.parent; } if (target.userData.type && (target.userData.type === 'item' || target.userData.type === 'weapon' || target.userData.type === 'scope' || target.userData.type === 'vehicle' || target.userData.type === 'npc')) { interactableObject = target; } else { interactableObject = null; } } else { interactableObject = null; } } else { interactableObject = null; }
             const prompt = document.getElementById('interaction-prompt'); const itemNameEl = document.getElementById('interaction-item-name'); const actionEl = document.getElementById('interaction-action');
-            if (interactableObject) { let action = "줍기"; let itemName = interactableObject.userData.name || interactableObject.userData.type; if (interactableObject.userData.type === 'vehicle') { action = "탑승"; itemName = "차량"; } else if (interactableObject.userData.type === 'npc') { action = "대화"; itemName = interactableObject.userData.name; if (itemName === '상인') { action = "거래"; } else if (itemName === '생존자') { const hasClaimable = achievements.some(a => a.unlocked && !a.claimed); if (hasClaimable) { action = "보상 수령"; } } } else if (interactableObject.userData.type === 'weapon') { action = "줍기"; itemName = WEAPON_DATABASE[interactableObject.userData.name].name; } else if (interactableObject.userData.type === 'scope') { action = "장착"; } else if (interactableObject.userData.name === '탄약') { action = "줍기"; itemName = `${interactableObject.userData.subtype} ${interactableObject.userData.amount}발`; } else if (interactableObject.userData.name === '의료키트') { action = "사용"; itemName = `의료키트`; } else if (interactableObject.userData.name === '에너지드링크') { action = "마시기"; itemName = `에너지드링크`; } else if (interactableObject.userData.name === '심법책') { action = "읽기"; itemName = `알 수 없는 책`; } else if (interactableObject.userData.name === '마력 회복단') { action = "복용"; itemName = `마력 회복단`; } else if (interactableObject.userData.name === '네잎클로버') { action = "줍기"; itemName = `작은 풀`; } else if (interactableObject.userData.name === '천잠고치') { action = "흡수"; itemName = `기이한 고치`; } itemNameEl.textContent = itemName; actionEl.textContent = action; prompt.style.display = 'block'; } else { prompt.style.display = 'none'; }
+            if (interactableObject) { let action = "줍기"; let itemName = interactableObject.userData.name || interactableObject.userData.type; if (interactableObject.userData.type === 'vehicle') { action = "탑승"; itemName = "차량"; } else if (interactableObject.userData.type === 'npc') { action = "대화"; itemName = interactableObject.userData.name; if (itemName === '상인') { action = "거래"; } else if (itemName === '생존자') { const hasClaimable = achievements.some(a => a.unlocked && !a.claimed); if (hasClaimable) { action = "보상 수령"; } } } else if (interactableObject.userData.type === 'weapon') { action = "줍기"; itemName = WEAPON_DATABASE[interactableObject.userData.name].name; } else if (interactableObject.userData.type === 'scope') { action = "장착"; } else if (interactableObject.userData.name === '탄약') { action = "줍기"; itemName = `${interactableObject.userData.subtype} ${interactableObject.userData.amount}발`; } else if (interactableObject.userData.name === '의료키트') { action = "사용"; itemName = `의료키트`; } else if (interactableObject.userData.name === '에너지드링크') { action = "마시기"; itemName = `에너지드링크`; } else if (interactableObject.userData.name === '심법책') { action = "읽기"; itemName = `알 수 없는 책`; } else if (interactableObject.userData.name === '마력 회복단') { action = "복용"; itemName = `마력 회복단`; } itemNameEl.textContent = itemName; actionEl.textContent = action; prompt.style.display = 'block'; } else { prompt.style.display = 'none'; }
         }
 
         function updateUI() {
@@ -6063,8 +6063,6 @@
                 const manaPercent = (gameState.mana / gameState.maxMana) * 100;
                 document.getElementById('mana-fill').style.width = `${manaPercent}%`;
                 document.getElementById('mana-text').textContent = `${Math.floor(gameState.mana)} / ${gameState.maxMana}`;
-                const manaLabel = document.getElementById('mana-label');
-                if (manaLabel) manaLabel.textContent = `마력 (${gameState.cultivationStage}경지)`;
             }
             document.getElementById('level-badge').textContent = gameState.level;
             const xpPercent = (gameState.xp / gameState.xpToNextLevel) * 100;
@@ -6115,29 +6113,35 @@
             const maxStamina = getMaxStamina();
             const maxHealth = getMaxHealth();
             if (!playerInVehicle && controls.sprint && (controls.moveForward || controls.moveBackward || controls.moveLeft || controls.moveRight)) { if (playerStamina > STAMINA_THRESHOLD) { playerStamina = Math.max(0, playerStamina - STAMINA_DRAIN_RATE * delta); } else { controls.sprint = false; } } else { playerStamina = Math.min(maxStamina, playerStamina + STAMINA_RECOVERY_RATE * delta); }
-            // [NEW] 심법 - 완전히 제자리에 멈춰 있을 때만 마력이 서서히 회복되며, 오래 정좌할수록(명상) 회복 속도가 가속되고
-            // 일정 시간 이상 정좌를 유지하면 숨겨진 수련치(cultivationExp)도 조금씩 쌓임
+            // [NEW] 심법 - 완전히 제자리에 멈춰 있을 때만 마력이 서서히 회복됨 (+ 장시간 정좌 시 운기조식으로 내공까지 축적)
             if (gameState.hasCultivation) {
+                const now2 = Date.now();
+                const inDeviation = gameState.deviationUntil > now2;
                 const isStandingStill = !playerInVehicle && gameState.onGround && !controls.moveForward && !controls.moveBackward && !controls.moveLeft && !controls.moveRight;
-                if (isStandingStill) {
-                    const now = Date.now();
-                    if (gameState.stillSince === 0) gameState.stillSince = now;
-                    const stillSeconds = (now - gameState.stillSince) / 1000;
-                    const stageCfg = getCultivationConfig();
-                    const baseRegen = stageCfg ? stageCfg.manaRegen : 3.0;
-                    const meditationBonus = Math.min(3.0, stillSeconds / 10); // 최대 10초 후 정체(가산 회복 최대 +3/초)
-                    if (gameState.mana < gameState.maxMana) {
-                        gameState.mana = Math.min(gameState.maxMana, gameState.mana + (baseRegen + meditationBonus) * delta);
-                    }
-                    // 20초 단위로 정좌 수련치 지급 (한 틱당 1회만)
-                    const tickCount = Math.floor(stillSeconds / 20);
-                    if (tickCount > gameState.lastMeditationTick) {
-                        gameState.lastMeditationTick = tickCount;
-                        gainCultivationExp(3);
+                const realmData = getRealmData();
+                const regenMult = realmData ? realmData.manaRegenMult : 1.0;
+                if (isStandingStill && !inDeviation) {
+                    if (gameState.meditateSince === 0) gameState.meditateSince = now2;
+                    const meditateElapsed = now2 - gameState.meditateSince;
+                    const isDeepMeditation = meditateElapsed >= 3000; // 3초 이상 정좌 시 운기조식(심화 명상) 진입
+                    const baseRegen = 3 * regenMult * (isDeepMeditation ? 2 : 1);
+                    if (gameState.mana < gameState.maxMana) gameState.mana = Math.min(gameState.maxMana, gameState.mana + baseRegen * delta);
+                    if (isDeepMeditation) {
+                        gainQi(1.5 * delta); // 운기조식 중에는 가만히 있는 것만으로도 내공이 조금씩 쌓임
+                        if (now2 - gameState.lastMeditateParticle > 1200) {
+                            gameState.lastMeditateParticle = now2;
+                            const auraPos = (playerInVehicle ? playerInVehicle.position : gameState.position).clone(); auraPos.y += 0.2;
+                            createDebrisEffect(auraPos, new THREE.Color(0xb388ff), 3); // 저빈도 파티클이라 렉 영향 없음
+                        }
+                        if (!gameState.wasMeditating) { gameState.wasMeditating = true; showChat('시스템', `🧘 <span style="color:#b388ff;">운기조식</span>에 들어갑니다. 마력 회복이 2배로 빨라지고 내공이 쌓입니다.`); }
                     }
                 } else {
-                    gameState.stillSince = 0;
-                    gameState.lastMeditationTick = 0;
+                    gameState.meditateSince = 0;
+                    gameState.wasMeditating = false;
+                    if (inDeviation) {
+                        // 주화입마 중에는 마력이 회복되지 않고 서서히 소모됨 (무리한 대가)
+                        gameState.mana = Math.max(0, gameState.mana - 2 * delta);
+                    }
                 }
             }
             if (playerStamina >= (maxStamina * 0.9) && gameState.health < maxHealth) { const healthRegenRate = 1 / 3; const healAmount = healthRegenRate * delta; gameState.health += healAmount; playerStamina -= healAmount * 4; if (gameState.health > maxHealth) { gameState.health = maxHealth; } }
@@ -6259,7 +6263,7 @@
                 if (playerInVehicle === vehicleA) {
                     const data = vehicleA.userData; data.steering = THREE.MathUtils.lerp(data.steering, vehicleSteering, delta * 5); const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion).normalize(); const samplePos = vehicleA.position.clone().add(forwardDir.clone().multiplyScalar(2.0)); const currentH = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const nextH = getTerrainHeight(samplePos.x, samplePos.z); 
                     const slope = nextH - currentH; const gravityFactor = 15.0; const gravityResistance = slope * gravityFactor * delta; 
-                    data.speed -= gravityResistance; if (vehicleAcceleration > 0) { data.speed = Math.min(data.maxSpeed, data.speed + data.acceleration * delta); } else if (vehicleAcceleration < 0) { data.speed -= (data.speed > 0 ? data.braking : data.acceleration) * delta; } else { data.speed = THREE.MathUtils.lerp(data.speed, 0, delta * data.friction); } const turnFactor = Math.min(1, Math.abs(data.speed) / (data.maxSpeed * 0.5)); vehicleA.rotation.y -= data.steering * data.turnSpeed * turnFactor * delta; const moveDirection = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion); const displacement = moveDirection.multiplyScalar(data.speed * delta); 
+                    data.speed -= gravityResistance; if (vehicleAcceleration > 0) { data.speed = Math.min(data.maxSpeed, data.speed + data.acceleration * delta); } else if (vehicleAcceleration < 0) { data.speed -= (data.speed > 0 ? data.braking : data.acceleration) * delta; data.speed = Math.min(data.speed, -MIN_FORWARD_VEHICLE_SPEED); /* [NEW] W만 눌렀을 땐 경사가 아무리 가팔라도 최소 전진 속도를 보장 */ } else { data.speed = THREE.MathUtils.lerp(data.speed, 0, delta * data.friction); } const turnFactor = Math.min(1, Math.abs(data.speed) / (data.maxSpeed * 0.5)); vehicleA.rotation.y -= data.steering * data.turnSpeed * turnFactor * delta; const moveDirection = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion); const displacement = moveDirection.multiplyScalar(data.speed * delta); 
                     gameStats.treesChopped += displacement.length(); // 누적 주행거리(m) 추적
                     const oldPosition = vehicleA.position.clone(); vehicleA.position.add(displacement); const terrainY = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const targetY = terrainY + 0.4; vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, targetY, delta * 10); if (vehicleA.position.y < targetY) { vehicleA.position.y = targetY; } camera.rotation.set(gameState.rotation.x, 0, 0, 'YXZ'); gameState.position.copy(camera.getWorldPosition(new THREE.Vector3())); gameState.rotation.y = vehicleA.rotation.y; 
                     const vehicleBox = vehicleA.userData.collisionBox.clone().translate(vehicleA.position); const oldSpeed = data.speed; 
@@ -6582,19 +6586,22 @@
 
                 if (bestHit) {
                     const distance = bestHit.point.distanceTo(data.spawnPosition); 
-                    const damage = calculateDamage(weaponData, distance);
+                    let damage = calculateDamage(weaponData, distance);
+                    if (data.skillDmgMult) damage *= data.skillDmgMult; // [NEW] 심법 마법(H키) 탄환은 경지 배율 적용
                     
                     if (bestHit.type === 'enemy') { 
                         const enemy = bestHit.obj; enemy.userData.health -= damage; showDamage(enemy.position, damage); 
                         if (enemy.userData.health > 0) { 
                             enemy.userData.state = 'chase'; enemy.userData.customTarget = null; 
                             const targetPos = playerInVehicle ? playerInVehicle.position : gameState.position; enemy.userData.lastKnownPlayerPosition.copy(targetPos); 
+                            if (data.skillDmgMult) gainQi(2.5); // [NEW]
                         } 
                         if (enemy.userData.health <= 0) { 
                             const isBandit = enemy.userData.type === 'bandit';
                             const molochReward = isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20;
                             const xpReward = isBandit ? (enemy.userData.isBanditLeader ? 100 : 40) : 30;
                             addMoloch(molochReward); gainXP(xpReward);
+                            if (data.skillDmgMult) gainQi(12); // [NEW]
                             if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; onSqKill(enemy.userData.isBanditLeader ? 'banditLeader' : 'bandit'); onStoryKill('bandit'); onElfRaidBanditKill(); checkAchievements(); }
                             // 엘프 퀘스트: 강도 두목 처치 시 완료
                             if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) {
@@ -6609,10 +6616,12 @@
                         }
                     }
                     else if (bestHit.type === 'zombie') { 
-                        hitZombie(bestHit.obj, damage, null); 
+                        const zTarget = bestHit.obj; const willKill = data.skillDmgMult && zTarget.userData.health <= damage;
+                        hitZombie(zTarget, damage, null); 
+                        if (data.skillDmgMult) gainQi(willKill ? 12 : 2.5); // [NEW]
                     } 
                     else if (bestHit.type === 'player') { const pDmg = damage * 0.5; attackPlayer(pDmg); if (data.ownerRef && data.ownerRef.userData) { data.ownerRef.userData.consecutiveMisses = 0; } }
-                    else if (bestHit.type === 'boss') { const boss = bestHit.obj; boss.userData.health -= damage; showDamage(boss.position, damage); }
+                    else if (bestHit.type === 'boss') { const boss = bestHit.obj; boss.userData.health -= damage; showDamage(boss.position, damage); if (data.skillDmgMult) gainQi(4); }
                     else if (bestHit.type === 'npc') { damageNpc(bestHit.obj, damage); }
                     
                     // 공격자가 없으면(플레이어) 플레이어 위치 갱신
@@ -6780,6 +6789,7 @@
             const hit = intersects.find(i => i.object.geometry.type !== 'PlaneGeometry' && i.object.userData.type !== 'roof' && i.object.userData.type !== 'floor' && i.distance > 1.0 ); return !hit || hit.distance > distance - 1; }
         function attackPlayer(damage) { 
             if (isGameOver || isRespawning) return; 
+            if (gameState.hasCultivation && gameState.invulnerableUntil > Date.now()) return; // [NEW] 천마유성권 시전 직후 무적 시간
             if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } 
             else { 
                 // [NEW] 방어구 데미지 경감 적용 (전체 피해의 85%까지만 경감 가능, 완전 무적 방지)
@@ -6787,6 +6797,8 @@
                 let reducedDamage = Math.max(damage * 0.15, damage - armorDefense);
                 // [NEW] '철벽의' 인첸트 액티브: 피해 50% 추가 감소
                 if (activeSkillEffects.damageShieldUntil > Date.now()) reducedDamage *= 0.5;
+                // [NEW] 심법 생사경(7경지) 이상 각성 시 호신강기 - 마력이 20% 이상 남아있으면 피해 10% 추가 경감
+                if (gameState.hasCultivation && gameState.realm >= 7 && gameState.mana > gameState.maxMana * 0.2) reducedDamage *= 0.9;
                 gameState.health -= reducedDamage; 
                 showPlayerDamageEffect(); updateUI(); 
                 if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } 
@@ -6796,7 +6808,9 @@
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             const ITEM_VISIBLE_SQ = 80 * 80;   // 80m 밖: 완전 숨김
             const ITEM_ACTIVE_SQ  = 30 * 30;   // 30m 밖: 회전·정착 계산 생략
-            items.forEach(item => {
+            // [NEW] 맵 전체에 쌓인 items 배열 전체를 매 프레임 순회하지 않고, 플레이어 주변 청크의 아이템만 처리 (원거리 아이템은 이미 숨겨진 상태 유지)
+            getNearbyItems(playerPos).forEach(item => {
+                if (!item.parent) return; // 이미 주웠거나 제거된 아이템(청크 버킷 정리 지연) 방어
                 const distSq = item.position.distanceToSquared(playerPos);
                 if (distSq > ITEM_VISIBLE_SQ) { item.visible = false; return; }
                 item.visible = true;
@@ -6963,12 +6977,13 @@
             updateEasterEggs(gameState.position); // [NEW] 이스터에그 근접 체크
             updateBosses(delta, now, gameState.position); updateHazardZones(now);
             updateInteraction();
-            // 용암 조명 맥동 (발판/이동 없음 - 정적 유지, 광원만 약하게)
+            // 용암 조명 맥동 (발판/이동 없음 - 정적 유지, 광원만 약하게) [MODIFIED] 용암(isLava) 조명은 애니메이션 제외, 고정 밝기로 빛나기만 함
             if (frameCount % 8 === 0) {
                 const t = now * 0.001;
                 const lavaPlayerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
                 const LIGHT_ANIM_RADIUS_SQ = 150 * 150;
                 lavaLights.forEach(ll => {
+                    if (ll.isLava) return; // [NEW] 용암 조명은 애니메이션 없이 고정된 밝기로만 빛남
                     const ldx = ll.light.position.x - lavaPlayerPos.x;
                     const ldz = ll.light.position.z - lavaPlayerPos.z;
                     if (ldx * ldx + ldz * ldz > LIGHT_ANIM_RADIUS_SQ) return;
