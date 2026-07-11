@@ -110,6 +110,12 @@
         #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; opacity: 0.8; }
         #crosshair::before { width: 2px; height: 20px; left: 50%; transform: translateX(-50%); }
         #crosshair::after { width: 20px; height: 2px; top: 50%; transform: translateY(-50%); }
+        /* [NEW] 연계(콤보) 카운터 UI - 화면 중앙 하단, 근접/검법 연속 적중 시에만 표시됨 */
+        #combo-counter { position: fixed; top: 62%; left: 50%; transform: translate(-50%, 0); z-index: 999; pointer-events: none; display: none; text-align: center; font-family: 'Noto Sans KR', sans-serif; }
+        #combo-counter .combo-num { font-size: 34px; font-weight: 900; color: #fff6b0; text-shadow: 0 0 10px rgba(255,200,60,0.9), 0 0 22px rgba(255,140,0,0.6); letter-spacing: 1px; }
+        #combo-counter .combo-label { font-size: 12px; color: rgba(255,255,255,0.75); margin-top: -2px; letter-spacing: 3px; }
+        #combo-counter.combo-pop .combo-num { animation: comboPop 0.22s ease-out; }
+        @keyframes comboPop { 0% { transform: scale(1.55); } 100% { transform: scale(1); } }
         /* 줌 상태일 때 크로스헤어 변경 */
         .zoomed #crosshair::before, .zoomed #crosshair::after { background: #00ff00; box-shadow: 0 0 5px #00ff00; }
         
@@ -124,6 +130,7 @@
         #stamina-fill { height: 100%; background: #2196F3; transition: width 0.1s ease; width: 100%; }
         #mana-fill { height: 100%; background: linear-gradient(90deg, #7b2ff7, #b388ff); transition: width 0.3s ease; width: 0%; box-shadow: 0 0 8px rgba(179,136,255,0.7); }
         #qi-fill { height: 100%; background: linear-gradient(90deg, #ffb300, #ffe082); transition: width 0.3s ease; width: 0%; box-shadow: 0 0 8px rgba(255,224,130,0.7); }
+        #naegong-fill { height: 100%; background: linear-gradient(90deg, #1f9d7c, #8fe3c4); transition: width 0.3s ease; width: 0%; box-shadow: 0 0 8px rgba(143,227,196,0.7); }
         #vehicle-health-bar { height: 15px; border-radius: 8px; }
         #vehicle-health-fill { height: 100%; background: #3498db; transition: width 0.3s ease; width: 100%; }
         #vehicle-status-row { display: none; }
@@ -226,6 +233,15 @@
         #pause-modal h2 { color: #00ff88; text-align: center; margin: 0 0 6px 0; font-size: 26px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #00ff88; }
         .pause-btn { background: #2d2d44; color: white; border: 1px solid #555; padding: 14px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 16px; transition: background 0.2s, transform 0.1s; }
         .pause-btn:hover { background: #3d3d5c; transform: scale(1.02); }
+        #keybind-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); border: 2px solid #4ecdc4; padding: 25px; border-radius: 15px; color: white; z-index: 2300; width: 380px; max-height: 80vh; overflow-y: auto; display: none; flex-direction: column; gap: 12px; box-shadow: 0 0 30px rgba(78, 205, 196, 0.4); }
+        #keybind-modal h2 { color: #4ecdc4; text-align: center; margin: 0 0 6px 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #4ecdc4; }
+        .keybind-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; }
+        .keybind-name { font-size: 14px; }
+        .keybind-key-btn { background: #333; color: #ffd700; border: 1px solid #666; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; min-width: 60px; text-align: center; }
+        .keybind-key-btn:hover { background: #444; }
+        .keybind-key-btn.listening { background: #4ecdc4; color: #000; animation: staggerBlink 0.6s infinite; }
+        #controlbind-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); border: 2px solid #ffaa44; padding: 25px; border-radius: 15px; color: white; z-index: 2300; width: 380px; max-height: 80vh; overflow-y: auto; display: none; flex-direction: column; gap: 12px; box-shadow: 0 0 30px rgba(255, 170, 68, 0.4); }
+        #controlbind-modal h2 { color: #ffaa44; text-align: center; margin: 0 0 6px 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #ffaa44; }
         #pause-save-btn { border-color: #00ff88; }
         #pause-save-btn:hover { background: #0d4d33; }
         #pause-load-btn { border-color: #4488ff; }
@@ -294,6 +310,7 @@
 
     <div id="game-container">
         <div id="crosshair"></div>
+        <div id="combo-counter"><div class="combo-num" id="combo-num-text">0</div><div class="combo-label">COMBO</div></div>
         <div id="muzzle-flash" class="muzzle-flash"></div>
         <div id="player-hit-overlay"></div>
         <div id="respawn-flash"></div>
@@ -359,8 +376,28 @@
             <button class="pause-btn" id="pause-load-btn">📂 불러오기</button>
             <button class="pause-btn" id="pause-quit-btn">🚪 종료</button>
             <button class="pause-btn" id="pause-equip-btn" style="border-color:#ffd700;">🎽 장비창 열기</button>
+            <button class="pause-btn" id="pause-keybind-btn" style="border-color:#4ecdc4;">🎹 스킬 키 설정</button>
+            <button class="pause-btn" id="pause-controlbind-btn" style="border-color:#ffaa44;">⌨️ 조작 키 설정</button>
             <div id="pause-status-msg"></div>
             <input type="file" id="pause-load-input" accept="application/json,.json" style="display:none;">
+        </div>
+
+        <!-- [NEW] 스킬 키 설정 창 (일시정지 메뉴 -> 스킬 키 설정) -->
+        <div id="keybind-modal">
+            <h2>🎹 스킬 키 설정</h2>
+            <div style="font-size:12px; color:#aaa; text-align:center; margin-top:-10px;">키 버튼을 클릭한 뒤, 원하는 키를 누르세요.</div>
+            <div id="keybind-list"></div>
+            <button id="keybind-reset-btn" class="pause-btn" style="border-color:#ff8844;">↺ 기본값으로 초기화</button>
+            <button id="close-keybind-btn" class="pause-btn">닫기</button>
+        </div>
+
+        <!-- [NEW] 조작 키 설정 창 (일시정지 메뉴 -> 조작 키 설정): 이동/상호작용 등 일반 조작 키를 직접 재배정 -->
+        <div id="controlbind-modal">
+            <h2>⌨️ 조작 키 설정</h2>
+            <div style="font-size:12px; color:#aaa; text-align:center; margin-top:-10px;">키 버튼을 클릭한 뒤, 원하는 키를 누르세요.</div>
+            <div id="controlbind-list"></div>
+            <button id="controlbind-reset-btn" class="pause-btn" style="border-color:#ff8844;">↺ 기본값으로 초기화</button>
+            <button id="close-controlbind-btn" class="pause-btn">닫기</button>
         </div>
 
         <!-- [NEW] 장비창 (일시정지 메뉴 -> 장비창 열기) -->
@@ -441,6 +478,11 @@
                     <div id="qi-bar" class="bar-container"><div id="qi-fill"></div></div>
                     <div id="qi-text" class="status-text">0 / 0</div>
                 </div>
+                <div class="status-row" id="naegong-status-row" style="display:none;">
+                    <div class="status-label" id="naegong-label">내공</div>
+                    <div id="naegong-bar" class="bar-container"><div id="naegong-fill"></div></div>
+                    <div id="naegong-text" class="status-text">0 / 0</div>
+                </div>
                 <div class="status-row" id="vehicle-status-row">
                     <div class="status-label">차량 내구도</div>
                     <div id="vehicle-health-bar" class="bar-container"><div id="vehicle-health-fill"></div></div>
@@ -455,6 +497,7 @@
                 <div id="weapon-ammo-type"></div>
                 <div id="weapon-name">맨손</div>
                 <div id="reload-prompt">[R] 재장전 필요</div>
+                <div id="grenade-count-display" style="font-size:13px; color:#ffcc88; margin-top:4px;">🎯 수류탄: <span id="grenade-count">0</span>개 (휠+좌클릭)</div>
             </div>
             
             <div id="interaction-prompt">
@@ -508,7 +551,11 @@
         let objects = [], structures = [], npcs = [], items = [], rangedEnemies = [], zombies = [], bullets = [], debrisParticles = [], vehicles = [], stairTriggers = [], foliage = [], bosses = [], hazardZones = [];
 
         // ── [NEW] 숨겨진 저주 시스템: 무고한 NPC를 죽이면 서서히 공포 연출이 시작됨 (플레이어에게 대놓고 알리지 않음) ──
-        let curseState = { active: false, intensity: 0, nextEventTime: 0, victimNames: [] };
+        let curseState = { active: false, intensity: 0, nextEventTime: 0, victimNames: [], curseEventCount: 0, apparitionCooldownUntil: 0, apparitionEncountered: false };
+        let apparitionEvent = null; // [NEW] 저주가 절정에 달했을 때 나타나는 환영 이벤트 (공포 모드 클라이맥스)
+        // ── [NEW] 히든 퀘스트: NPC에게 받는 게 아니라 특정 행동을 하는 "그 순간" 조용히 시작되는 퀘스트.
+        // 퀘스트 UI에는 나타나지 않으며, 오직 시스템 메시지로만 그 존재를 짐작할 수 있음. 'inactive' | 'active' | 'done'
+        let hiddenQuests = { bloodprice: 'inactive', seeker: 'inactive', heartdemon: 'inactive' };
         let portals = [], flares = []; 
         let lavaPlanes = []; 
         
@@ -553,6 +600,8 @@
         let armorSkillCooldowns = { helmet: 0, chest: 0, pants: 0, boots: 0 };
         let activeSkillEffects = { damageShieldUntil: 0, speedBurstUntil: 0, revealEnemiesUntil: 0 };
         let isAiming = false;
+        let isMouseDown = false; // [NEW] 좌클릭을 누르고 있는 중인지 (자동사격 무기용)
+        let grenades = []; // [NEW] 던져진 수류탄 목록
         
         // [NEW] 줌 시스템 변수 & 업그레이드
         const SCOPE_LEVELS = [1, 2, 4, 8];
@@ -602,7 +651,7 @@
             banditKills: 0, banditLeaderKills: 0, orcKills: 0, trollKills: 0,
             elfVillagerKills: 0, dwarfVillagerKills: 0,
             treesChopped: 0, deathCount: 0, vehiclesDriven: 0, lavaSurvived: 0, timesDied: 0,
-            shotsFired: 0, headshotKills: 0, meleeKills: 0, maxComboKills: 0,
+            shotsFired: 0, headshotKills: 0, meleeKills: 0, maxComboKills: 0, scarecrowHits: 0,
             tradesCompleted: 0, itemsLooted: 0, npcTalks: 0, wanderingMerchantsMet: 0,
             elfQuestsCompleted: 0, dwarfQuestsCompleted: 0, nightsSurvived: 0,
             chunksExplored: 0, achievementsClaimed: 0,
@@ -620,6 +669,21 @@
             { id: 'banditslayer', title: '치안관', desc: '강도 15마리 처치', condition: () => gameStats.banditKills >= 15, reward: 1200, unlocked: false, claimed: false },
             { id: 'leaderslayer', title: '현상금 사냥꾼', desc: '강도 두목 3명 처치', condition: () => gameStats.banditLeaderKills >= 3, reward: 2000, unlocked: false, claimed: false },
             { id: 'meleemaster', title: '맨손의 달인', desc: '근접 공격으로 10마리 처치', condition: () => gameStats.meleeKills >= 10, reward: 700, unlocked: false, claimed: false },
+            { id: 'combomaster', title: '연격의 소양', desc: '콤보 10연타 달성', condition: () => gameStats.maxComboKills >= 10, reward: 900, unlocked: false, claimed: false },
+            { id: 'combomaster2', title: '무결점의 연계', desc: '콤보 20연타 달성', condition: () => gameStats.maxComboKills >= 20, reward: 2200, unlocked: false, claimed: false },
+            { id: 'combomaster3', title: '검무(劍舞)', desc: '콤보 30연타 달성', condition: () => gameStats.maxComboKills >= 30, reward: 4500, unlocked: false, claimed: false },
+            { id: 'naegongawaken', title: '수련의 결실', desc: '내공을 각성', condition: () => gameState.hasNaegong, reward: 1000, unlocked: false, claimed: false },
+            { id: 'flashslash', title: '일섬의 검객', desc: '일섬을 습득', condition: () => gameState.hasFlashSlash, reward: 1500, unlocked: false, claimed: false },
+            { id: 'naegongmaster', title: '입신(入神)의 경지', desc: '내공 최고 단계 도달', condition: () => gameState.naegongLevel >= 4, reward: 5000, unlocked: false, claimed: false },
+            { id: 'apparition_seen', title: '그림자와 마주하다', desc: '???', condition: () => curseState.apparitionEncountered, reward: 300, unlocked: false, claimed: false },
+            { id: 'hq_bloodprice', title: '피의 대가', desc: '???', condition: () => hiddenQuests.bloodprice === 'done', reward: 1200, unlocked: false, claimed: false },
+            { id: 'hq_seeker', title: '구도자의 길', desc: '???', condition: () => hiddenQuests.seeker === 'done', reward: 1200, unlocked: false, claimed: false },
+            { id: 'hq_heartdemon', title: '심마(心魔)', desc: '???', condition: () => hiddenQuests.heartdemon === 'done', reward: 1200, unlocked: false, claimed: false },
+            { id: 'statskill_first', title: '숨겨진 재능', desc: '스탯 히든 스킬을 처음 각성', condition: () => Object.values(gameState.statSkillTiers).some(t => t > 0), reward: 500, unlocked: false, claimed: false },
+            { id: 'statskill_all', title: '만능의 소양', desc: '5가지 스탯 히든 스킬을 모두 각성', condition: () => Object.values(gameState.statSkillTiers).every(t => t > 0), reward: 2500, unlocked: false, claimed: false },
+            { id: 'statskill_master', title: '극에 이른 재능', desc: '스탯 히든 스킬 하나를 최고 단계로', condition: () => Object.values(gameState.statSkillTiers).some(t => t >= STAT_SKILL_TIERS.length), reward: 3000, unlocked: false, claimed: false },
+            { id: 'extremestat_first', title: '한계를 넘다', desc: '???', condition: () => Object.values(gameState.extremeStatUnlocked).some(v => v), reward: 2000, unlocked: false, claimed: false },
+            { id: 'extremestat_all', title: '인간의 영역을 초월하다', desc: '???', condition: () => Object.values(gameState.extremeStatUnlocked).every(v => v), reward: 8000, unlocked: false, claimed: false },
             
             // ─── 보스 계열 ───
             { id: 'witchkiller', title: '마녀사냥꾼', desc: '저주받은 마녀 처치', condition: () => gameStats.witchKills >= 1, reward: 1500, unlocked: false, claimed: false },
@@ -1500,11 +1564,13 @@
             "Vector": { name: "Vector (SMG)", type: "SMG", ammoType: "9mm", damage: 31, fireRate: 50, magSize: 19, bulletSpeed: 350, reloadTime: 2000, model: createPistolModel, effectiveRange: 30, maxRange: 200, minDamageMultiplier: 0.2 },
             "UMP45": { name: "UMP45 (SMG)", type: "SMG", ammoType: ".45 ACP", damage: 41, fireRate: 90, magSize: 25, bulletSpeed: 390, reloadTime: 2200, model: createPistolModel, effectiveRange: 40, maxRange: 250, minDamageMultiplier: 0.25 },
             "S1897": { name: "S1897 (샷건)", type: "SG", ammoType: "12 Gauge", damage: 15, pellets: 9, spread: 0.1, fireRate: 800, magSize: 5, bulletSpeed: 360, reloadTime: 3000, model: createSniperModel, effectiveRange: 10, maxRange: 50, minDamageMultiplier: 0.05 },
-            "M249": { name: "M249 (기관총)", type: "LMG", ammoType: "5.56mm", damage: 40, fireRate: 80, magSize: 100, bulletSpeed: 915, reloadTime: 4500, model: createMachineGunModel, effectiveRange: 80, maxRange: 480, minDamageMultiplier: 0.5 },
+            "M249": { name: "M249 (기관총)", type: "LMG", ammoType: "5.56mm", damage: 40, fireRate: 80, magSize: 100, bulletSpeed: 915, reloadTime: 4500, model: createMachineGunModel, effectiveRange: 80, maxRange: 480, minDamageMultiplier: 0.5, auto: true },
             "P1911": { name: "P1911 (권총)", type: "Pistol", ammoType: ".45 ACP", damage: 35, fireRate: 400, magSize: 7, bulletSpeed: 250, reloadTime: 1500, model: createPistolModel, effectiveRange: 25, maxRange: 150, minDamageMultiplier: 0.2 },
             "FlashGun": { name: "섬광총", type: "Special", ammoType: "Flare", damage: 0, fireRate: 1000, magSize: 1, bulletSpeed: 400, reloadTime: 2000, model: createPistolModel, effectiveRange: 500, maxRange: 1000, minDamageMultiplier: 0 },
             "MagicBolt": { name: "마력탄", type: "Magic", damage: 140, fireRate: 3200, bulletSpeed: 70, effectiveRange: 60, maxRange: 150, minDamageMultiplier: 0.6 },
-            "Fist": { name: "맨손", type: "Melee", damage: 5, fireRate: 500, range: 5.0, model: () => { const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 })); fistMesh.position.set(0, 0, -0.3); const group = new THREE.Group(); group.add(fistMesh); const dummyMuzzle = new THREE.Object3D(); dummyMuzzle.name = 'muzzle'; dummyMuzzle.position.set(0, 0, -0.4); group.add(dummyMuzzle); group.userData = { isAnimating: false, type: 'Melee' }; return group; } }
+            "Fist": { name: "맨손", type: "Melee", damage: 5, fireRate: 500, range: 5.0, model: () => { const fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 })); fistMesh.position.set(0, 0, -0.3); const group = new THREE.Group(); group.add(fistMesh); const dummyMuzzle = new THREE.Object3D(); dummyMuzzle.name = 'muzzle'; dummyMuzzle.position.set(0, 0, -0.4); group.add(dummyMuzzle); group.userData = { isAnimating: false, type: 'Melee' }; return group; } },
+            // [NEW] 수류탄: 총과 같은 방식(무기 슬롯, 마우스 좌클릭)으로 사용. 포물선을 그리며 날아가 착지 지점에서 터짐
+            "Grenade": { name: "수류탄", type: "Grenade", damage: 0, fireRate: 700, model: createGrenadeModel }
         };
 
         // ─── [NEW] 방어구 시스템 ────────────────────────────────────────────────
@@ -1638,12 +1704,22 @@
         let gameState = {
             health: BASE_PLAYER_HEALTH, moloch: 0, 
             ammoInventory: { "5.56mm": 60, "7.62mm": 60, "9mm": 0, ".45 ACP": 14, "12 Gauge": 10, ".300": 0, "Flare": 5 },
-            weapons: [ { key: "Fist" }, { key: "P1911", magAmmo: 7 }, { key: "FlashGun", magAmmo: 1 } ],
+            weapons: [ { key: "Fist" }, { key: "P1911", magAmmo: 7 }, { key: "FlashGun", magAmmo: 1 }, { key: "Grenade" } ],
             currentWeaponIndex: 0,
             position: new THREE.Vector3(0, 1.8, 0), rotation: new THREE.Vector2(0, 0), velocityY: 0, onGround: true, lastShotTime: 0, isReloading: false, inHighrise: false,
             lastHordeTime: -300, hordeCooldown: 240, hordeActive: false,
             stats: { vitality: 0, strength: 0, agility: 0, endurance: 0, perception: 0 },
             statPoints: 0,
+            // ── [NEW] 스탯 히든 스킬: 각 스탯을 일정 수치 이상 투자하면 자동으로 생성/강화되는 패시브 스킬 ──
+            statSkillTiers: { vitality: 0, strength: 0, agility: 0, endurance: 0, perception: 0 },
+            lastVitalitySkillTime: 0, lastAgilityDodgeTime: 0, lastEnduranceSaveTime: 0, lastPerceptionPulseTime: 0,
+            // ── [NEW] 극한 스탯: 일반 티어(5단계, 최대 75)를 넘어 극한(120~300)까지 투자하면 완전히 다른 신규 스킬이 열리며, 이후로도 5단계로 점점 강해짐 ──
+            extremeStatUnlocked: { vitality: 0, strength: 0, agility: 0, endurance: 0, perception: 0 },
+            lastExtremeReviveTime: 0, lastPerceptionLootPulseTime: 0,
+            // ── [NEW] 만능의 극의: 5개 스탯이 모두 300(극한 최대 티어)에 도달하면 열리는 궁극 스킬. 이후로도 스탯 총합만큼 계속 강해져 상한선이 없음 ──
+            allStatMasteryUnlocked: false,
+            lastMasterySkillTime: 0,
+            grenadeCount: 2, // [NEW] 수류탄 - 시작 시 2개 지급, 이후 루팅으로 획득
             level: 1,
             xp: 0,
             xpToNextLevel: 100,
@@ -1658,19 +1734,26 @@
             // ── [NEW] 심법 경지(내공) 시스템 ──
             realm: 0, qi: 0, deviationUntil: 0, lastBurstTime: 0, lastUltimateTime: 0, invulnerableUntil: 0,
             meditateSince: 0, lastMeditateParticle: 0, wasMeditating: false,
+            // ── [NEW] 검법 스킬 3종(회오리베기/검기파동/용보) 쿨다운 타이머 ──
+            lastWhirlwindTime: 0, lastQiWaveTime: 0, lastDragonStepTime: 0,
+            // ── [NEW] 연계(콤보) 카운터 - 근접/검법 스킬을 끊기지 않고 연속 적중시키면 쌓이는 히든 시스템 ──
+            comboCount: 0, lastComboHitTime: 0,
+            // ── [NEW] 히든 스탯: 내공(정파) — 마기(심법)와 동시에 존재할 수 없는 대척점의 기운.
+            // 마기가 전투(살생)로 쌓이는 것과 달리, 내공은 허수아비를 상대로 한 순수한 반복 수련으로만 쌓임.
+            hasNaegong: false, naegong: 0, maxNaegong: 0, naegongLevel: 0, hasFlashSlash: false, lastFlashSlashTime: 0,
         };
 
         // ── [NEW] 심법 경지(무협풍 9단계) 데이터베이스 ──
         // qiToNext: 해당 경지에서 다음 경지로 돌파하는 데 필요한 내공(qi), maxMana/manaRegenMult/dmgMult: 경지별 보정치
         const CULTIVATION_REALMS = [
             { id: 1, name: '삼류', qiToNext: 120,  maxMana: 100, manaRegenMult: 1.0, dmgMult: 1.0,  unlockMsg: '' },
-            { id: 2, name: '이류', qiToNext: 220,  maxMana: 130, manaRegenMult: 1.15, dmgMult: 1.15, unlockMsg: '' },
+            { id: 2, name: '이류', qiToNext: 220,  maxMana: 130, manaRegenMult: 1.15, dmgMult: 1.15, unlockMsg: '새로운 검법 [회오리베기 - V]을 사용할 수 있습니다!' },
             { id: 3, name: '일류', qiToNext: 380,  maxMana: 165, manaRegenMult: 1.3, dmgMult: 1.3,  unlockMsg: '참격의 사거리가 넓어집니다.' },
-            { id: 4, name: '절정', qiToNext: 600,  maxMana: 210, manaRegenMult: 1.5, dmgMult: 1.5,  unlockMsg: '' },
+            { id: 4, name: '절정', qiToNext: 600,  maxMana: 210, manaRegenMult: 1.5, dmgMult: 1.5,  unlockMsg: '새로운 검법 [검기파동 - B]을 사용할 수 있습니다!' },
             { id: 5, name: '초절정', qiToNext: 900,  maxMana: 260, manaRegenMult: 1.7, dmgMult: 1.7,  unlockMsg: '새로운 심법 스킬 [폭렬장 - K]을 사용할 수 있습니다!' },
-            { id: 6, name: '화경', qiToNext: 1300, maxMana: 320, manaRegenMult: 1.9, dmgMult: 1.9,  unlockMsg: '' },
+            { id: 6, name: '화경', qiToNext: 1300, maxMana: 320, manaRegenMult: 1.9, dmgMult: 1.9,  unlockMsg: '새로운 보법 [용보 - N]을 사용할 수 있습니다! 짧은 순간 무적과 함께 돌진합니다.' },
             { id: 7, name: '생사경', qiToNext: 1800, maxMana: 390, manaRegenMult: 2.1, dmgMult: 2.1,  unlockMsg: '호신강기가 각성하여 받는 피해가 자동으로 줄어듭니다.' },
-            { id: 8, name: '현경', qiToNext: 2500, maxMana: 470, manaRegenMult: 2.4, dmgMult: 2.4,  unlockMsg: '' },
+            { id: 8, name: '현경', qiToNext: 2500, maxMana: 470, manaRegenMult: 2.4, dmgMult: 2.4,  unlockMsg: '연계(콤보)의 최대 위력이 크게 늘어납니다.' },
             { id: 9, name: '우화등선', qiToNext: Infinity, maxMana: 600, manaRegenMult: 2.8, dmgMult: 2.8, unlockMsg: '필살기 [천마유성권 - L]을 각성했습니다!' },
         ];
         function getRealmData() { return gameState.realm > 0 ? CULTIVATION_REALMS[gameState.realm - 1] : null; }
@@ -1687,6 +1770,13 @@
                 showChat('시스템', `✨ <span style="color:#ffd700; font-weight:bold;">돌파!</span> 심법의 경지가 <span style="color:#b388ff; font-weight:bold;">${next.name}</span>(으)로 상승했습니다! ${next.unlockMsg}`);
                 const flashPos = (playerInVehicle ? playerInVehicle.position : gameState.position).clone(); flashPos.y += 1;
                 createDebrisEffect(flashPos, new THREE.Color(0xffe082), 26);
+                // [NEW] 최고 경지(우화등선)에 도달 - 히든 퀘스트 '심마' 완료 조건
+                if (gameState.realm >= CULTIVATION_REALMS.length) {
+                    completeHiddenQuest('heartdemon', 2000, 600, [
+                        { speaker: '???', text: '...결국 그 끝까지 갔군.' },
+                        { speaker: '시스템', text: '몸속의 마기가 완전히 길들여졌다. 더 이상 그것에 잠식당하지 않는다.' },
+                    ]);
+                }
             }
             updateCultivationUI();
         }
@@ -1694,8 +1784,14 @@
         function maybeTriggerDeviation() {
             if (gameState.deviationUntil > Date.now()) return;
             if (gameState.mana < gameState.maxMana * 0.1 && Math.random() < 0.2) {
+                const isFirstDeviation = hiddenQuests.heartdemon === 'inactive';
                 gameState.deviationUntil = Date.now() + 4000;
                 showChat('시스템', `⚠️ <span style="color:#ff5555; font-weight:bold;">주화입마!</span> 무리하게 기를 끌어올려 잠시 몸이 뒤틀립니다...`);
+                // [NEW] 첫 주화입마 - 히든 퀘스트 '심마(心魔)' 조용히 시작
+                if (isFirstDeviation) {
+                    startHiddenQuest('heartdemon');
+                    setTimeout(() => showChat('???', '...그 힘에 잠식당하지 않을 자신이 있나?'), 2500);
+                }
             }
         }
         // 심법 상태 UI(경지/내공 게이지) 갱신 - 값이 바뀔 때만 호출되므로 매 프레임 비용 없음
@@ -1709,6 +1805,119 @@
             const qiPercent = qiToNext === Infinity ? 100 : Math.min(100, (gameState.qi / qiToNext) * 100);
             const qiFill = document.getElementById('qi-fill'); if (qiFill) qiFill.style.width = `${qiPercent}%`;
             const qiText = document.getElementById('qi-text'); if (qiText) qiText.textContent = qiToNext === Infinity ? '극(極)' : `${Math.floor(gameState.qi)} / ${qiToNext}`;
+        }
+
+        // ── [NEW] 연계(콤보) 카운터 시스템 ──────────────────────────────────────────
+        // 근접 공격/검법 스킬을 COMBO_TIMEOUT 이내로 계속 적중시키면 콤보가 쌓이고, 콤보 수에 비례해 데미지가 강해짐.
+        // 심법을 각성하지 않아도 동작하는 "숨겨진" 성장 시스템(반복 숙련)이며, 현경(8경지) 이상부터는 상한이 더 늘어남.
+        const COMBO_TIMEOUT = 2500; // 이 시간(ms) 동안 추가 타격이 없으면 콤보가 끊김
+        function getComboDamageMult() {
+            const highRealm = gameState.hasCultivation && gameState.realm >= 8; // 현경 이상: 콤보 숙련이 극에 달함
+            const cap = highRealm ? 30 : 20;
+            const perHit = highRealm ? 0.03 : 0.025;
+            return 1 + Math.min(gameState.comboCount, cap) * perHit;
+        }
+        function registerComboHit() {
+            const now = Date.now();
+            if (now - gameState.lastComboHitTime > COMBO_TIMEOUT) gameState.comboCount = 0;
+            gameState.comboCount++;
+            gameState.lastComboHitTime = now;
+            if (gameState.comboCount > gameStats.maxComboKills) gameStats.maxComboKills = gameState.comboCount;
+            if (gameState.comboCount === 10 || gameState.comboCount === 20 || gameState.comboCount === 30) checkAchievements();
+            updateComboUI(true);
+        }
+        // 콤보 UI 갱신. pop=true면 숫자가 팡 튀는 연출을 함께 재생함
+        function updateComboUI(pop) {
+            const box = document.getElementById('combo-counter');
+            if (!box) return;
+            if (gameState.comboCount <= 1) { box.style.display = 'none'; return; }
+            box.style.display = 'block';
+            const numEl = document.getElementById('combo-num-text');
+            if (numEl) numEl.textContent = `${gameState.comboCount} HIT`;
+            if (pop) { box.classList.remove('combo-pop'); void box.offsetWidth; box.classList.add('combo-pop'); }
+        }
+
+        // ── [NEW] 내공(정파) 시스템 ──────────────────────────────────────────────────
+        // 마기(심법)와는 정반대로, 폭력이 아닌 "반복된 수련"으로만 성장하는 히든 스탯.
+        // 이미 마기를 각성한 몸에는 스며들지 않으며(동시사용 불가), 그 반대도 마찬가지.
+        const NAEGONG_TIERS = [
+            { level: 1, name: '연공(練功)',   hitsRequired: 50,  maxNaegong: 60,  regen: 4,  dmgMult: 1.0  },
+            { level: 2, name: '소성(小成)',   hitsRequired: 150, maxNaegong: 100, regen: 6,  dmgMult: 1.2  },
+            { level: 3, name: '대성(大成)',   hitsRequired: 400, maxNaegong: 150, regen: 8,  dmgMult: 1.45 },
+            { level: 4, name: '입신(入神)',   hitsRequired: 800, maxNaegong: 220, regen: 11, dmgMult: 1.75 },
+        ];
+        const FLASH_SLASH_HITS_REQUIRED = 300; // 검법서를 못 구해도 이만큼 반복 수련하면 자연히 깨우침
+        function getNaegongTierData() { return gameState.naegongLevel > 0 ? NAEGONG_TIERS[gameState.naegongLevel - 1] : null; }
+
+        // 허수아비를 때릴 때마다 호출됨(performPunch에서 트리거). 마기를 각성한 상태라면 아무 일도 일어나지 않음.
+        function trainNaegong() {
+            if (gameState.hasCultivation) return; // [핵심] 내공과 마기는 동시사용 불가 - 이미 마기가 있으면 수련이 스며들지 않음
+            gameStats.scarecrowHits = (gameStats.scarecrowHits || 0) + 1;
+            checkNaegongLevelUp();
+            checkFlashSlashUnlock();
+        }
+        function checkNaegongLevelUp() {
+            for (let i = NAEGONG_TIERS.length - 1; i >= 0; i--) {
+                const tier = NAEGONG_TIERS[i];
+                if (gameStats.scarecrowHits >= tier.hitsRequired && gameState.naegongLevel < tier.level) {
+                    const wasAwakened = gameState.hasNaegong;
+                    gameState.hasNaegong = true;
+                    gameState.naegongLevel = tier.level;
+                    gameState.maxNaegong = tier.maxNaegong;
+                    gameState.naegong = gameState.maxNaegong;
+                    const row = document.getElementById('naegong-status-row'); if (row) row.style.display = 'flex';
+                    if (!wasAwakened) {
+                        showChat('시스템', `🥋 반복된 목검 수련 끝에 몸속에서 <span style="color:#8fe3c4; font-weight:bold;">내공(內功)</span>이 눈을 뜹니다...`);
+                        // [NEW] 내공 최초 각성 - 히든 퀘스트 '구도자의 길' 조용히 시작
+                        startHiddenQuest('seeker');
+                        setTimeout(() => showChat('???', '...아직 갈 길이 멀다.'), 2200);
+                    } else {
+                        showChat('시스템', `🥋 내공이 <span style="color:#8fe3c4; font-weight:bold;">${tier.name}</span>의 경지에 이르렀습니다!`);
+                        // [NEW] 최고 단계(입신) 도달 - 히든 퀘스트 '구도자의 길' 완료
+                        if (tier.level >= NAEGONG_TIERS.length) {
+                            completeHiddenQuest('seeker', 2000, 500, [
+                                { speaker: '???', text: '...마침내 이르렀군. 더는 가르칠 것이 없다.' },
+                            ]);
+                        }
+                    }
+                    updateNaegongUI();
+                    checkAchievements();
+                    break;
+                }
+            }
+        }
+        // 검법서(쾌검결)를 읽거나, 혹은 그것 없이도 충분히 반복 수련하면 '일섬'을 깨우침
+        function checkFlashSlashUnlock() {
+            if (gameState.hasFlashSlash || gameState.hasCultivation) return;
+            if (gameStats.scarecrowHits >= FLASH_SLASH_HITS_REQUIRED) unlockFlashSlash('repetition');
+        }
+        function unlockFlashSlash(source) {
+            if (gameState.hasFlashSlash) return;
+            if (gameState.hasCultivation) { showChat('시스템', '마기에 물든 몸에는 이 정순한 검법이 스며들지 않습니다.'); return; }
+            gameState.hasFlashSlash = true;
+            if (!gameState.hasNaegong) { // 검법서만으로 각성한 경우, 최소 1단계 내공을 함께 틔워 자원 풀을 마련해줌
+                gameState.hasNaegong = true; gameState.naegongLevel = 1;
+                gameState.maxNaegong = NAEGONG_TIERS[0].maxNaegong; gameState.naegong = gameState.maxNaegong;
+                const row = document.getElementById('naegong-status-row'); if (row) row.style.display = 'flex';
+                updateNaegongUI();
+            }
+            if (source === 'manual') {
+                showChat('시스템', `📜 <span style="color:#8fe3c4; font-weight:bold;">쾌검결</span>을 읽었습니다! 새로운 검법 [일섬 - U]을 사용할 수 있습니다!`);
+            } else {
+                showChat('시스템', `🥋 무수한 수련 끝에 마침내 <span style="color:#8fe3c4; font-weight:bold;">일섬(一閃)</span>의 요체를 깨우쳤습니다! (U키)`);
+            }
+            checkAchievements();
+        }
+        // 내공 상태 UI(단계/게이지) 갱신
+        function updateNaegongUI() {
+            const row = document.getElementById('naegong-status-row');
+            if (!gameState.hasNaegong) { if (row) row.style.display = 'none'; return; }
+            if (row) row.style.display = 'flex';
+            const tierData = getNaegongTierData();
+            const label = document.getElementById('naegong-label'); if (label) label.textContent = tierData ? tierData.name : '내공';
+            const percent = gameState.maxNaegong > 0 ? Math.min(100, (gameState.naegong / gameState.maxNaegong) * 100) : 0;
+            const fill = document.getElementById('naegong-fill'); if (fill) fill.style.width = `${percent}%`;
+            const text = document.getElementById('naegong-text'); if (text) text.textContent = `${Math.floor(gameState.naegong)} / ${gameState.maxNaegong}`;
         }
 
         // [NEW] 장착한 방어구의 합산 효과 계산
@@ -1742,7 +1951,7 @@
 
         // [NEW] 방어구 인첸트 액티브 스킬 발동 (Q/Z/X/C 키)
         function activateArmorSkill(slotKey) {
-            if (isPaused || isTrading || isStatsOpen || isEquipOpen || isGameOver || isRespawning) return;
+            if (isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isGameOver || isRespawning) return;
             const piece = gameState.armor[slotKey];
             if (!piece || !piece.enchantId) return;
             const ench = ENCHANT_DATABASE.find(e => e.id === piece.enchantId);
@@ -1832,9 +2041,277 @@
 
         function getMaxHealth() { return BASE_PLAYER_HEALTH + (gameState.stats.vitality * 10) + getEquippedArmorBonuses().vitalityBonus; }
         function getMaxStamina() { return BASE_PLAYER_STAMINA + (gameState.stats.endurance * 20) + getEquippedArmorBonuses().enduranceBonus; }
+
+        // ── [NEW] 스탯 히든 스킬 시스템 ──────────────────────────────────────────────
+        // 스탯을 투자할 때마다 조용히 성장하는 패시브 스킬. 티어를 올리는 데 필요한 스탯 수치가 점점 늘어남(5→15→30→50→75).
+        const STAT_SKILL_TIERS = [5, 15, 30, 50, 75]; // 누적 스탯 요구치 (간격이 5→10→15→20→25로 점점 벌어짐)
+        const STAT_LABELS = { vitality: '체력', strength: '힘', agility: '민첩', endurance: '지구력', perception: '감지력' };
+        const STAT_SKILLS = {
+            vitality: {
+                name: '회복의 숨결', icon: '💗',
+                flavor: '스태미나가 위험할 만큼 바닥나면, 체력 1을 대가로 스태미나를 자동으로 채웁니다.',
+                tierData: [
+                    { restore: 5,  cooldown: 60000 },
+                    { restore: 10, cooldown: 50000 },
+                    { restore: 18, cooldown: 40000 },
+                    { restore: 28, cooldown: 30000 },
+                    { restore: 40, cooldown: 20000 },
+                ],
+            },
+            strength: {
+                name: '회심의 일격', icon: '💥',
+                flavor: '근접 공격 시 낮은 확률로 강력한 추가 피해가 터집니다.',
+                tierData: [
+                    { chance: 0.08, bonus: 15  },
+                    { chance: 0.12, bonus: 30  },
+                    { chance: 0.16, bonus: 50  },
+                    { chance: 0.20, bonus: 80  },
+                    { chance: 0.25, bonus: 120 },
+                ],
+            },
+            agility: {
+                name: '회피의 발걸음', icon: '💨',
+                flavor: '공격을 받는 순간 낮은 확률로 피해를 완전히 무효화합니다.',
+                tierData: [
+                    { chance: 0.10, cooldown: 20000 },
+                    { chance: 0.14, cooldown: 16000 },
+                    { chance: 0.18, cooldown: 12000 },
+                    { chance: 0.22, cooldown: 9000  },
+                    { chance: 0.28, cooldown: 6000  },
+                ],
+            },
+            endurance: {
+                name: '불굴의 심장', icon: '🛡️',
+                flavor: '체력이 위험 수준까지 떨어지는 치명적인 피해를 자동으로 경감시켜 줍니다.',
+                tierData: [
+                    { reduction: 0.3, cooldown: 90000 },
+                    { reduction: 0.4, cooldown: 80000 },
+                    { reduction: 0.5, cooldown: 70000 },
+                    { reduction: 0.6, cooldown: 60000 },
+                    { reduction: 0.7, cooldown: 45000 },
+                ],
+            },
+            perception: {
+                name: '천리안', icon: '👁️',
+                flavor: '주기적으로 주변의 적 기척을 감지해 방향과 거리를 알려줍니다.',
+                tierData: [
+                    { range: 40,  cooldown: 25000 },
+                    { range: 55,  cooldown: 20000 },
+                    { range: 70,  cooldown: 16000 },
+                    { range: 90,  cooldown: 12000 },
+                    { range: 120, cooldown: 8000  },
+                ],
+            },
+        };
+        function getStatSkillTier(statValue) {
+            let tier = 0;
+            for (let i = 0; i < STAT_SKILL_TIERS.length; i++) { if (statValue >= STAT_SKILL_TIERS[i]) tier = i + 1; }
+            return tier;
+        }
+        // ── [NEW] 극한 스탯 스킬: 일반 티어(최대 75)를 넘어 120부터 투자하면, 같은 스킬이 더 강해지는 게 아니라
+        // 완전히 새로운 종류의 스킬이 열림. 단, 처음 각성했을 때는 효과가 미미하고, 120 이후로도 스탯을 계속 투자하면
+        // 300까지 5단계에 걸쳐 점점 강력해짐 (일반 티어와 동일한 "약하게 시작해서 점점 좋아지는" 설계).
+        const EXTREME_STAT_TIERS = [120, 150, 190, 240, 300]; // 누적 스탯 요구치 (간격이 점점 벌어짐)
+        const EXTREME_STAT_SKILLS = {
+            vitality: {
+                name: '불사의 심장', icon: '❤️‍🔥',
+                flavor: '치명적인 피해로 쓰러지기 직전, 가끔 기적적으로 목숨을 건집니다.',
+                tierData: [
+                    { chance: 0.25, cooldown: 480000 },
+                    { chance: 0.40, cooldown: 400000 },
+                    { chance: 0.55, cooldown: 320000 },
+                    { chance: 0.70, cooldown: 240000 },
+                    { chance: 0.85, cooldown: 180000 },
+                ],
+            },
+            strength: {
+                name: '분쇄의 파동', icon: '🌊',
+                flavor: '근접 공격의 여파가 주변의 다른 적에게도 미칩니다.',
+                tierData: [
+                    { splashRadius: 1.2, splashRatio: 0.15 },
+                    { splashRadius: 1.6, splashRatio: 0.25 },
+                    { splashRadius: 2.0, splashRatio: 0.35 },
+                    { splashRadius: 2.3, splashRatio: 0.45 },
+                    { splashRadius: 2.5, splashRatio: 0.50 },
+                ],
+            },
+            agility: {
+                name: '질주의 숨결', icon: '🌀',
+                flavor: '전력 질주 중에도 숨이 덜 차, 스태미나가 조금씩 덜 소모됩니다.',
+                // regenPerSecWhileSprint: 질주 중 초당 이만큼 스태미나를 함께 회복시켜 소모량을 상쇄함. 최고 단계에서 소모량 전체를 상쇄(=무한 질주).
+                tierData: [
+                    { regenPerSecWhileSprint: 3  },
+                    { regenPerSecWhileSprint: 6  },
+                    { regenPerSecWhileSprint: 9  },
+                    { regenPerSecWhileSprint: 12 },
+                    { regenPerSecWhileSprint: 15 },
+                ],
+            },
+            endurance: {
+                name: '재생의 육체', icon: '♻️',
+                flavor: '가만히 있지 않아도 체력이 서서히 자연 회복됩니다.',
+                tierData: [
+                    { regenPerSec: 0.08 },
+                    { regenPerSec: 0.15 },
+                    { regenPerSec: 0.25 },
+                    { regenPerSec: 0.32 },
+                    { regenPerSec: 0.40 },
+                ],
+            },
+            perception: {
+                name: '심안(心眼)', icon: '🔮',
+                flavor: '주기적으로 근처의 희귀한 기운(귀한 아이템)도 함께 감지합니다.',
+                tierData: [
+                    { cooldown: 50000, range: 25 },
+                    { cooldown: 42000, range: 35 },
+                    { cooldown: 36000, range: 45 },
+                    { cooldown: 33000, range: 52 },
+                    { cooldown: 30000, range: 60 },
+                ],
+            },
+        };
+        function getExtremeStatTier(statValue) {
+            let tier = 0;
+            for (let i = 0; i < EXTREME_STAT_TIERS.length; i++) { if (statValue >= EXTREME_STAT_TIERS[i]) tier = i + 1; }
+            return tier;
+        }
+        // 스탯 포인트를 찍을 때 호출됨 - 새로운 티어에 도달했다면 각성/강화 메시지를 띄움
+        function checkStatSkillUnlock(stat) {
+            const newTier = getStatSkillTier(gameState.stats[stat]);
+            const oldTier = gameState.statSkillTiers[stat];
+            if (newTier > oldTier) {
+                gameState.statSkillTiers[stat] = newTier;
+                const skill = STAT_SKILLS[stat];
+                const label = STAT_LABELS[stat];
+                if (oldTier === 0) {
+                    showChat('시스템', `✨ [${label}] 스탯이 쌓이며 히든 스킬 <span style="color:#7CFC00; font-weight:bold;">${skill.icon} ${skill.name}</span>을(를) 각성했습니다! ${skill.flavor}`);
+                } else {
+                    const nextReq = STAT_SKILL_TIERS[newTier];
+                    const nextText = nextReq !== undefined ? ` (다음 강화까지 필요 ${label}: ${nextReq})` : ' (일반 강화 최대 단계 도달)';
+                    showChat('시스템', `✨ [${label}] ${skill.icon} <span style="color:#7CFC00; font-weight:bold;">${skill.name}</span>이(가) ${newTier}단계로 강화되었습니다!${nextText}`);
+                }
+                checkAchievements();
+            }
+            // [NEW] 극한 스탯 - 완전히 새로운 스킬이 열리며, 이후로도 계속 투자하면 최대 5단계까지 점점 강해짐
+            const newExTier = getExtremeStatTier(gameState.stats[stat]);
+            const oldExTier = gameState.extremeStatUnlocked[stat];
+            if (newExTier > oldExTier) {
+                gameState.extremeStatUnlocked[stat] = newExTier;
+                const ex = EXTREME_STAT_SKILLS[stat];
+                const label = STAT_LABELS[stat];
+                if (oldExTier === 0) {
+                    showChat('시스템', `🌟 [${label}] 극한의 경지에 이르렀습니다! 완전히 새로운 힘 <span style="color:#ffd700; font-weight:bold;">${ex.icon} ${ex.name}</span>이(가) 깨어납니다! (아직은 미약합니다) ${ex.flavor}`);
+                } else {
+                    const nextReq = EXTREME_STAT_TIERS[newExTier];
+                    const nextText = nextReq !== undefined ? ` (다음 강화까지 필요 ${label}: ${nextReq})` : ' (극한 강화 최대 단계 도달)';
+                    showChat('시스템', `🌟 [${label}] ${ex.icon} <span style="color:#ffd700; font-weight:bold;">${ex.name}</span>이(가) ${newExTier}단계로 강화되었습니다!${nextText}`);
+                }
+                checkAchievements();
+            }
+            checkAllStatMasteryUnlock(); // [NEW] 5개 스탯 모두 극한 최대 티어(300) 도달 시 궁극 스킬 각성 체크
+        }
+        // ── [NEW] 만능의 극의: 5개 스탯이 전부 300 이상이 되면 각성하는 궁극 스킬. 각성 직후엔 미약하지만,
+        // 이후로도 스탯을 계속 투자할수록(300을 넘는 초과분의 총합만큼) 상한선 없이 점점 강력해짐.
+        const ALL_STAT_MASTERY_THRESHOLD = 300;
+        function hasAllStatMastery() { return Object.values(gameState.stats).every(v => v >= ALL_STAT_MASTERY_THRESHOLD); }
+        function checkAllStatMasteryUnlock() {
+            if (gameState.allStatMasteryUnlocked || !hasAllStatMastery()) return;
+            gameState.allStatMasteryUnlocked = true;
+            showChat('시스템', `👑 5가지 스탯이 모두 극한(300)에 도달했습니다! 궁극의 힘 <span style="color:#ff66ff; font-weight:bold;">💫 만능의 극의</span>이(가) 깨어납니다! (Y키, 지금은 아주 미약하지만 스탯을 더 투자할수록 한계 없이 강해집니다)`);
+            checkAchievements();
+        }
+        // 만능의 극의 위력 계산: 300을 넘는 초과분의 총합에 비례해 커짐 - 별도의 상한이 없음(리미트 없음)
+        function getMasterySkillDamage() {
+            const overflow = Object.values(gameState.stats).reduce((sum, v) => sum + Math.max(0, v - ALL_STAT_MASTERY_THRESHOLD), 0);
+            return 220 + overflow * 2; // 각성 직후(초과분 0)에는 220으로 시작, 이후 초과 투자량만큼 무제한 성장
+        }
+        // Y키 - 만능의 극의: 5가지 스탯이 모두 극한에 이르러야 사용 가능한 궁극 스킬
+        function useMasterySkill() {
+            if (!gameState.allStatMasteryUnlocked) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
+            const now = Date.now(); const cooldown = 15000;
+            if (now - gameState.lastMasterySkillTime < cooldown) { showChat('시스템', `만능의 극의는 아직 준비되지 않았습니다. (${Math.ceil((cooldown - (now - gameState.lastMasterySkillTime)) / 1000)}초 남음)`); return; }
+            gameState.lastMasterySkillTime = now;
+            const origin = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const radius = 9, damage = getMasterySkillDamage();
+            const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+            let hitCount = 0;
+            targets.forEach(t => {
+                if (!t.parent || t.userData.health <= 0) return;
+                if (t.position.distanceTo(origin) > radius) return;
+                applySkillDamage(t, damage);
+                hitCount++;
+            });
+            if (hitCount > 0) registerComboHit();
+            createDebrisEffect(origin.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Color(0xff66ff), 30);
+            showChat('시스템', `💫 <span style="color:#ff66ff; font-weight:bold;">만능의 극의</span>을(를) 시전했습니다! (위력 ${Math.round(damage)}, ${hitCount}명 적중)`);
+        }
+        // 저장/로드 및 새 게임 시작 시, 현재 스탯 기준으로 티어를 조용히 동기화 (중복 각성 메시지 방지용)
+        function syncStatSkillTiers() {
+            Object.keys(gameState.stats).forEach(s => {
+                gameState.statSkillTiers[s] = getStatSkillTier(gameState.stats[s]);
+                gameState.extremeStatUnlocked[s] = getExtremeStatTier(gameState.stats[s]);
+            });
+            gameState.allStatMasteryUnlocked = hasAllStatMastery(); // [NEW] 조용히 동기화 (중복 각성 메시지 방지)
+        }
+
+        // 체력 스탯 히든 스킬: 스태미나가 바닥날 때 체력을 태워 자동 회복
+        function updateVitalitySkill(now) {
+            const tier = gameState.statSkillTiers.vitality;
+            if (tier <= 0) return;
+            const data = STAT_SKILLS.vitality.tierData[tier - 1];
+            if (now - gameState.lastVitalitySkillTime < data.cooldown) return;
+            const maxStamina = getMaxStamina();
+            if (playerStamina > maxStamina * 0.12) return;
+            if (gameState.health <= 1) return; // 안전장치: 체력 1 이하로는 발동하지 않음
+            gameState.health -= 1;
+            playerStamina = Math.min(maxStamina, playerStamina + data.restore);
+            gameState.lastVitalitySkillTime = now;
+            showChat('시스템', `💗 회복의 숨결: 체력 1을 소모해 스태미나를 ${data.restore} 회복했습니다.`);
+            updateUI();
+        }
+        // 감지력 스탯 히든 스킬: 주기적으로 근처 적의 위치를 알려줌
+        function updatePerceptionSkill(now) {
+            const tier = gameState.statSkillTiers.perception;
+            if (tier <= 0) return;
+            const data = STAT_SKILLS.perception.tierData[tier - 1];
+            if (now - gameState.lastPerceptionPulseTime < data.cooldown) return;
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const candidates = [...zombies, ...rangedEnemies, ...bosses];
+            let nearest = null, nearestDist = data.range;
+            candidates.forEach(e => {
+                if (!e.parent || e.userData.health <= 0) return;
+                const d = e.position.distanceTo(playerPos);
+                if (d < nearestDist) { nearestDist = d; nearest = e; }
+            });
+            if (!nearest) return;
+            gameState.lastPerceptionPulseTime = now;
+            const dx = nearest.position.x - playerPos.x, dz = nearest.position.z - playerPos.z;
+            const deg = (Math.atan2(dx, -dz) * 180 / Math.PI + 360) % 360;
+            const dirs = ['북', '북동', '동', '남동', '남', '남서', '서', '북서'];
+            const compass = dirs[Math.round(deg / 45) % 8];
+            showChat('시스템', `👁️ 천리안: ${compass}쪽 약 ${Math.round(nearestDist)}m 거리에서 기척이 느껴집니다.`);
+        }
+        // [NEW] 감지력 극한 스킬: 심안 - 근처의 희귀 아이템(심법책/쾌검결/방어구 등)도 함께 감지
+        function updatePerceptionLootSkill(now) {
+            const exTier = gameState.extremeStatUnlocked.perception;
+            if (exTier <= 0) return;
+            const data = EXTREME_STAT_SKILLS.perception.tierData[exTier - 1];
+            if (now - gameState.lastPerceptionLootPulseTime < data.cooldown) return;
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const rareNames = ['심법책', '쾌검결', '내공단', '마력 회복단'];
+            const nearbyItems = getNearbyItems(playerPos).filter(it => it.parent && (rareNames.includes(it.userData.name) || it.userData.type === 'armor'));
+            if (nearbyItems.length === 0) return;
+            let nearestItem = null, nd = data.range;
+            nearbyItems.forEach(it => { const d = it.position.distanceTo(playerPos); if (d < nd) { nd = d; nearestItem = it; } });
+            if (!nearestItem) return;
+            gameState.lastPerceptionLootPulseTime = now;
+            showChat('시스템', `🔮 심안: 근처 약 ${Math.round(nd)}m 거리에서 심상치 않은 기운이 느껴집니다...`);
+        }
         function getMoveSpeed() {
             let mult = activeSkillEffects.speedBurstUntil > Date.now() ? 1.6 : 1;
             if (gameState.hasCultivation && gameState.deviationUntil > Date.now()) mult *= 0.75; // [NEW] 주화입마 중에는 이동속도 감소
+            if (gameState.isReloading) mult *= 0.85; // [FIX] 재장전 중에는 완전히 못 움직이는 대신 아주 조금만 느려진 채로 이동 가능
             return 10 * (1 + (gameState.stats.agility + getEquippedArmorBonuses().agilityBonus) * 0.05) * mult;
         }
 
@@ -1870,6 +2347,8 @@
             if (isTrading) { closeTradeModal(); }
             else if (isStatsOpen) { closeStatsModal(); }
             else if (isEquipOpen) { closeEquipmentModal(); }
+            else if (isKeybindOpen) { closeKeybindModal(); document.body.requestPointerLock(); }
+            else if (isControlbindOpen) { closeControlbindModal(); document.body.requestPointerLock(); }
             else { togglePauseModal(); }
         }
         function togglePauseModal() {
@@ -1922,7 +2401,10 @@
                     armor: gameState.armor,
                     bag: gameState.bag,
                     hasCultivation: gameState.hasCultivation, mana: gameState.mana, maxMana: gameState.maxMana,
-                    realm: gameState.realm, qi: gameState.qi
+                    realm: gameState.realm, qi: gameState.qi,
+                    hasNaegong: gameState.hasNaegong, naegong: gameState.naegong, maxNaegong: gameState.maxNaegong,
+                    naegongLevel: gameState.naegongLevel, hasFlashSlash: gameState.hasFlashSlash,
+                    grenadeCount: gameState.grenadeCount // [FIX] 저장 데이터 누락 - 불러오면 수류탄 개수가 초기값으로 리셋되던 버그
                 },
                 playerStamina: playerStamina,
                 unlockedScopeIndex: unlockedScopeIndex,
@@ -1933,7 +2415,9 @@
                 mainStory: { chapter: mainStory.chapter, phase: mainStory.phase, step: mainStory.step, kills: mainStory.kills },
                 sideQuests: sideQuests, sqKills: sqKills, elfChainIndex: elfChainIndex, dwarfChainIndex: dwarfChainIndex,
                 achievements: achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed })),
-                shopArmorStock: shopArmorStock
+                shopArmorStock: shopArmorStock,
+                curseState: { active: curseState.active, intensity: curseState.intensity, victimNames: curseState.victimNames, curseEventCount: curseState.curseEventCount, apparitionEncountered: curseState.apparitionEncountered },
+                hiddenQuests: hiddenQuests
             };
         }
 
@@ -1997,7 +2481,18 @@
                     const manaRow = document.getElementById('mana-status-row'); if (manaRow) manaRow.style.display = 'flex';
                     updateCultivationUI();
                 }
+                if (gs.hasNaegong) {
+                    gameState.hasNaegong = true;
+                    gameState.naegongLevel = typeof gs.naegongLevel === 'number' ? gs.naegongLevel : 1;
+                    gameState.maxNaegong = typeof gs.maxNaegong === 'number' ? gs.maxNaegong : (NAEGONG_TIERS[0] ? NAEGONG_TIERS[0].maxNaegong : 60);
+                    gameState.naegong = typeof gs.naegong === 'number' ? gs.naegong : gameState.maxNaegong;
+                    gameState.hasFlashSlash = !!gs.hasFlashSlash;
+                    updateNaegongUI();
+                }
                 gameState.velocityY = 0; gameState.onGround = true; gameState.isReloading = false;
+                if (typeof gs.grenadeCount === 'number') gameState.grenadeCount = gs.grenadeCount; // [FIX] 수류탄 개수 복원
+                // [FIX] 예전 세이브에는 수류탄이 무기 슬롯에 없을 수 있으므로, 수류탄을 보유 중이면 슬롯을 보충
+                if ((gameState.grenadeCount || 0) > 0 && !gameState.weapons.find(w => w.key === 'Grenade')) gameState.weapons.push({ key: 'Grenade' });
 
                 if (typeof data.playerStamina === 'number') playerStamina = data.playerStamina;
                 if (typeof data.unlockedScopeIndex === 'number') unlockedScopeIndex = data.unlockedScopeIndex;
@@ -2007,6 +2502,15 @@
                 dwarfQuestActive = !!data.dwarfQuestActive; dwarfQuestDone = !!data.dwarfQuestDone;
                 if (data.mainStory) { mainStory.chapter = data.mainStory.chapter || 1; mainStory.phase = data.mainStory.phase || 'intro'; mainStory.step = data.mainStory.step || 0; mainStory.kills = data.mainStory.kills || 0; }
                 if (data.sideQuests) sideQuests = data.sideQuests;
+                if (data.curseState) {
+                    curseState.active = !!data.curseState.active;
+                    curseState.intensity = data.curseState.intensity || 0;
+                    curseState.victimNames = data.curseState.victimNames || [];
+                    curseState.curseEventCount = data.curseState.curseEventCount || 0;
+                    curseState.apparitionEncountered = !!data.curseState.apparitionEncountered;
+                    if (curseState.active) curseState.nextEventTime = Date.now() + 30000 + Math.random() * 60000;
+                }
+                if (data.hiddenQuests) hiddenQuests = { ...hiddenQuests, ...data.hiddenQuests };
                 if (data.sqKills) sqKills = data.sqKills;
                 elfChainIndex = data.elfChainIndex || 0;
                 dwarfChainIndex = data.dwarfChainIndex || 0;
@@ -2224,6 +2728,7 @@
                 gameState.statPoints--;
                 if (stat === 'vitality') gameState.health += 10;
                 if (stat === 'endurance') playerStamina += 20;
+                checkStatSkillUnlock(stat); // [NEW] 스탯 히든 스킬 각성/강화 체크
                 updateStatsUI();
                 updateUI();
             }
@@ -2333,6 +2838,7 @@
         function startLoading() {
             const tips = [
                 "E키(또는 ESC)를 눌러 일시정지 메뉴를 열고 저장/불러오기/장비창 이동이 가능합니다.",
+                "일시정지 메뉴의 '스킬 키 설정'에서 각 스킬의 사용 키를 원하는 대로 바꿀 수 있습니다.",
                 "방어구는 몹이나 보스를 처치하면 드랍됩니다. 가방에 보관되며 장비창에서 장착해야 효과가 적용됩니다.",
                 "모자(Q), 흉갑(Z), 바지(X), 부츠(C)에 붙은 인첸트는 각 키를 눌러 액티브 스킬로 발동할 수 있습니다.",
                 "엘프와 드워프 마을 주민은 평소엔 평화롭지만, 먼저 공격하면 반격합니다.",
@@ -2360,6 +2866,9 @@
             } catch (e) { console.error('저장 데이터 적용 실패:', e); }
 
             switchWeapon(gameState.currentWeaponIndex || 0); 
+            syncStatSkillTiers(); // [NEW] 저장된(혹은 초기) 스탯 기준으로 히든 스킬 티어를 조용히 동기화
+            loadKeyBindings(); // [NEW] 이전에 저장해둔 스킬 키 설정 불러오기 (없으면 기본값)
+            loadControlBindings(); // [NEW] 이전에 저장해둔 조작 키 설정 불러오기 (없으면 기본값)
             if (!loadedFromSave) {
                 const startY = getTerrainHeight(gameState.position.x, gameState.position.z); 
                 gameState.position.y = startY + 1.8; 
@@ -2410,7 +2919,9 @@
             // [FIX] WebGL 생성 실패 시 예외 처리 및 Fallback
             try {
                 // 1차 시도: 고성능 옵션
-                renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+                // [OPTIMIZATION] 안티앨리어싱(MSAA)은 오브젝트가 많은 이 씬에서 프레임당 GPU 비용이 꽤 크고
+                // 게임 내용/오브젝트에는 영향이 없으므로 끄고, 대신 성능 확보에 사용 (기능/외형은 동일, 테두리만 약간 덜 부드러움)
+                renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
             } catch (e1) {
                 console.warn('WebGL initialization failed, retrying with default settings...', e1);
                 try {
@@ -2431,6 +2942,19 @@
         }
         
         function createPistolModel() { const gun = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 }); gun.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.3), bodyMaterial)); const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.25, 8), bodyMaterial); barrel.position.set(0, 0, -0.275); barrel.rotation.x = Math.PI / 2; gun.add(barrel); const gunMuzzle = new THREE.Object3D(); gunMuzzle.name = 'muzzle'; gunMuzzle.position.set(0, 0, -0.4); gun.add(gunMuzzle); return gun; }
+        // [NEW] 손에 든 수류탄 뷰모델 (총처럼 화면 우하단에 표시됨)
+        function createGrenadeModel() {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.SphereGeometry(0.11, 10, 10), new THREE.MeshStandardMaterial({ color: 0x3b4a2e, roughness: 0.6 }));
+            body.position.set(0, -0.05, -0.25);
+            group.add(body);
+            const lever = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.12, 0.03), new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.4 }));
+            lever.position.set(0.06, 0.03, -0.25);
+            group.add(lever);
+            const grenadeMuzzle = new THREE.Object3D(); grenadeMuzzle.name = 'muzzle'; grenadeMuzzle.position.set(0, -0.05, -0.4);
+            group.add(grenadeMuzzle);
+            return group;
+        }
         function createMachineGunModel() { const gun = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.6 }); gun.add(new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.8), bodyMaterial)); const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.6, 8), bodyMaterial); barrel.position.set(0, 0, -0.7); barrel.rotation.x = Math.PI / 2; gun.add(barrel); const gunMuzzle = new THREE.Object3D(); gunMuzzle.name = 'muzzle'; gunMuzzle.position.set(0, 0, -1.0); gun.add(gunMuzzle); return gun; }
         function createSniperModel() { const gun = new THREE.Group(); const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.4 }); gun.add(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 1.2), bodyMaterial)); const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 8), bodyMaterial); barrel.position.set(0, 0, -1.05); barrel.rotation.x = Math.PI / 2; gun.add(barrel); const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 8), bodyMaterial); scope.position.set(0, 0.15, -0.4); scope.rotation.x = Math.PI / 2; gun.add(scope); const gunMuzzle = new THREE.Object3D(); gunMuzzle.name = 'muzzle'; gunMuzzle.position.set(0, 0, -1.5); gun.add(gunMuzzle); return gun; }
         
@@ -2439,7 +2963,7 @@
         // [OPTIMIZATION] 청크 freeze 시스템: 멀리 떨어진 청크의 정적 오브젝트(나무/건물/돌)는
         // 완전히 삭제하지 않고 visible만 끄고 충돌검사 대상에서 제외 -> 다시 가까워지면 복구.
         // (완전 삭제 후 재생성 방식보다 안전하고, instancedMesh 재구축 비용도 없음)
-        const FREEZE_CHUNK_DISTANCE = 6; // [MODIFIED] 청크 크기가 100m로 절반이 된 만큼 동일한 실거리(약 600m)를 유지하도록 6으로 조정
+        const FREEZE_CHUNK_DISTANCE = 3; // [MODIFIED] 6->3: 안개(fog) 시야가 200m라 600m까지 활성 유지할 필요가 없음. 300m로 줄여 항상 계산되는 활성 오브젝트/조명/레이캐스트 수를 크게 줄임 (오브젝트 자체는 삭제되지 않고 그대로 얼려서 보존됨)
         let frozenChunks = new Set();
 
         // [PERF] 지면/구조물 레이캐스트용 "활성 구조물" 캐시.
@@ -2824,6 +3348,28 @@
             return y;
         }
 
+        // ── [FIX] 적/보스가 도시(건물) 안에서 항상 맨땅 높이로 스냅되어 건물 바닥을 뚫고 떨어지던 버그 수정용 공용 함수 ──
+        // 좀비는 기존에도 도시에서 건물 바닥/지붕을 레이캐스트로 감지했지만, 원거리 적(강도 등)과 보스는 항상 raw 지형 높이만 사용해서
+        // 건물 2층 등에 있어도 순간적으로 맨땅 높이로 끌려 내려가는 문제가 있었음. 이제 좀비/적/보스가 모두 이 함수를 공유해서 사용.
+        // 도시가 아니면 기존처럼 지형 높이를 그대로 반환(성능 영향 없음). 도시에서는 10프레임마다 한 번만 레이캐스트해서 성능을 보호하고,
+        // 그 사이에는 마지막으로 확인된 건물 높이를 그대로 유지(값이 없으면 바로 계산)하여 매 프레임 정확한 높이를 반환함.
+        function getStructureAwareGroundY(pos, data) {
+            // [수정] 건물 바닥도 그냥 땅과 완전히 똑같이 취급 - 바이옴 제한 없이(도시가 아니어도 광산/신전/마을 건물 등 전부 적용),
+            // 캐싱/쓰로틀링도 없이 지형 높이 계산처럼 매번 즉시 새로 계산.
+            // (예전엔 도시 바이옴일 때만 동작 + 몇 프레임 지난 캐시값을 재사용하다가 어긋나는 경우가 있었음 - 이제 그런 제약/지연이 전부 없음)
+            raycaster.far = 40;
+            raycaster.set(pos.clone().add(new THREE.Vector3(0, 5, 0)), new THREE.Vector3(0, -1, 0));
+            const hits = raycaster.intersectObjects(activeStructuresCache, true);
+            const validHit = hits.find(hit => {
+                const isStructure = hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor';
+                const isGround = hit.object.geometry.type === 'PlaneGeometry';
+                if (!isStructure && !isGround) return false;
+                if (isGround && hit.distance > 10.0) return false;
+                return true;
+            });
+            return validHit ? validHit.point.y : getTerrainHeight(pos.x, pos.z);
+        }
+
         // [NEW] 용암이 지형지물처럼 위아래로 오르내리는 진폭/주기 (시각 + 데미지 판정 공용)
         const LAVA_BOB_AMPLITUDE = 1.4; // 위아래로 출렁이는 높이(m)
         const LAVA_BOB_SPEED = 0.35;    // 출렁이는 속도
@@ -2893,8 +3439,11 @@
                 if (data.name === '의료키트') { color = 0xffffff; geo = new THREE.BoxGeometry(0.5, 0.3, 0.4); }
                 if (data.name === '에너지드링크') { color = 0x00ffff; geo = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 8); }
                 if (data.name === '음식') { color = 0xffa500; }
+                if (data.name === '수류탄') { color = 0x3b4a2e; geo = new THREE.SphereGeometry(0.16, 10, 10); } // [NEW]
                 if (data.name === '심법책') { color = 0x2a0845; geo = new THREE.BoxGeometry(0.4, 0.55, 0.08); }
                 if (data.name === '마력 회복단') { color = 0xb388ff; geo = new THREE.SphereGeometry(0.18, 10, 10); }
+                if (data.name === '쾌검결') { color = 0x123a2e; geo = new THREE.BoxGeometry(0.4, 0.55, 0.08); }
+                if (data.name === '내공단') { color = 0x8fe3c4; geo = new THREE.SphereGeometry(0.18, 10, 10); }
                 mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color }));
                 if (data.name === '의료키트') {
                     const v = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), new THREE.MeshBasicMaterial({color: 0xff0000}));
@@ -2903,6 +3452,11 @@
                 }
                 if (data.name === '심법책' || data.name === '마력 회복단') {
                     const glow = new THREE.PointLight(0x9b59ff, 1.5, 4);
+                    glow.position.set(0, 0.2, 0);
+                    mesh.add(glow);
+                }
+                if (data.name === '쾌검결' || data.name === '내공단') {
+                    const glow = new THREE.PointLight(0x5fd9a8, 1.5, 4);
                     glow.position.set(0, 0.2, 0);
                     mesh.add(glow);
                 }
@@ -2937,13 +3491,24 @@
 
         function createRandomLoot(x, z, y) {
             // [NEW] 극히 낮은 확률로 등장하는 히든 아이템 '심법책' (기존 확률 분포에 영향 거의 없음)
-            if (!gameState.hasCultivation && Math.random() < 0.0015) {
+            // 이미 내공(정파)을 각성했다면 심법책은 더 이상 등장하지 않음 (동시사용 불가)
+            if (!gameState.hasCultivation && !gameState.hasNaegong && Math.random() < 0.0015) {
                 spawnItem({ type: 'item', name: '심법책', amount: 1 }, x, y, z);
+                return;
+            }
+            // [NEW] 정파의 상대격 히든 아이템 '쾌검결' - 마기를 각성하지 않았고 아직 일섬을 배우지 않았을 때만 등장
+            if (!gameState.hasCultivation && !gameState.hasFlashSlash && Math.random() < 0.0015) {
+                spawnItem({ type: 'item', name: '쾌검결', amount: 1 }, x, y, z);
                 return;
             }
             // [NEW] 심법을 각성한 이후에만 등장하는 마력 회복단
             if (gameState.hasCultivation && Math.random() < 0.1) {
                 spawnItem({ type: 'item', name: '마력 회복단', amount: 1 }, x, y, z);
+                return;
+            }
+            // [NEW] 내공을 각성한 이후에만 등장하는 내공단
+            if (gameState.hasNaegong && Math.random() < 0.1) {
+                spawnItem({ type: 'item', name: '내공단', amount: 1 }, x, y, z);
                 return;
             }
             const rand = Math.random();
@@ -2955,6 +3520,9 @@
             } else if (rand < 0.55) {
                 const cons = ['의료키트', '에너지드링크', '음식'];
                 spawnItem({ type: 'item', name: cons[Math.floor(Math.random() * cons.length)], amount: 1 }, x, y, z);
+            } else if (rand < 0.60) {
+                // [NEW] 수류탄 드랍
+                spawnItem({ type: 'item', name: '수류탄', amount: 1 + (Math.random() < 0.3 ? 1 : 0) }, x, y, z);
             } else if (rand < 0.65) {
                 const keys = Object.keys(WEAPON_DATABASE).filter(k => k !== 'Fist' && k !== 'FlashGun' && k !== 'MagicBolt');
                 const key = keys[Math.floor(Math.random() * keys.length)];
@@ -3228,15 +3796,7 @@
                 // 생존자는 처음엔 조금 떨어진 곳에 대기 (허수아비 처치 후 텔레포트)
                 const y2 = getTerrainHeight(40, 30);
                 createNPC(40, 30, 0x00ff00, '생존자', ["지평선 너머엔 무엇이 있을까요?", "항상 주변을 경계하세요.", "조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다."], y2);
-                // 허수아비: 플레이어 정면 8m
-                setTimeout(() => {
-                    createScarecrow(8, 0);
-                    // 튜토리얼 안내 메시지 순차 출력
-                    setTimeout(() => showChat('시스템', '📖 튜토리얼: 좌클릭으로 사격, 우클릭으로 조준합니다.'), 1000);
-                    setTimeout(() => showChat('시스템', '📖 WASD로 이동, Shift로 달리기, Space로 점프.'), 3500);
-                    setTimeout(() => showChat('시스템', '📖 R키 재장전, F키 상호작용, T키 줌 배율 변경.'), 6000);
-                    setTimeout(() => showChat('시스템', '🎯 허수아비를 공격해서 조작을 익혀보세요!'), 8500);
-                }, 2000);
+                // [MODIFIED] 튜토리얼(허수아비+조작 안내)은 더 이상 여기서 자동 시작하지 않음 - 생존자와의 첫 대화가 끝난 뒤 startTutorial()에서 시작됨
             }
         }
         
@@ -3390,11 +3950,13 @@
             bossMesh.position.set(x, yBase + (0.9 * scale), z); bossMesh.castShadow = false;
             const skillCooldowns = { fireball: 0, shockwave: 0, summon: 0, smash: 0, boulderThrow: 0, teleport: 0, darkPulse: 0, massRaise: 0 };
             bossMesh.userData = { type: 'boss', bossType: type, name: bossName, health: bossHealth, maxHealth: bossHealth, scale: scale, speed: speed, state: 'idle', lastAttackTime: 0, attackCooldown: type === 'witch' ? 3200 : type === 'golem' ? 4000 : type === 'necromancer' ? 3800 : 2500, attackRange: type === 'witch' ? 40 : type === 'golem' ? 12 : type === 'fire_demon' ? 10 : 45, detectionRange: 300, lastTeleportTime: 0, teleportCooldown: 8000, originalColor: new THREE.Color(color), skillCooldowns,
+                spawnPosition: new THREE.Vector3(x, yBase, z), // [NEW] 생성 위치 - 이 위치로부터 정해진 반경 밖의 플레이어는 탐지하지 않음
                 // [NEW] 보스전 재미 요소: 스태거(경직)/분노(인레이지)/페이즈 연출용 상태값
                 staggerDamage: 0, staggerWindowStart: 0, staggeredUntil: 0, combatStartTime: 0, enraged: false, lastAnnouncedPhase: 1 };
             scene.add(bossMesh); bosses.push(bossMesh); objects.push(bossMesh); 
         }
 
+        const BOSS_LEASH_RADIUS = 250; // [NEW] 보스는 생성된 위치로부터 이 반경 밖의 플레이어는 탐지하지 않음 (자기 구역을 벗어난 추격 방지 + 렉 감소)
         function updateBosses(delta, now, playerPos) {
             let activeBoss = null; let minDst = 300; 
             const isSafeZone = (hasLeftSafeZone === 0);
@@ -3411,7 +3973,10 @@
                 const dist = boss.position.distanceTo(playerPos);
                 if (isSafeZone && boss.userData.health >= boss.userData.maxHealth) return;
                 if (dist < minDst) { minDst = dist; activeBoss = boss; }
-                if (dist < boss.userData.detectionRange) {
+                // [NEW] 생성 위치 기준 반경 밖에 있는 플레이어는 아무리 가까이 있어도(순간이동 등) 탐지되지 않음
+                const spawnPos = boss.userData.spawnPosition || boss.position;
+                const withinTerritory = playerPos.distanceTo(spawnPos) <= BOSS_LEASH_RADIUS;
+                if (dist < boss.userData.detectionRange && withinTerritory) {
                     // [NEW] 경직(스태거) 상태: 공격/이동 없이 완전히 무방비 (플레이어에게 딜링 찬스)
                     if (now < boss.userData.staggeredUntil) { return; }
                     // [NEW] 분노(인레이지): 전투 시작 90초 경과 시 1회, 공격 빨라지고 이동속도 상승
@@ -3449,7 +4014,7 @@
         // ─── 불의 악마 스킬 AI ───────────────────────────────────────────────
         function handleFireDemonAI(boss, playerPos, dist, now, delta, direction) {
             const sc = boss.userData.skillCooldowns;
-            const groundY = getTerrainHeight(boss.position.x, boss.position.z);
+            const groundY = getStructureAwareGroundY(boss.position, boss.userData);
             if (dist > boss.userData.attackRange) { boss.position.add(direction.multiplyScalar(boss.userData.speed * delta)); boss.position.y = groundY + (0.9 * boss.userData.scale); }
             
             if (now - boss.userData.lastAttackTime < boss.userData.attackCooldown) return;
@@ -3514,7 +4079,7 @@
         // ─── 골렘 스킬 AI ────────────────────────────────────────────────────
         function handleGolemAI(boss, playerPos, dist, now, delta, direction) {
             const sc = boss.userData.skillCooldowns;
-            const groundY = getTerrainHeight(boss.position.x, boss.position.z);
+            const groundY = getStructureAwareGroundY(boss.position, boss.userData);
             if (dist > boss.userData.attackRange) { boss.position.add(direction.multiplyScalar(boss.userData.speed * delta)); boss.position.y = groundY + (0.9 * boss.userData.scale); }
             const hpRatio = boss.userData.health / boss.userData.maxHealth;
             // [NEW] 체력 30% 이하 페이즈 전환 (1회성 대사 + 이펙트, 이후 공격이 더 빨라짐)
@@ -3559,7 +4124,7 @@
         // ─── 강령술사 스킬 AI ─────────────────────────────────────────────────
         function handleNecromancerAI(boss, playerPos, dist, now, delta, direction) {
             const sc = boss.userData.skillCooldowns;
-            const groundY = getTerrainHeight(boss.position.x, boss.position.z);
+            const groundY = getStructureAwareGroundY(boss.position, boss.userData);
             // 거리 유지 (40~70m)
             if (dist < 35) { const away = direction.clone().negate(); boss.position.add(away.multiplyScalar(boss.userData.speed * delta)); }
             else if (dist > 70) { boss.position.add(direction.multiplyScalar(boss.userData.speed * delta)); }
@@ -3627,7 +4192,7 @@
                 createDebrisEffect(boss.position, new THREE.Color(0x800080), 25);
             }
             if ((dist < 8 || Math.random() < 0.005) && now - boss.userData.lastTeleportTime > boss.userData.teleportCooldown) { castWitchTeleport(boss, playerPos); boss.userData.lastTeleportTime = now; return; }
-            if (dist > boss.userData.attackRange) { boss.position.add(direction.multiplyScalar(boss.userData.speed * delta)); const groundY = getTerrainHeight(boss.position.x, boss.position.z); boss.position.y = groundY + (0.9 * boss.userData.scale); }
+            if (dist > boss.userData.attackRange) { boss.position.add(direction.multiplyScalar(boss.userData.speed * delta)); const groundY = getStructureAwareGroundY(boss.position, boss.userData); boss.position.y = groundY + (0.9 * boss.userData.scale); }
             const effectiveCooldownW = boss.userData.attackCooldown * (hpRatio <= 0.3 ? 0.7 : 1);
             if (now - boss.userData.lastAttackTime > effectiveCooldownW) {
                 boss.userData.lastAttackTime = now; const rand = Math.random();
@@ -3668,6 +4233,15 @@
             const zone = new THREE.Mesh(geometry, material); const groundY = getTerrainHeight(x, z); zone.position.set(x, groundY + 0.1, z); scene.add(zone);
             const hazard = { mesh: zone, spawnedAt: Date.now(), expiry: Date.now() + duration, damage: damage, radius: radius, triggered: false }; hazardZones.push(hazard);
         }
+        // [NEW] 플레이어 수류탄 착지 지점 위험지역 (보스 공격범위와 같은 방식으로 동작하지만, 피해 대상은 플레이어가 아니라 적)
+        function createPlayerGrenadeZone(x, y, z, radius, duration, damage) {
+            if (hazardZones.length > 60) { const old = hazardZones.shift(); if (old && old.mesh.parent) scene.remove(old.mesh); }
+            let geometry = hazardGeoCache.get(radius);
+            if (!geometry) { geometry = new THREE.CylinderGeometry(radius, radius, 0.2, 16); hazardGeoCache.set(radius, geometry); }
+            const material = new THREE.MeshBasicMaterial({ color: 0xff8800, transparent: true, opacity: 0.15 });
+            const zone = new THREE.Mesh(geometry, material); const groundY = getTerrainHeight(x, z); zone.position.set(x, groundY + 0.1, z); scene.add(zone);
+            const hazard = { mesh: zone, spawnedAt: Date.now(), expiry: Date.now() + duration, damage: damage, radius: radius, triggered: false, isPlayerGrenade: true }; hazardZones.push(hazard);
+        }
         function updateHazardZones(now) {
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             for (let i = hazardZones.length - 1; i >= 0; i--) {
@@ -3684,8 +4258,19 @@
                         zone.mesh.material.opacity = baseOpacity + Math.sin(now * pulseSpeed) * (0.1 + urgency * 0.15);
                     }
                 } else {
-                    createDebrisEffect(zone.mesh.position, new THREE.Color(0xff4500), 20);
-                    if (distSq < zone.radius * zone.radius) { attackPlayer(zone.damage); showChat('시스템', '마법 폭발에 휘말렸습니다!'); }
+                    createDebrisEffect(zone.mesh.position, new THREE.Color(zone.isPlayerGrenade ? 0xff8800 : 0xff4500), zone.isPlayerGrenade ? 24 : 20);
+                    if (zone.isPlayerGrenade) {
+                        // [NEW] 플레이어 수류탄: 위험지역 안의 적(좀비/원거리/보스/NPC)에게만 피해
+                        const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+                        let hitCount = 0;
+                        targets.forEach(t => {
+                            if (!t.parent || t.userData.health <= 0) return;
+                            if (t.position.distanceToSquared(zone.mesh.position) > zone.radius * zone.radius) return;
+                            applySkillDamage(t, zone.damage);
+                            hitCount++;
+                        });
+                        if (hitCount > 0) registerComboHit();
+                    } else if (distSq < zone.radius * zone.radius) { attackPlayer(zone.damage); showChat('시스템', '마법 폭발에 휘말렸습니다!'); }
                     scene.remove(zone.mesh); hazardZones.splice(i, 1);
                 }
             }
@@ -3749,7 +4334,7 @@
             if (cfg.isElf) npc.userData.isElf = true;
             if (cfg.isDwarf) npc.userData.isDwarf = true;
             if (cfg.hasTutorial) {
-                npc.userData.tutorialDialogue = [ "1. [캐릭터 조작] WASD로 이동하고, Shift로 달립니다. Space는 점프, F키는 상호작용입니다.", "2. [차량 조작] 차량 근처에서 F키로 타고 내립니다. WASD로 운전하며, 좀비들을 들이받아 날려버릴 수 있습니다.", "3. [생존 위협] 좀비와 적들은 소리를 듣고 쫓아옵니다. 특히 밤에는 시야가 좁아지고 적들이 더 위험해집니다.", "4. [전투 방법] 마우스 왼쪽 버튼으로 사격, 우클릭으로 조준합니다. 탄약이 떨어지면 R키로 재장전하세요.", "5. [줌 조절] 우클릭 조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다. T키로 최대 배율을 변경해보세요!", "6. [지형 주의] 화산 지대의 용암에 닿으면 큰 피해를 입습니다! 조심하세요!" ];
+                npc.userData.tutorialDialogue = [ "1. [캐릭터 조작] WASD로 이동하고, Shift로 달립니다. Space는 점프, F키는 상호작용입니다.", "2. [차량 조작] 차량 근처에서 F키로 타고 내립니다. WASD로 운전하며, 좀비들을 들이받아 날려버릴 수 있습니다.", "3. [생존 위협] 좀비와 적들은 소리를 듣고 쫓아옵니다. 특히 밤에는 시야가 좁아지고 적들이 더 위험해집니다.", "4. [전투 방법] 마우스 왼쪽 버튼으로 사격, 우클릭으로 조준합니다. 탄약이 떨어지면 R키로 재장전하세요.", "5. [줌 조절] 우클릭 조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다. T키로 최대 배율을 변경해보세요!", "6. [지형 주의] 화산 지대의 용암에 닿으면 큰 피해를 입습니다! 조심하세요!", "7. [스탯 히든 스킬] P키로 스탯을 투자하면 자동으로 숨겨진 스킬이 생기고 점점 강해집니다. 120 이상 극한까지 투자하면 완전히 새로운 강력한 스킬이 열리고, 5개 스탯을 모두 300까지 채우면 궁극기 '만능의 극의'가 각성합니다!", "8. [키 설정] E키(일시정지 메뉴)에서 '스킬 키 설정'과 '조작 키 설정'을 열어 각 키를 원하는 대로 자유롭게 바꿀 수 있습니다.", "9. [수류탄] 마우스 휠로 수류탄을 무기처럼 선택한 뒤 좌클릭하면 포물선을 그리며 던져집니다. 떨어진 지점에 위험 지역이 표시되고 잠시 후 터지며, 그 범위 안의 적에게만 피해를 줍니다.", "10. [기관총] M249 같은 기관총은 마우스 왼쪽 버튼을 누르고 있으면 계속 자동으로 발사됩니다." ];
                 npc.userData.tutorialIndex = 0;
             }
             showChat('시스템', `📢 새로운 ${name}이(가) 그 자리를 대신하게 되었습니다.`);
@@ -3757,15 +4342,21 @@
 
         // ── [NEW] 숨겨진 저주 트리거: 무고한 NPC 살해 시 서서히 공포 연출 시작 (플레이어에게 알리지 않음) ──
         function triggerNpcDeathCurse(npc) {
+            const isFirstVictim = !curseState.active;
             if (!curseState.victimNames.includes(npc.userData.name)) curseState.victimNames.push(npc.userData.name);
             curseState.active = true;
             curseState.intensity = Math.min(3, curseState.intensity + 1);
             // 첫 징조는 즉시 티내지 않고 30~90초 뒤 무작위 시점에 시작 (인과관계를 흐림)
             curseState.nextEventTime = Date.now() + 30000 + Math.random() * 60000;
+            // [NEW] 첫 무고한 희생 - 히든 퀘스트 '피의 대가' 조용히 시작 (플레이어에게 알림창 없이)
+            if (isFirstVictim) startHiddenQuest('bloodprice');
         }
 
         function updateCurseSystem(now) {
             if (!curseState.active) return;
+            if (apparitionEvent) { updateApparitionEvent(now); return; } // 환영이 나타난 동안은 다른 징조를 띄우지 않음
+            maybeSpawnApparition(now);
+            if (apparitionEvent) return; // 방금 막 환영이 소환되었다면 이번 틱은 여기서 마무리
             if (now < curseState.nextEventTime) return;
             fireCurseEvent();
             // 강도가 높을수록 다음 징조가 더 자주 발생 (하지만 여전히 무작위/드묾)
@@ -3774,6 +4365,7 @@
         }
 
         function fireCurseEvent() {
+            curseState.curseEventCount = (curseState.curseEventCount || 0) + 1;
             const names = curseState.victimNames.length ? curseState.victimNames : ['생존자'];
             const victim = names[Math.floor(Math.random() * names.length)];
             const roll = Math.random();
@@ -3788,6 +4380,97 @@
             } else {
                 spawnGhostText(victim);
             }
+        }
+
+        // ── [NEW] 공포 모드 클라이맥스: 저주가 절정(강도 3)에 달하고 충분한 징조가 쌓이면, 희생자의 환영이 실제로 모습을 드러냄 ──
+        function maybeSpawnApparition(now) {
+            if (apparitionEvent) return;
+            if (curseState.intensity < 3) return;
+            if ((curseState.curseEventCount || 0) < 5) return;
+            if (curseState.apparitionCooldownUntil && now < curseState.apparitionCooldownUntil) return;
+            if (!scene || !camera || playerInVehicle) return; // 차량 안에서는 연출하지 않음
+            spawnApparition();
+        }
+
+        function spawnApparition() {
+            const names = curseState.victimNames.length ? curseState.victimNames : ['이름 모를 그림자'];
+            const name = names[Math.floor(Math.random() * names.length)];
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; if (dir.lengthSq() > 0.0001) dir.normalize();
+            const dist = 6 + Math.random() * 3;
+            const spawnPos = gameState.position.clone().addScaledVector(dir, dist);
+            spawnPos.y = getTerrainHeight(spawnPos.x, spawnPos.z);
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.8, 0.4), new THREE.MeshBasicMaterial({ color: 0xbfffe0, transparent: true, opacity: 0.35, depthWrite: false }));
+            body.position.y = 0.9; group.add(body);
+            const glow = new THREE.PointLight(0x88ffcc, 2, 12); glow.position.y = 1.2; group.add(glow);
+            group.position.copy(spawnPos);
+            scene.add(group);
+            apparitionEvent = { mesh: group, name, expiresAt: Date.now() + 16000, resolvedFlag: false };
+            curseState.apparitionEncountered = true;
+            showChat('시스템', '...누군가 저 앞에 조용히 서 있다.');
+            setTimeout(() => { if (apparitionEvent) showChat(apparitionEvent.name, '...왜...'); }, 2200);
+            checkAchievements();
+        }
+
+        function updateApparitionEvent(now) {
+            if (!apparitionEvent) return;
+            apparitionEvent.mesh.position.y += Math.sin(now * 0.002) * 0.003; // 은은한 부유
+            const dist = gameState.position.distanceTo(apparitionEvent.mesh.position);
+            if (dist < 3 && !apparitionEvent.resolvedFlag) {
+                apparitionEvent.resolvedFlag = true;
+                resolveApparitionEvent();
+                return;
+            }
+            if (now > apparitionEvent.expiresAt) {
+                despawnApparition(false);
+            }
+        }
+
+        // 플레이어가 환영에게 직접 다가가면(도망치지 않으면) 화해의 서사가 진행됨 - '피의 대가' 히든 퀘스트의 결말
+        function resolveApparitionEvent() {
+            const name = apparitionEvent.name;
+            showChat('시스템', `${name}의 눈을 마주보았다...`);
+            setTimeout(() => showChat(name, '...나는... 그저 살고 싶었을 뿐인데...'), 1500);
+            setTimeout(() => showChat('시스템', '깊은 후회가 밀려온다. 무언가 풀려나는 느낌이 든다.'), 3500);
+            setTimeout(() => {
+                curseState.intensity = Math.max(0, curseState.intensity - 1);
+                if (curseState.intensity <= 0) {
+                    curseState.active = false;
+                    showChat('시스템', '🕊️ 저주가 완전히 풀렸다. 다시는 무고한 이를 해치지 않겠다고 다짐한다.');
+                } else {
+                    showChat('시스템', `저주의 기운이 옅어졌다. (남은 강도: ${curseState.intensity})`);
+                }
+                curseState.curseEventCount = 0;
+                curseState.apparitionCooldownUntil = Date.now() + 120000;
+                completeHiddenQuest('bloodprice', 800, 300, []);
+                despawnApparition(true);
+            }, 5000);
+        }
+
+        function despawnApparition(resolved) {
+            if (!apparitionEvent) return;
+            if (!resolved) {
+                showChat('시스템', '그것은 아무 말 없이... 사라졌다.');
+                curseState.apparitionCooldownUntil = Date.now() + 60000;
+            }
+            scene.remove(apparitionEvent.mesh);
+            apparitionEvent = null;
+        }
+
+        // ── [NEW] 히든 퀘스트 헬퍼: NPC 없이 특정 행동/조건으로 조용히 시작되고 완료되는 퀘스트 ──
+        function startHiddenQuest(id) {
+            if (hiddenQuests[id] !== 'inactive') return;
+            hiddenQuests[id] = 'active';
+        }
+        function completeHiddenQuest(id, rewardMoloch, rewardXp, resultLines) {
+            if (hiddenQuests[id] !== 'active') return;
+            hiddenQuests[id] = 'done';
+            (resultLines || []).forEach((line, i) => setTimeout(() => showChat(line.speaker, line.text), i * 1800));
+            setTimeout(() => {
+                addMoloch(rewardMoloch); gainXP(rewardXp);
+                showChat('시스템', `🔒 [히든 퀘스트 완료] +${rewardMoloch} 몰록, +${rewardXp} XP`);
+                checkAchievements();
+            }, (resultLines || []).length * 1800 + 400);
         }
 
         function spawnGhostText(name) {
@@ -3840,6 +4523,11 @@
             // ── 메인스토리 보스 처치 연동 ──
             onStoryKill('boss', boss.userData.bossType);
             createDebrisEffect(boss.position, boss.userData.originalColor, 50); scene.remove(boss); bosses.splice(index, 1); objects = objects.filter(o => o !== boss); document.getElementById('boss-container').style.display = 'none'; 
+            // [FIX] 네크로맨서 보스를 처치하면 히든 아이템 '백신'을 얻음 (기존엔 얻을 방법이 전혀 없어서 상인에게 있던 판매 버튼이 항상 죽은 코드였음)
+            if (boss.userData.bossType === 'necromancer' && !gameState.hasVaccine) {
+                gameState.hasVaccine = true;
+                showChat('시스템', `🧪 네크로맨서가 품고 있던 수상한 <span style="color:#00ff00; font-weight:bold;">백신</span>을 손에 넣었습니다... 상인에게 팔면 무슨 일이 일어날지도 모릅니다.`);
+            }
             // [NEW] 보스 처치 시 높은 확률(70%)로 방어구 드랍, 티어도 아이언 이상으로 더 좋은 편이 나오게 함
             if (Math.random() < 0.7) {
                 const piece = generateArmorPiece(null, rollBossArmorTier());
@@ -3979,7 +4667,7 @@
             body.castShadow = isMerchant; 
             
             body.userData = { type: 'npc', name: name, dialogue: dialogue, dialogueIndex: 0, spawnPosition: new THREE.Vector3(x, yBase + 1, z), wanderTarget: null, lastMoveTime: 0, speed: 2.5, health: 120, maxHealth: 120, originalColor: new THREE.Color(color) };
-            if (name === '생존자') { body.userData.tutorialDialogue = [ "1. [캐릭터 조작] WASD로 이동하고, Shift로 달립니다. Space는 점프, F키는 상호작용입니다.", "2. [차량 조작] 차량 근처에서 F키로 타고 내립니다. WASD로 운전하며, 좀비들을 들이받아 날려버릴 수 있습니다.", "3. [생존 위협] 좀비와 적들은 소리를 듣고 쫓아옵니다. 특히 밤에는 시야가 좁아지고 적들이 더 위험해집니다.", "4. [전투 방법] 마우스 왼쪽 버튼으로 사격, 우클릭으로 조준합니다. 탄약이 떨어지면 R키로 재장전하세요.", "5. [줌 조절] 우클릭 조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다. T키로 최대 배율을 변경해보세요!", "6. [지형 주의] 화산 지대의 용암에 닿으면 큰 피해를 입습니다! 조심하세요!" ]; body.userData.tutorialIndex = 0; }
+            if (name === '생존자') { body.userData.tutorialDialogue = [ "1. [캐릭터 조작] WASD로 이동하고, Shift로 달립니다. Space는 점프, F키는 상호작용입니다.", "2. [차량 조작] 차량 근처에서 F키로 타고 내립니다. WASD로 운전하며, 좀비들을 들이받아 날려버릴 수 있습니다.", "3. [생존 위협] 좀비와 적들은 소리를 듣고 쫓아옵니다. 특히 밤에는 시야가 좁아지고 적들이 더 위험해집니다.", "4. [전투 방법] 마우스 왼쪽 버튼으로 사격, 우클릭으로 조준합니다. 탄약이 떨어지면 R키로 재장전하세요.", "5. [줌 조절] 우클릭 조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다. T키로 최대 배율을 변경해보세요!", "6. [지형 주의] 화산 지대의 용암에 닿으면 큰 피해를 입습니다! 조심하세요!", "7. [스탯 히든 스킬] P키로 스탯을 투자하면 자동으로 숨겨진 스킬이 생기고 점점 강해집니다. 120 이상 극한까지 투자하면 완전히 새로운 강력한 스킬이 열리고, 5개 스탯을 모두 300까지 채우면 궁극기 '만능의 극의'가 각성합니다!", "8. [키 설정] E키(일시정지 메뉴)에서 '스킬 키 설정'과 '조작 키 설정'을 열어 각 키를 원하는 대로 자유롭게 바꿀 수 있습니다.", "9. [수류탄] 마우스 휠로 수류탄을 무기처럼 선택한 뒤 좌클릭하면 포물선을 그리며 던져집니다. 떨어진 지점에 위험 지역이 표시되고 잠시 후 터지며, 그 범위 안의 적에게만 피해를 줍니다.", "10. [기관총] M249 같은 기관총은 마우스 왼쪽 버튼을 누르고 있으면 계속 자동으로 발사됩니다." ]; body.userData.tutorialIndex = 0; }
             const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshLambertMaterial({ color: 0x333333 })); head.position.set(0, 1.3, 0); 
             
             // [수정] 머리 그림자도 상인만
@@ -3992,6 +4680,18 @@
         // ─── 허수아비 시스템 ────────────────────────────────────────────────
         let scarecrow = null;
         const SCARECROW_MAX_HP = 200;
+
+        // [NEW] 생존자와의 첫 대화가 끝난 뒤에만 시작되는 튜토리얼 - 허수아비를 플레이어 정면에 배치하고, 안내 메시지 사이 텀을 넉넉히 둠
+        function startTutorial() {
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; if (dir.lengthSq() < 0.0001) dir.set(1, 0, 0); else dir.normalize();
+            createScarecrow(playerPos.x + dir.x * 8, playerPos.z + dir.z * 8);
+            // 튜토리얼 안내 메시지 순차 출력 (기존 2.5초 텀 → 4초 텀으로 늘려서 읽을 시간 확보)
+            setTimeout(() => showChat('시스템', '📖 튜토리얼: 좌클릭으로 사격, 우클릭으로 조준합니다.'), 1000);
+            setTimeout(() => showChat('시스템', '📖 WASD로 이동, Shift로 달리기, Space로 점프.'), 5000);
+            setTimeout(() => showChat('시스템', '📖 R키 재장전, F키 상호작용, T키 줌 배율 변경.'), 9000);
+            setTimeout(() => showChat('시스템', '🎯 허수아비를 공격해서 조작을 익혀보세요!'), 13000);
+        }
 
         function createScarecrow(x, z) {
             const yBase = getTerrainHeight(x, z);
@@ -4213,7 +4913,7 @@
                      if (data.isJumping) {
                         data.velocityY -= 0.03 * updateRate; 
                         enemy.position.y += data.velocityY * updateRate;
-                        const groundY = getTerrainHeight(enemy.position.x, enemy.position.z);
+                        const groundY = getStructureAwareGroundY(enemy.position, data); // [FIX] 건물 바닥 인식
                         if (enemy.position.y <= groundY + 0.9) {
                             enemy.position.y = groundY + 0.9;
                             data.isJumping = false;
@@ -4238,23 +4938,8 @@
                 if (isNight) { data.speed = playerBaseSpeed + 0.01; } else { data.speed = Math.max(0, playerBaseSpeed - 0.1); }
                 if (data.health <= 0) { handleZombieDeath(enemy, index, true); continue; }
                 
-                let zombieGroundY = -100; let validGroundHit = null; const biome = getBiome(enemy.position.x, enemy.position.z);
-                if (biome !== 'city') { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); } else { 
-                    if (data.isJumping || (frameCount + index) % 10 === 0) {
-                        raycaster.far = 20; raycaster.set(enemy.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const zombieIntersects = raycaster.intersectObjects(structures, true); 
-                        validGroundHit = zombieIntersects.find(hit => {
-                            if (hit.point.y >= enemy.position.y + 2.0) return false;
-                            const isStructure = hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor';
-                            const isGround = hit.object.geometry.type === 'PlaneGeometry';
-                            if (!isStructure && !isGround) return false;
-                            if (isGround && hit.distance > 5.0) return false;
-                            return true;
-                        });
-                        if (validGroundHit) { zombieGroundY = validGroundHit.point.y; } else { zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z); }
-                    } else {
-                        zombieGroundY = getTerrainHeight(enemy.position.x, enemy.position.z);
-                    }
-                }
+                // [FIX] 좀비 지면(건물 바닥 포함) 높이 계산 - 공용 함수 사용으로 통일 (기존엔 레이캐스트가 실패하면 높이 갱신을 아예 건너뛰어 붕 뜨거나 어긋나는 문제가 있었음)
+                const zombieGroundY = getStructureAwareGroundY(enemy.position, data);
 
                 // [NEW] 용암 데미지: 좀비/트롤/오크/엘프는 용암에 닿으면 피해를 입음. 드워프는 용암에 면역.
                 if (!data.isDwarfVillager && data.health > 0 && (frameCount + index) % 4 === 0) {
@@ -4266,21 +4951,26 @@
                 }
 
                 let heightOffset = 0.9; if (data.isTroll) heightOffset = 1.35; if (data.isOrc) heightOffset = data.name.includes('워치프') ? 1.35 : 1.0;
-                if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03 * updateRate; if (enemy.position.y <= zombieGroundY + heightOffset && data.velocityY < 0) { enemy.position.y = zombieGroundY + heightOffset; data.isJumping = false; data.velocityY = 0; } } else { if (biome !== 'city' || validGroundHit) { enemy.position.y = zombieGroundY + heightOffset; } }
+                if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03 * updateRate; if (enemy.position.y <= zombieGroundY + heightOffset && data.velocityY < 0) { enemy.position.y = zombieGroundY + heightOffset; data.isJumping = false; data.velocityY = 0; } } else { enemy.position.y = zombieGroundY + heightOffset; }
                 
                 let currentTargetPos = targetPos; let isTargetPlayer = true;
                 if (data.customTarget) { if (data.customTarget.parent && data.customTarget.userData.health > 0) { currentTargetPos = data.customTarget.position; isTargetPlayer = false; } else { data.customTarget = null; } }
 
                 if (!currentTargetPos || !enemy || !enemy.position) continue; const distSq = enemy.position.distanceToSquared(currentTargetPos); const distToTarget = Math.sqrt(distSq); const heightDiff = currentTargetPos.y - enemy.position.y; data.targetHeight = heightDiff; data.playerElevated = isTargetPlayer && heightDiff > 3; 
                 const isSafeZone = isTargetPlayer && (hasLeftSafeZone === 0); const isProvoked = data.isProvoked;
+                const isPassiveByDefault = data.isOrc || data.isPeaceful; // [OPTIMIZATION] LOS/포탈 탐색 스킵 판단에 필요해서 위로 끌어올림
 
-                if (now - data.lastPortalCheck > data.portalCheckInterval) { 
+                // [OPTIMIZATION] 오크 군락 렉 감소: 도발당하지 않은 평화로운 몹(오크 등)은 애초에 chase/portal 상태로 전환되지 않으므로
+                // 시야 레이캐스트와 포탈 탐색 결과가 행동에 전혀 영향을 주지 않음 - 그런데도 매 프레임 계산하고 있었음. 통째로 스킵.
+                const needsAggroLogic = !isPassiveByDefault || isProvoked;
+
+                if (needsAggroLogic && now - data.lastPortalCheck > data.portalCheckInterval) { 
                     data.lastPortalCheck = now; const verticalDist = Math.abs(heightDiff);
                     if (verticalDist > 2.5 && distToTarget < 80) { data.portalAction = findBestPortalAction(enemy.position, currentTargetPos.y); } else { data.portalAction = null; } 
                 }
 
                 let hasLineOfSight = false; 
-                if (!isSafeZone || isProvoked) { 
+                if (needsAggroLogic && (!isSafeZone || isProvoked)) { 
                     if (data.state === 'chase' && (frameCount + index) % 10 !== 0) {
                         hasLineOfSight = true; 
                     } else {
@@ -4290,8 +4980,7 @@
                 if (hasLineOfSight) { data.lastKnownPlayerPosition.copy(currentTargetPos); }
                 
                 const moved = enemy.position.distanceTo(data.lastPosition); if (!data.isJumping && moved < 0.1 * effectiveDelta && (data.state === 'chase' || data.state === 'portal')) { data.stuckTime += effectiveDelta * 1000; } else { data.stuckTime = 0; } data.lastPosition.copy(enemy.position);
-                
-                const isPassiveByDefault = data.isOrc || data.isPeaceful;
+
                 if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager) { data.state = 'portal'; } 
                 else if (((!isPassiveByDefault && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
                 else if (isProvoked || (!isPassiveByDefault && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
@@ -4320,6 +5009,29 @@
             return bestPortal;
         }
 
+        // [NEW] 몹이 건물 벽을 그냥 통과하지 않도록 하는 간단한 수평 충돌 처리 (플레이어 충돌 로직을 몹용으로 축약)
+        // - 축(X/Z)별로 따로 검사해서 벽에 닿으면 그 방향으로만 못 가고 다른 축으로는 계속 미끄러지듯 이동 가능
+        function applyMobMovement(enemy, velocity) {
+            if (velocity.x === 0 && velocity.z === 0) return;
+            const nearby = getNearbyStaticObjects(enemy.position);
+            if (nearby.length === 0) { enemy.position.x += velocity.x; enemy.position.z += velocity.z; return; }
+            const r = 0.5;
+            const isWall = (obj) => obj.geometry && obj.parent && obj.userData.type !== 'roof' && obj.userData.type !== 'floor' && obj.geometry.type !== 'PlaneGeometry' && obj.userData.type !== 'lava';
+            if (velocity.x !== 0) {
+                const testX = enemy.position.x + velocity.x;
+                const box = new THREE.Box3(new THREE.Vector3(testX - r, enemy.position.y, enemy.position.z - r), new THREE.Vector3(testX + r, enemy.position.y + 1.6, enemy.position.z + r));
+                let blocked = false;
+                for (const obj of nearby) { if (!isWall(obj)) continue; if (box.intersectsBox(tempBox.setFromObject(obj))) { blocked = true; break; } }
+                if (!blocked) enemy.position.x = testX;
+            }
+            if (velocity.z !== 0) {
+                const testZ = enemy.position.z + velocity.z;
+                const box = new THREE.Box3(new THREE.Vector3(enemy.position.x - r, enemy.position.y, testZ - r), new THREE.Vector3(enemy.position.x + r, enemy.position.y + 1.6, testZ + r));
+                let blocked = false;
+                for (const obj of nearby) { if (!isWall(obj)) continue; if (box.intersectsBox(tempBox.setFromObject(obj))) { blocked = true; break; } }
+                if (!blocked) enemy.position.z = testZ;
+            }
+        }
         function handleChaseState(enemy, data, now, delta, hasLOS, targetPos) {
             if (!targetPos && data.lastKnownPlayerPosition.lengthSq() > 0) targetPos = data.lastKnownPlayerPosition;
             if (!targetPos) { data.state = 'wander'; return; }
@@ -4347,7 +5059,7 @@
                 if (moveDir.lengthSq() > 0.0001) moveDir.normalize();
                 const elfSpeed = data.speed * 1.15; // 엘프는 더 날렵함
                 const velocity = moveDir.multiplyScalar(elfSpeed * delta);
-                enemy.position.add(velocity);
+                applyMobMovement(enemy, velocity);
                 enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
                 if (hasLOS && !data.isJumping && data.playerElevated && data.targetHeight > 2.0) { data.velocityY = 0.3; data.isJumping = true; }
                 return;
@@ -4357,7 +5069,7 @@
             // (별도 가속 없이 기본 로직을 타되, 속도/맷집은 생성 시점에 이미 둔중하게 설정됨)
 
             const velocity = direction.multiplyScalar(data.speed * delta);
-            enemy.position.add(velocity);
+            applyMobMovement(enemy, velocity);
             enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
             
             if (hasLOS && !data.isJumping && data.playerElevated && data.targetHeight > 2.0) { data.velocityY = 0.3; data.isJumping = true; }
@@ -4373,7 +5085,7 @@
             if (dist < 1) { data.wanderTarget = null; return; }
             
             const direction = data.wanderTarget.clone().sub(enemy.position).normalize(); direction.y = 0;
-            enemy.position.add(direction.multiplyScalar(data.speed * 0.5 * delta));
+            applyMobMovement(enemy, direction.multiplyScalar(data.speed * 0.5 * delta));
             enemy.lookAt(data.wanderTarget.x, enemy.position.y, data.wanderTarget.z);
         }
 
@@ -4893,6 +5605,170 @@
             scene.add(vehicle); vehicles.push(vehicle);
         }
 
+        // ── [NEW] 스킬 키 설정(리바인딩) 시스템 ──────────────────────────────────────────
+        const DEFAULT_KEY_BINDINGS = {
+            slash: 'KeyG', magic: 'KeyH', healMagic: 'KeyJ', burst: 'KeyK', ultimate: 'KeyL',
+            whirlwind: 'KeyV', bladeQi: 'KeyB', dragonStep: 'KeyN', flashSlash: 'KeyU',
+            armorHelmet: 'KeyQ', armorChest: 'KeyZ', armorPants: 'KeyX', armorBoots: 'KeyC',
+            mastery: 'KeyY',
+        };
+        const SKILL_ACTION_LABELS = {
+            slash: '참격', magic: '마법', healMagic: '치유 마법', burst: '폭렬장', ultimate: '필살기: 천마유성권',
+            whirlwind: '회오리베기', bladeQi: '검기파동', dragonStep: '용보 대시', flashSlash: '일섬',
+            armorHelmet: '인첸트 (모자)', armorChest: '인첸트 (흉갑)', armorPants: '인첸트 (바지)', armorBoots: '인첸트 (부츠)',
+            mastery: '💫 만능의 극의 (전 스탯 300)',
+        };
+        const SKILL_ACTIONS = {
+            slash: () => useSlashSkill(), magic: () => useMagicSkill(), healMagic: () => useHealMagicSkill(),
+            burst: () => useBurstSkill(), ultimate: () => useUltimateSkill(), whirlwind: () => useWhirlwindSlash(),
+            bladeQi: () => useBladeQiWave(), dragonStep: () => useDragonStepDash(), flashSlash: () => useFlashSlash(),
+            armorHelmet: () => activateArmorSkill('helmet'), armorChest: () => activateArmorSkill('chest'),
+            armorPants: () => activateArmorSkill('pants'), armorBoots: () => activateArmorSkill('boots'),
+            mastery: () => useMasterySkill(),
+        };
+        // 이동/조작 키로 사용 중인 코드는 스킬 키로 재할당할 수 없도록 예약 (조작 키 설정에서 바뀌면 이 목록도 함께 바뀜)
+        function getReservedControlCodes() {
+            return new Set([...Object.values(controlBindings), 'Escape']);
+        }
+        let keyBindings = { ...DEFAULT_KEY_BINDINGS };
+        let reverseKeyBindings = {}; // code -> actionName
+        function rebuildReverseKeyBindings() {
+            reverseKeyBindings = {};
+            Object.entries(keyBindings).forEach(([action, code]) => { reverseKeyBindings[code] = action; });
+        }
+        function keyCodeToLabel(code) {
+            if (!code) return '?';
+            if (code.startsWith('Key')) return code.slice(3);
+            if (code.startsWith('Digit')) return code.slice(5);
+            const special = { Space: 'Space', ShiftLeft: 'Shift', ShiftRight: 'Shift', ControlLeft: 'Ctrl', ControlRight: 'Ctrl', AltLeft: 'Alt', AltRight: 'Alt', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', BracketLeft: '[', BracketRight: ']', Backquote: '`', Minus: '-', Equal: '=' };
+            return special[code] || code;
+        }
+        function loadKeyBindings() {
+            try {
+                const saved = localStorage.getItem('gameKeyBindings');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // [FIX] 예전 버전에서 저장된 세이브에 지금은 존재하지 않는 액션 이름이 남아있으면,
+                    // 그 낡은 항목이 merge 순서상 나중에 처리되면서 현재 유효한 액션(예: 수류탄 I키)의
+                    // 키를 가로채 reverseKeyBindings에서 지워버리는 버그가 있었음(해당 키를 눌러도 아무 반응 없음).
+                    // 지금 실제로 존재하는 액션만 골라서 반영하도록 정리.
+                    const sanitized = {};
+                    Object.keys(DEFAULT_KEY_BINDINGS).forEach(action => {
+                        if (parsed[action] && typeof parsed[action] === 'string') sanitized[action] = parsed[action];
+                    });
+                    keyBindings = { ...DEFAULT_KEY_BINDINGS, ...sanitized };
+                }
+            } catch (e) { /* localStorage 사용 불가 - 기본값 사용 */ }
+            rebuildReverseKeyBindings();
+        }
+        function saveKeyBindings() {
+            try { localStorage.setItem('gameKeyBindings', JSON.stringify(keyBindings)); } catch (e) { /* 무시 */ }
+        }
+        let listeningForAction = null; // 현재 키 입력을 기다리는 중인 액션 이름
+        function renderKeybindModal() {
+            const list = document.getElementById('keybind-list');
+            if (!list) return;
+            list.innerHTML = '';
+            Object.keys(SKILL_ACTION_LABELS).forEach(action => {
+                const row = document.createElement('div'); row.className = 'keybind-row';
+                const name = document.createElement('div'); name.className = 'keybind-name'; name.textContent = SKILL_ACTION_LABELS[action];
+                const btn = document.createElement('button'); btn.className = 'keybind-key-btn'; btn.textContent = keyCodeToLabel(keyBindings[action]);
+                if (listeningForAction === action) { btn.classList.add('listening'); btn.textContent = '키 입력...'; }
+                btn.onclick = () => { listeningForAction = action; renderKeybindModal(); };
+                row.appendChild(name); row.appendChild(btn); list.appendChild(row);
+            });
+        }
+        function toggleKeybindModal() {
+            isKeybindOpen = !isKeybindOpen;
+            const modal = document.getElementById('keybind-modal');
+            if (isKeybindOpen) {
+                listeningForAction = null;
+                document.exitPointerLock();
+                modal.style.display = 'flex';
+                renderKeybindModal();
+            } else {
+                modal.style.display = 'none';
+                listeningForAction = null;
+            }
+        }
+        function closeKeybindModal() {
+            isKeybindOpen = false;
+            listeningForAction = null;
+            document.getElementById('keybind-modal').style.display = 'none';
+        }
+        let isKeybindOpen = false;
+
+        // ─── [NEW] 조작 키 설정 (이동/상호작용 등 일반 조작 키 재배정) ───────────────────
+        const DEFAULT_CONTROL_BINDINGS = {
+            moveForward: 'KeyW', moveLeft: 'KeyA', moveBackward: 'KeyS', moveRight: 'KeyD',
+            jump: 'Space', sprint: 'ShiftLeft', reload: 'KeyR', interact: 'KeyF',
+            weaponSlot1: 'Digit1', weaponSlot2: 'Digit2', weaponSlot3: 'Digit3', weaponSlot4: 'Digit4', weaponSlot5: 'Digit5',
+            statsMenu: 'KeyP', minimap: 'KeyM', scopeCycle: 'KeyT', pauseMenu: 'KeyE',
+        };
+        const CONTROL_ACTION_LABELS = {
+            moveForward: '앞으로 이동', moveLeft: '왼쪽 이동', moveBackward: '뒤로 이동', moveRight: '오른쪽 이동',
+            jump: '점프', sprint: '달리기', reload: '재장전', interact: '상호작용/줍기',
+            weaponSlot1: '무기 슬롯 1', weaponSlot2: '무기 슬롯 2', weaponSlot3: '무기 슬롯 3', weaponSlot4: '무기 슬롯 4', weaponSlot5: '무기 슬롯 5',
+            statsMenu: '스탯 창', minimap: '미니맵 토글', scopeCycle: '스코프 전환', pauseMenu: '일시정지 메뉴',
+        };
+        let controlBindings = { ...DEFAULT_CONTROL_BINDINGS };
+        let reverseControlBindings = {}; // code -> actionName
+        function rebuildReverseControlBindings() {
+            reverseControlBindings = {};
+            Object.entries(controlBindings).forEach(([action, code]) => { reverseControlBindings[code] = action; });
+        }
+        function loadControlBindings() {
+            try {
+                const saved = localStorage.getItem('gameControlBindings');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    // 스킬 키와 동일하게, 지금 존재하지 않는 낡은 액션 이름이 유효한 키를 가로채지 않도록 정리
+                    const sanitized = {};
+                    Object.keys(DEFAULT_CONTROL_BINDINGS).forEach(action => {
+                        if (parsed[action] && typeof parsed[action] === 'string') sanitized[action] = parsed[action];
+                    });
+                    controlBindings = { ...DEFAULT_CONTROL_BINDINGS, ...sanitized };
+                }
+            } catch (e) { /* localStorage 사용 불가 - 기본값 사용 */ }
+            rebuildReverseControlBindings();
+        }
+        function saveControlBindings() {
+            try { localStorage.setItem('gameControlBindings', JSON.stringify(controlBindings)); } catch (e) { /* 무시 */ }
+        }
+        let listeningForControlAction = null;
+        function renderControlbindModal() {
+            const list = document.getElementById('controlbind-list');
+            if (!list) return;
+            list.innerHTML = '';
+            Object.keys(CONTROL_ACTION_LABELS).forEach(action => {
+                const row = document.createElement('div'); row.className = 'keybind-row';
+                const name = document.createElement('div'); name.className = 'keybind-name'; name.textContent = CONTROL_ACTION_LABELS[action];
+                const btn = document.createElement('button'); btn.className = 'keybind-key-btn'; btn.textContent = keyCodeToLabel(controlBindings[action]);
+                if (listeningForControlAction === action) { btn.classList.add('listening'); btn.textContent = '키 입력...'; }
+                btn.onclick = () => { listeningForControlAction = action; renderControlbindModal(); };
+                row.appendChild(name); row.appendChild(btn); list.appendChild(row);
+            });
+        }
+        function toggleControlbindModal() {
+            isControlbindOpen = !isControlbindOpen;
+            const modal = document.getElementById('controlbind-modal');
+            if (isControlbindOpen) {
+                listeningForControlAction = null;
+                document.exitPointerLock();
+                modal.style.display = 'flex';
+                renderControlbindModal();
+            } else {
+                modal.style.display = 'none';
+                listeningForControlAction = null;
+            }
+        }
+        function closeControlbindModal() {
+            isControlbindOpen = false;
+            listeningForControlAction = null;
+            document.getElementById('controlbind-modal').style.display = 'none';
+        }
+        let isControlbindOpen = false;
+
         function setupControls() {
             // [NEW] 퀘스트 목록 휠 스크롤: 무기 전환 등 게임 휠 입력과 충돌하지 않도록 분리 처리
             const questListEl = document.getElementById('quest-list');
@@ -4924,50 +5800,126 @@
 
             // [NEW] 장비창 닫기 버튼
             document.getElementById('close-equip-btn').addEventListener('click', () => { closeEquipmentModal(); });
+
+            // [NEW] 일시정지 메뉴 -> 스킬 키 설정 버튼
+            document.getElementById('pause-keybind-btn').addEventListener('click', () => {
+                closePauseModal(true);
+                toggleKeybindModal();
+            });
+            document.getElementById('close-keybind-btn').addEventListener('click', () => { closeKeybindModal(); document.body.requestPointerLock(); });
+            document.getElementById('keybind-reset-btn').addEventListener('click', () => {
+                keyBindings = { ...DEFAULT_KEY_BINDINGS };
+                rebuildReverseKeyBindings();
+                saveKeyBindings();
+                listeningForAction = null;
+                renderKeybindModal();
+            });
+
+            // [NEW] 일시정지 메뉴 -> 조작 키 설정 버튼
+            document.getElementById('pause-controlbind-btn').addEventListener('click', () => {
+                closePauseModal(true);
+                toggleControlbindModal();
+            });
+            document.getElementById('close-controlbind-btn').addEventListener('click', () => { closeControlbindModal(); document.body.requestPointerLock(); });
+            document.getElementById('controlbind-reset-btn').addEventListener('click', () => {
+                controlBindings = { ...DEFAULT_CONTROL_BINDINGS };
+                rebuildReverseControlBindings();
+                saveControlBindings();
+                listeningForControlAction = null;
+                renderControlbindModal();
+            });
+
             document.addEventListener('keydown', (e) => { 
-                if(isGameOver || gameState.isReloading) return; 
+                // [NEW] 키 설정 창에서 새 키를 입력받는 중이라면, 이 키 입력을 바인딩에만 사용하고 게임 조작으로는 전달하지 않음
+                if (isKeybindOpen && listeningForAction) {
+                    e.preventDefault();
+                    const action = listeningForAction;
+                    const code = e.code;
+                    if (code === 'Escape') { listeningForAction = null; renderKeybindModal(); return; }
+                    if (getReservedControlCodes().has(code)) {
+                        listeningForAction = null;
+                        renderKeybindModal();
+                        showChat('시스템', `❌ [${keyCodeToLabel(code)}]키는 조작 키로 사용 중이라 스킬에 배정할 수 없습니다.`);
+                        return;
+                    }
+                    // 이미 다른 스킬에 배정된 키라면 두 스킬의 키를 서로 맞바꿈
+                    const conflictAction = Object.keys(keyBindings).find(a => keyBindings[a] === code && a !== action);
+                    if (conflictAction) { keyBindings[conflictAction] = keyBindings[action]; }
+                    keyBindings[action] = code;
+                    rebuildReverseKeyBindings();
+                    saveKeyBindings();
+                    listeningForAction = null;
+                    renderKeybindModal();
+                    return;
+                }
+                // [NEW] 조작 키 설정 창에서 새 키를 입력받는 중이라면, 이 키 입력을 바인딩에만 사용
+                if (isControlbindOpen && listeningForControlAction) {
+                    e.preventDefault();
+                    const caction = listeningForControlAction;
+                    const ccode = e.code;
+                    if (ccode === 'Escape') { listeningForControlAction = null; renderControlbindModal(); return; }
+                    if (Object.values(keyBindings).includes(ccode)) {
+                        listeningForControlAction = null;
+                        renderControlbindModal();
+                        showChat('시스템', `❌ [${keyCodeToLabel(ccode)}]키는 이미 스킬 키로 사용 중입니다.`);
+                        return;
+                    }
+                    // 이미 다른 조작에 배정된 키라면 두 조작의 키를 서로 맞바꿈
+                    const cConflict = Object.keys(controlBindings).find(a => controlBindings[a] === ccode && a !== caction);
+                    if (cConflict) { controlBindings[cConflict] = controlBindings[caction]; }
+                    controlBindings[caction] = ccode;
+                    rebuildReverseControlBindings();
+                    saveControlBindings();
+                    listeningForControlAction = null;
+                    renderControlbindModal();
+                    return;
+                }
+                if (isGameOver) return; 
+                if (e.repeat) return; // [FIX] 키를 누르고 있을 때 OS 자동반복으로 스킬/수류탄/상호작용 등이 연타되는 것 방지 (이동 플래그는 최초 1회만 세팅해도 keyup 전까지 유지되므로 문제 없음)
+                const ctrlAction = reverseControlBindings[e.code]; // [NEW] 재배정 가능한 조작 키 매핑
                 if (playerInVehicle) { 
-                    switch(e.code) { case 'KeyW': vehicleAcceleration = -1; break; case 'KeyS': vehicleAcceleration = 1; break; case 'KeyA': vehicleSteering = -1; break; case 'KeyD': vehicleSteering = 1; break; } 
+                    switch(ctrlAction) { case 'moveForward': vehicleAcceleration = -1; break; case 'moveBackward': vehicleAcceleration = 1; break; case 'moveLeft': vehicleSteering = -1; break; case 'moveRight': vehicleSteering = 1; break; } 
                 } else { 
-                    if (!isTrading && !isStatsOpen && !isPaused && !isEquipOpen) { 
-                        switch (e.code) { case 'KeyW': controls.moveForward = true; break; case 'KeyA': controls.moveLeft = true; break; case 'KeyS': controls.moveBackward = true; break; case 'KeyD': controls.moveRight = true; break; case 'Space': controls.jump = true; break; case 'ShiftLeft': controls.sprint = true; break; } 
+                    if (!isTrading && !isStatsOpen && !isPaused && !isEquipOpen && !isKeybindOpen && !isControlbindOpen) { 
+                        // [FIX] 재장전 중에도 이동은 가능하게 함 (속도는 getMoveSpeed()에서 살짝만 감소 처리)
+                        switch (ctrlAction) { case 'moveForward': controls.moveForward = true; break; case 'moveLeft': controls.moveLeft = true; break; case 'moveBackward': controls.moveBackward = true; break; case 'moveRight': controls.moveRight = true; break; case 'jump': controls.jump = true; break; case 'sprint': controls.sprint = true; break; } 
                     } 
                 } 
-                switch (e.code) { 
-                    case 'KeyR': reload(); break; 
-                    case 'Digit1': switchWeapon(0); break; 
-                    case 'Digit2': switchWeapon(1); break; 
-                    case 'Digit3': switchWeapon(2); break; 
-                    case 'Digit4': switchWeapon(3); break; 
-                    case 'Digit5': switchWeapon(4); break; 
-                    case 'KeyF': interact(); break; 
-                    case 'KeyP': toggleStatsModal(); break;
-                    case 'KeyM': toggleMinimap(); break; // [NEW] 미니맵 토글 키
-                    case 'KeyG': useSlashSkill(); break; // [NEW] 히든 스킬: 참격 (심법 각성 전엔 아무 반응 없음)
-                    case 'KeyH': useMagicSkill(); break; // [NEW] 히든 스킬: 마법 (심법 각성 전엔 아무 반응 없음)
-                    case 'KeyJ': useHealMagicSkill(); break; // [NEW] 히든 스킬: 치유 마법 (마력 대량 소모)
-                    case 'KeyK': useBurstSkill(); break; // [NEW] 히든 스킬: 폭렬장 (초절정 경지 이상 해금)
-                    case 'KeyL': useUltimateSkill(); break; // [NEW] 히든 필살기: 천마유성권 (우화등선 경지 전용)
-                    case 'KeyT': cycleScope(); break; // [NEW] 스코프 교체 키
-                    // [NEW] 방어구 인첸트 액티브 스킬: 부위별로 다른 키
-                    case 'KeyQ': activateArmorSkill('helmet'); break;
-                    case 'KeyZ': activateArmorSkill('chest'); break;
-                    case 'KeyX': activateArmorSkill('pants'); break;
-                    case 'KeyC': activateArmorSkill('boots'); break;
-                    case 'Escape': // [NEW] ESC/E: 다른 모달이 열려있으면 그것부터 닫고, 아니면 일시정지 메뉴 토글
-                    case 'KeyE':
+                if (gameState.isReloading && ctrlAction !== 'pauseMenu' && e.code !== 'Escape') return; // 재장전 중엔 이동 외의 행동(발사/무기교체/재장전 재시도/스킬 등)은 계속 막음
+                switch (ctrlAction) { 
+                    case 'reload': reload(); break; 
+                    case 'weaponSlot1': switchWeapon(0); break; 
+                    case 'weaponSlot2': switchWeapon(1); break; 
+                    case 'weaponSlot3': switchWeapon(2); break; 
+                    case 'weaponSlot4': switchWeapon(3); break; 
+                    case 'weaponSlot5': switchWeapon(4); break; 
+                    case 'interact': interact(); break; 
+                    case 'statsMenu': toggleStatsModal(); break;
+                    case 'minimap': toggleMinimap(); break; // [NEW] 미니맵 토글 키
+                    case 'scopeCycle': cycleScope(); break; // [NEW] 스코프 교체 키
+                    case 'pauseMenu': // [NEW] 일시정지 메뉴 토글 (재배정 가능한 키)
                         handlePauseMenuKey();
+                        break;
+                    default:
+                        if (e.code === 'Escape') { handlePauseMenuKey(); break; } // Escape는 항상 고정 동작(탈출용, 재배정 불가)
+                        // [NEW] 리바인딩 가능한 스킬 키 처리 (참격/마법/치유/폭렬장/필살기/검법/보법/인첸트/만능의 극의 등)
+                        const boundAction = reverseKeyBindings[e.code];
+                        if (boundAction && SKILL_ACTIONS[boundAction]) { SKILL_ACTIONS[boundAction](); }
                         break;
                 } 
             });
-            document.addEventListener('keyup', (e) => { if (playerInVehicle) { switch(e.code) { case 'KeyW': if (vehicleAcceleration < 0) vehicleAcceleration = 0; break; case 'KeyS': if (vehicleAcceleration > 0) vehicleAcceleration = 0; break; case 'KeyA': if (vehicleSteering < 0) vehicleSteering = 0; break; case 'KeyD': if (vehicleSteering > 0) vehicleSteering = 0; break; } } switch (e.code) { case 'KeyW': controls.moveForward = false; break; case 'KeyA': controls.moveLeft = false; break; case 'KeyS': controls.moveBackward = false; break; case 'KeyD': controls.moveRight = false; break; case 'ShiftLeft': controls.sprint = false; case 'Space': controls.jump = false; break; } });
+            document.addEventListener('keyup', (e) => { 
+                const ctrlAction = reverseControlBindings[e.code];
+                if (playerInVehicle) { switch(ctrlAction) { case 'moveForward': if (vehicleAcceleration < 0) vehicleAcceleration = 0; break; case 'moveBackward': if (vehicleAcceleration > 0) vehicleAcceleration = 0; break; case 'moveLeft': if (vehicleSteering < 0) vehicleSteering = 0; break; case 'moveRight': if (vehicleSteering > 0) vehicleSteering = 0; break; } } 
+                switch (ctrlAction) { case 'moveForward': controls.moveForward = false; break; case 'moveLeft': controls.moveLeft = false; break; case 'moveBackward': controls.moveBackward = false; break; case 'moveRight': controls.moveRight = false; break; case 'sprint': controls.sprint = false; break; case 'jump': controls.jump = false; break; } 
+            });
             
             // [FIX] WrongDocumentError Fix
             document.addEventListener('click', (event) => { 
                 // UI 클릭 시 포인터 잠금 방지
-                if (event.target.closest('button') || event.target.closest('#trade-modal') || event.target.closest('#stats-modal') || event.target.closest('#pause-modal') || event.target.closest('#equipment-modal')) return;
+                if (event.target.closest('button') || event.target.closest('#trade-modal') || event.target.closest('#stats-modal') || event.target.closest('#pause-modal') || event.target.closest('#equipment-modal') || event.target.closest('#keybind-modal') || event.target.closest('#controlbind-modal')) return;
 
-                if (!isPointerLocked && !isTrading && !isStatsOpen && !isPaused && !isEquipOpen) { 
+                if (!isPointerLocked && !isTrading && !isStatsOpen && !isPaused && !isEquipOpen && !isKeybindOpen && !isControlbindOpen) { 
                     // document.body 대신 renderer.domElement 사용 시도
                     const target = renderer ? renderer.domElement : document.body;
                     if(target && target.requestPointerLock) {
@@ -4985,8 +5937,11 @@
                 isPointerLocked = !!document.pointerLockElement;
                 document.getElementById('crosshair').style.display = isPointerLocked ? 'block' : 'none'; 
                 document.body.style.cursor = isPointerLocked ? 'none' : 'default'; 
+                if (!isPointerLocked) isMouseDown = false; // [NEW] 포인터락 풀리면 자동사격도 멈춤 (마우스 뗀 걸 못 받는 경우 방지)
                 if (isPointerLocked && (isTrading || isStatsOpen)) { closeTradeModal(); closeStatsModal(); } 
                 if (isPointerLocked && isEquipOpen) { closeEquipmentModal(); }
+                if (isPointerLocked && isKeybindOpen) { closeKeybindModal(); }
+                if (isPointerLocked && isControlbindOpen) { closeControlbindModal(); }
             });
             
             document.addEventListener('mousemove', (e) => { if (isPointerLocked) { const sensitivity = 0.0015; if (!playerInVehicle) { gameState.rotation.y -= e.movementX * sensitivity; } gameState.rotation.x -= e.movementY * sensitivity; gameState.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gameState.rotation.x)); } });
@@ -4996,6 +5951,7 @@
                 if (isPointerLocked && !playerInVehicle && !gameState.isReloading) { 
                     e.preventDefault(); 
                     if (e.button === 0) {
+                        isMouseDown = true;
                         shoot(); 
                     } else if (e.button === 2) { 
                         zoomClickCount++;
@@ -5032,6 +5988,7 @@
             });
             // [수정] mouseup 이벤트에서 우클릭 줌 해제 로직 제거 (토글 방식이므로 필요 없음)
             document.addEventListener('mouseup', (e) => { 
+                if (e.button === 0) isMouseDown = false; // [NEW] 자동사격 중지
                 // 기존의 우클릭 뗄 때 줌 해제하던 코드는 삭제함
             });
             
@@ -5065,8 +6022,25 @@
             }, weaponData.reloadTime);
         }
 
+        // [NEW] 마우스 좌클릭을 누르고 있는 동안 자동사격 무기(M249 등 auto:true)를 계속 발사
+        function handleAutoFire() {
+            if (!isMouseDown || !isPointerLocked || playerInVehicle || gameState.isReloading || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isGameOver) return;
+            const weaponObj = gameState.weapons[gameState.currentWeaponIndex];
+            const weaponData = weaponObj && WEAPON_DATABASE[weaponObj.key];
+            if (weaponData && weaponData.auto) shoot(); // shoot() 내부에서 fireRate 쿨다운을 알아서 체크하므로 매 프레임 호출해도 안전함
+        }
         function shoot() {
-            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (!weaponObj || !muzzle) return; const weaponData = WEAPON_DATABASE[weaponObj.key]; const isMelee = (weaponData.type === 'Melee'); const isOutOfAmmo = (!isMelee && weaponObj.magAmmo <= 0); const fireRate = (isMelee || isOutOfAmmo) ? WEAPON_DATABASE["Fist"].fireRate : weaponData.fireRate; const now = Date.now(); if (now - gameState.lastShotTime < fireRate) return; gameState.lastShotTime = now;
+            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (!weaponObj || !muzzle) return; const weaponData = WEAPON_DATABASE[weaponObj.key];
+            if (weaponData.type === 'Grenade') {
+                // [NEW] 수류탄: 총과 동일한 발사 방식(좌클릭)이지만 마그넷 탄약이 아닌 grenadeCount를 소모하고, 포물선으로 던짐
+                const gnow = Date.now(); if (gnow - gameState.lastShotTime < weaponData.fireRate) return; gameState.lastShotTime = gnow;
+                if ((gameState.grenadeCount || 0) <= 0) { showChat('시스템', '수류탄이 없습니다.'); return; }
+                gameState.grenadeCount--; updateUI();
+                launchGrenade();
+                gameStats.shotsFired++;
+                return;
+            }
+            const isMelee = (weaponData.type === 'Melee'); const isOutOfAmmo = (!isMelee && weaponObj.magAmmo <= 0); const fireRate = (isMelee || isOutOfAmmo) ? WEAPON_DATABASE["Fist"].fireRate : weaponData.fireRate; const now = Date.now(); if (now - gameState.lastShotTime < fireRate) return; gameState.lastShotTime = now;
             if (isMelee || isOutOfAmmo) { if (isOutOfAmmo) { document.getElementById('reload-prompt').style.display = 'block'; } performPunch(WEAPON_DATABASE["Fist"]); return; }
             weaponObj.magAmmo--; updateUI(); const muzzleWorldPos = new THREE.Vector3(); muzzle.getWorldPosition(muzzleWorldPos); showMuzzleFlash(muzzleWorldPos); const pellets = weaponData.pellets || 1; const spread = weaponData.spread || 0;
             gameStats.shotsFired++;
@@ -5318,8 +6292,19 @@
 
         function performPunch(weaponData) {
             let damage = weaponData.damage; 
-            if (weaponData.type === 'Melee') {
+            const isMeleeWeapon = weaponData.type === 'Melee';
+            if (isMeleeWeapon) {
                 damage += ((gameState.stats.strength + getEquippedArmorBonuses().strengthBonus) * 2);
+                damage *= getComboDamageMult(); // [NEW] 근접 콤보 배율 적용
+                // [NEW] 힘 히든 스킬: 회심의 일격 - 낮은 확률로 추가 피해
+                const strTier = gameState.statSkillTiers.strength;
+                if (strTier > 0) {
+                    const data = STAT_SKILLS.strength.tierData[strTier - 1];
+                    if (Math.random() < data.chance) {
+                        damage += data.bonus;
+                        showChat('시스템', `💥 회심의 일격! (+${data.bonus} 추가 피해)`);
+                    }
+                }
             }
             
             const range = weaponData.range; const direction = new THREE.Vector3(); camera.getWorldDirection(direction); raycaster.set(gameState.position, direction); raycaster.far = range;
@@ -5330,6 +6315,7 @@
                     const tempV = new THREE.Vector3();
                     if (raycaster.ray.intersectBox(scBox, tempV)) {
                         damageScarecrow(damage);
+                        if (isMeleeWeapon) trainNaegong(); // [NEW] 허수아비 반복 수련 -> 내공(정파) 성장
                         createDebrisEffect(tempV, new THREE.Color(0xc8a850), 4);
                         return;
                     }
@@ -5337,6 +6323,7 @@
             }
             const allHits = raycaster.intersectObjects([...rangedEnemies, ...zombies, ...bosses, ...npcs], true); if (allHits.length === 0) return; let closestHit = null; for (const hit of allHits) { if (!closestHit || hit.distance < closestHit.distance) { closestHit = hit; } } if (!closestHit) return; if (playerGun && playerGun.userData.type === 'Melee') { if (playerGun.userData.isAnimating) return; playerGun.userData.isAnimating = true; const originalPos = { y: -0.3, z: -0.8 }; const punchY = originalPos.y + 0.1; const punchZ = originalPos.z - 0.2; playerGun.position.y = punchY; setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.z = punchZ; } setTimeout(() => { if(playerGun && playerGun.userData.type === 'Melee') { playerGun.position.y = originalPos.y; playerGun.position.z = originalPos.z; playerGun.userData.isAnimating = false; } }, 50); }, 100); }
             let target = closestHit.object; while (target.parent && target.parent !== scene) { target = target.parent; }
+            if (isMeleeWeapon) registerComboHit(); // [NEW] 근접 공격이 실제로 적중했으므로 콤보 갱신
             
             // [MODIFIED] 플레이어 공격 시 hitZombie 호출 (attacker = null은 플레이어 의미)
             const isMeleeAttack = weaponData.type === 'Melee';
@@ -5374,6 +6361,18 @@
                     showChat('시스템', `💫 ${bd.name}이(가) 휘청거립니다! 지금이 기회다!`);
                     createDebrisEffect(target.position, new THREE.Color(0xffff00), 15);
                 }
+            }
+            // [NEW] 힘 극한 스킬: 분쇄의 파동 - 근접 공격이 주변의 다른 적에게도 여파를 미침 (티어가 낮으면 범위/위력이 작음)
+            const strExTier = gameState.extremeStatUnlocked.strength;
+            if (isMeleeWeapon && strExTier > 0) {
+                const exData = EXTREME_STAT_SKILLS.strength.tierData[strExTier - 1];
+                const splashDamage = damage * exData.splashRatio;
+                const splashTargets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+                splashTargets.forEach(t => {
+                    if (t === target || !t.parent || t.userData.health <= 0) return;
+                    if (t.position.distanceTo(target.position) > exData.splashRadius) return;
+                    applySkillDamage(t, splashDamage);
+                });
             }
         }
 
@@ -5425,7 +6424,7 @@
         // ── [NEW] 히든 스킬 1: 참격 (G키) - 심법 각성 전에는 존재 자체가 발동되지 않음 ──
         function useSlashSkill() {
             if (!gameState.hasCultivation) return;
-            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
             if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
             const now = Date.now(); const cooldown = 2200, cost = 25;
             if (now - gameState.lastSlashTime < cooldown) return;
@@ -5434,8 +6433,9 @@
             const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; if (dir.lengthSq() > 0.0001) dir.normalize();
             const realmData = getRealmData(); const dmgMult = realmData ? realmData.dmgMult : 1.0;
             const range = gameState.realm >= 3 ? 9 : 7, angleThreshold = Math.cos(Math.PI / 2.4); // 일류 경지 이상부터 사거리 증가 (약 150도 부채꼴)
-            const damage = (90 + gameState.stats.strength * 3) * dmgMult;
+            const damage = (90 + gameState.stats.strength * 3) * dmgMult * getComboDamageMult();
             const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+            let slashHitCount = 0;
             targets.forEach(t => {
                 if (!t.parent || t.userData.health <= 0) return;
                 const toTarget = t.position.clone().sub(gameState.position); toTarget.y = 0;
@@ -5444,7 +6444,9 @@
                 toTarget.normalize();
                 if (toTarget.dot(dir) < angleThreshold) return;
                 applySkillDamage(t, damage);
+                slashHitCount++;
             });
+            if (slashHitCount > 0) registerComboHit(); // [NEW] 참격 적중 시에도 콤보가 이어짐
             spawnSlashEffect(dir);
         }
 
@@ -5461,7 +6463,7 @@
         // ── [NEW] 히든 스킬 2: 마법 (H키) - 심법 각성 전에는 존재 자체가 발동되지 않음 ──
         function useMagicSkill() {
             if (!gameState.hasCultivation) return;
-            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
             if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
             const now = Date.now(); const cooldown = 3200, cost = 40;
             if (now - gameState.lastMagicTime < cooldown) return;
@@ -5481,7 +6483,7 @@
         // ── [NEW] 히든 스킬 3: 치유 마법 (J키) - 공격 마법보다 훨씬 많은 마력을 소모함 ──
         function useHealMagicSkill() {
             if (!gameState.hasCultivation) return;
-            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
             if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
             const now = Date.now(); const cooldown = 6000, cost = 70;
             if (now - gameState.lastHealMagicTime < cooldown) return;
@@ -5502,7 +6504,7 @@
         // ── [NEW] 히든 스킬 4: 폭렬장 (K키) - 초절정(5경지) 이상부터 사용 가능한 광역 폭발기 ──
         function useBurstSkill() {
             if (!gameState.hasCultivation) return;
-            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
             if (gameState.realm < 5) { showChat('시스템', '아직 폭렬장을 다룰 경지에 이르지 못했습니다. (필요 경지: 초절정)'); return; }
             if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
             const now = Date.now(); const cooldown = 8000, cost = 55;
@@ -5513,7 +6515,7 @@
             const origin = playerInVehicle ? playerInVehicle.position : gameState.position;
             const targetPoint = origin.clone().addScaledVector(dir, 12); // 조준 방향으로 12m 지점에 폭발 생성
             const realmData = getRealmData(); const dmgMult = realmData ? realmData.dmgMult : 1.0;
-            const radius = 6, damage = (160 + gameState.stats.strength * 4) * dmgMult;
+            const radius = 6, damage = (160 + gameState.stats.strength * 4) * dmgMult * getComboDamageMult();
             const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
             let hitCount = 0;
             targets.forEach(t => {
@@ -5522,6 +6524,7 @@
                 applySkillDamage(t, damage);
                 hitCount++;
             });
+            if (hitCount > 0) registerComboHit();
             createDebrisEffect(targetPoint, new THREE.Color(0xffa000), 26);
             showChat('시스템', `💥 <span style="color:#ffa000; font-weight:bold;">폭렬장</span>을(를) 시전했습니다! (${hitCount}명 적중)`);
         }
@@ -5529,7 +6532,7 @@
         // ── [NEW] 히든 스킬 5: 천마유성권 (L키) - 우화등선(9경지, 최고 경지)에서만 각성하는 필살기 ──
         function useUltimateSkill() {
             if (!gameState.hasCultivation) return;
-            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isPointerLocked === false) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
             if (gameState.realm < 9) { showChat('시스템', '필살기는 우화등선의 경지에 이르러야만 사용할 수 있습니다.'); return; }
             const now = Date.now(); const cooldown = 90000;
             if (now - gameState.lastUltimateTime < cooldown) { showChat('시스템', `천마유성권은 아직 준비되지 않았습니다. (${Math.ceil((cooldown - (now - gameState.lastUltimateTime)) / 1000)}초 남음)`); return; }
@@ -5549,6 +6552,151 @@
             });
             createDebrisEffect(origin, new THREE.Color(0xff3366), 40);
             showChat('시스템', `☄️ <span style="color:#ff3366; font-weight:bold;">천마유성권!</span> 사방의 적 ${hitCount}명을 강타했습니다. (2.5초간 무적)`);
+        }
+
+        // ── [NEW] 히든 검법 1: 회오리베기 (V키) - 이류(2경지) 이상부터 사용 가능한 전방위 회전 베기 ──
+        function useWhirlwindSlash() {
+            if (!gameState.hasCultivation) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
+            if (gameState.realm < 2) { showChat('시스템', '아직 회오리베기를 다룰 경지에 이르지 못했습니다. (필요 경지: 이류)'); return; }
+            if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
+            const now = Date.now(); const cooldown = 5000, cost = 35;
+            if (now - gameState.lastWhirlwindTime < cooldown) return;
+            if (gameState.mana < cost) { showChat('시스템', '마력이 부족합니다.'); return; }
+            gameState.mana -= cost; gameState.lastWhirlwindTime = now; updateUI(); maybeTriggerDeviation();
+            const origin = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const realmData = getRealmData(); const dmgMult = realmData ? realmData.dmgMult : 1.0;
+            const radius = 6, damage = (70 + gameState.stats.strength * 2) * dmgMult * getComboDamageMult();
+            const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+            let hitCount = 0;
+            targets.forEach(t => {
+                if (!t.parent || t.userData.health <= 0) return;
+                if (t.position.distanceTo(origin) > radius) return;
+                applySkillDamage(t, damage);
+                hitCount++;
+            });
+            if (hitCount > 0) registerComboHit();
+            spawnWhirlwindEffect(origin);
+            showChat('시스템', `🌀 <span style="color:#7CFC00; font-weight:bold;">회오리베기</span>! 사방의 적 ${hitCount}명을 베었습니다.`);
+        }
+        function spawnWhirlwindEffect(origin) {
+            for (let i = 0; i < 12; i++) {
+                const angle = (i / 12) * Math.PI * 2;
+                const pos = origin.clone().add(new THREE.Vector3(Math.cos(angle) * 3, 1, Math.sin(angle) * 3));
+                createDebrisEffect(pos, new THREE.Color(0x9be15d), 2);
+            }
+        }
+
+        // ── [NEW] 히든 검법 2: 검기파동 (B키) - 절정(4경지) 이상부터 사용 가능한 관통형 검기 ──
+        function useBladeQiWave() {
+            if (!gameState.hasCultivation) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
+            if (gameState.realm < 4) { showChat('시스템', '아직 검기파동을 다룰 경지에 이르지 못했습니다. (필요 경지: 절정)'); return; }
+            if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
+            const now = Date.now(); const cooldown = 4500, cost = 45;
+            if (now - gameState.lastQiWaveTime < cooldown) return;
+            if (gameState.mana < cost) { showChat('시스템', '마력이 부족합니다.'); return; }
+            gameState.mana -= cost; gameState.lastQiWaveTime = now; updateUI(); maybeTriggerDeviation();
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; if (dir.lengthSq() > 0.0001) dir.normalize();
+            const origin = (playerInVehicle ? playerInVehicle.position : gameState.position).clone();
+            const realmData = getRealmData(); const dmgMult = realmData ? realmData.dmgMult : 1.0;
+            const range = 16, halfWidth = 1.6;
+            const damage = (110 + gameState.stats.strength * 3.5) * dmgMult * getComboDamageMult();
+            const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+            let hitCount = 0;
+            targets.forEach(t => {
+                if (!t.parent || t.userData.health <= 0) return;
+                const toTarget = t.position.clone().sub(origin); toTarget.y = 0;
+                const forwardDist = toTarget.dot(dir);
+                if (forwardDist < 0 || forwardDist > range) return;
+                const lateralDist = toTarget.clone().sub(dir.clone().multiplyScalar(forwardDist)).length();
+                if (lateralDist > halfWidth) return;
+                applySkillDamage(t, damage);
+                hitCount++;
+            });
+            if (hitCount > 0) registerComboHit();
+            spawnQiWaveEffect(origin, dir, range);
+            showChat('시스템', `⚡ <span style="color:#40e0ff; font-weight:bold;">검기파동</span>이(가) 적 ${hitCount}명을 관통했습니다!`);
+        }
+        function spawnQiWaveEffect(origin, dir, range) {
+            for (let d = 2; d <= range; d += 3) {
+                const pos = origin.clone().addScaledVector(dir, d); pos.y += 1;
+                createDebrisEffect(pos, new THREE.Color(0x40e0ff), 4);
+            }
+        }
+
+        // ── [NEW] 히든 보법 3: 용보(龍步) 대시 (N키) - 화경(6경지) 이상부터 사용 가능한 순간 돌진기 ──
+        // 전방으로 순식간에 파고들며 경로상의 적을 베고, 짧은 무적 시간을 얻는 회피/기동 스킬
+        function useDragonStepDash() {
+            if (!gameState.hasCultivation) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
+            if (gameState.realm < 6) { showChat('시스템', '아직 용보를 다룰 경지에 이르지 못했습니다. (필요 경지: 화경)'); return; }
+            if (gameState.deviationUntil > Date.now()) { showChat('시스템', '주화입마 상태에서는 심법 스킬을 사용할 수 없습니다!'); return; }
+            const now = Date.now(); const cooldown = 6000, cost = 30;
+            if (now - gameState.lastDragonStepTime < cooldown) return;
+            if (gameState.mana < cost) { showChat('시스템', '마력이 부족합니다.'); return; }
+            gameState.mana -= cost; gameState.lastDragonStepTime = now; updateUI(); maybeTriggerDeviation();
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; if (dir.lengthSq() > 0.0001) dir.normalize();
+            const startPos = gameState.position.clone();
+            const dashDistance = 10, steps = 10, hitRadius = 1.8;
+            const realmData = getRealmData(); const dmgMult = realmData ? realmData.dmgMult : 1.0;
+            const damage = (95 + gameState.stats.strength * 3) * dmgMult * getComboDamageMult();
+            const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+            const hitSet = new Set();
+            for (let i = 1; i <= steps; i++) {
+                const dist = (dashDistance / steps) * i;
+                const stepPos = startPos.clone().addScaledVector(dir, dist);
+                const groundY = getTerrainHeight(stepPos.x, stepPos.z);
+                stepPos.y = groundY + 1.8;
+                gameState.position.copy(stepPos);
+                targets.forEach(t => {
+                    if (hitSet.has(t) || !t.parent || t.userData.health <= 0) return;
+                    const toTarget = t.position.clone().sub(stepPos); toTarget.y = 0;
+                    if (toTarget.length() <= hitRadius) { applySkillDamage(t, damage); hitSet.add(t); }
+                });
+            }
+            gameState.invulnerableUntil = Math.max(gameState.invulnerableUntil, now + 500); // 돌진 중 0.5초 무적
+            if (hitSet.size > 0) registerComboHit();
+            const dashEndPos = gameState.position.clone(); dashEndPos.y += 1;
+            createDebrisEffect(dashEndPos, new THREE.Color(0xffd700), 20);
+            showChat('시스템', `🐉 <span style="color:#ffd700; font-weight:bold;">용보</span>로 쏜살같이 돌진했습니다! (${hitSet.size}명 적중, 0.5초 무적)`);
+        }
+
+        // ── [NEW] 히든 정파 검법: 일섬 (U키) - 내공(정파) 경로 전용. 검법서(쾌검결)를 읽거나 수련 반복으로 습득. ──
+        // 마기 계열의 화려한 광역기와 달리, 좁고 곧은 궤적에 극히 높은 위력을 싣는 정순한 일격.
+        function useFlashSlash() {
+            if (!gameState.hasFlashSlash) return;
+            if (playerInVehicle || isPaused || isTrading || isStatsOpen || isEquipOpen || isKeybindOpen || isControlbindOpen || isPointerLocked === false) return;
+            const now = Date.now(); const cooldown = 3000, cost = 30;
+            if (now - gameState.lastFlashSlashTime < cooldown) return;
+            if (gameState.naegong < cost) { showChat('시스템', '내공이 부족합니다.'); return; }
+            gameState.naegong -= cost; gameState.lastFlashSlashTime = now; updateUI();
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir); dir.y = 0; if (dir.lengthSq() > 0.0001) dir.normalize();
+            const origin = (playerInVehicle ? playerInVehicle.position : gameState.position).clone();
+            const tierData = getNaegongTierData(); const dmgMult = tierData ? tierData.dmgMult : 1.0;
+            const range = 12, halfWidth = 0.9; // 좁고 곧게 뻗는 일격
+            const damage = (150 + gameState.stats.strength * 4.5) * dmgMult * getComboDamageMult();
+            const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+            let hitCount = 0;
+            targets.forEach(t => {
+                if (!t.parent || t.userData.health <= 0) return;
+                const toTarget = t.position.clone().sub(origin); toTarget.y = 0;
+                const forwardDist = toTarget.dot(dir);
+                if (forwardDist < 0 || forwardDist > range) return;
+                const lateralDist = toTarget.clone().sub(dir.clone().multiplyScalar(forwardDist)).length();
+                if (lateralDist > halfWidth) return;
+                applySkillDamage(t, damage);
+                hitCount++;
+            });
+            if (hitCount > 0) registerComboHit();
+            spawnFlashSlashEffect(origin, dir, range);
+            showChat('시스템', `💫 <span style="color:#e8fff5; font-weight:bold;">일섬(一閃)</span>! 벨 것도 없이 스쳐 지나갔습니다. (${hitCount}명 적중)`);
+        }
+        function spawnFlashSlashEffect(origin, dir, range) {
+            const endPos = origin.clone().addScaledVector(dir, range); endPos.y += 1;
+            createDebrisEffect(endPos, new THREE.Color(0xe8fff5), 6);
+            const midPos = origin.clone().addScaledVector(dir, range / 2); midPos.y += 1;
+            createDebrisEffect(midPos, new THREE.Color(0xe8fff5), 4);
         }
 
         // [FIXED] 중복 및 문법 오류 수정
@@ -5668,6 +6816,8 @@
                         showChat('시스템', `📜 ${ch.label} — ${typeof firstStep.activeMsg === 'function' ? firstStep.activeMsg(0, firstStep.target) : firstStep.activeMsg}`);
                         updateQuestUI();
                     }
+                    // [NEW] 생존자와의 대화가 완전히 끝난 뒤에만 튜토리얼 시작
+                    if (npcName === '생존자') setTimeout(startTutorial, 1500);
                 });
                 return true;
             }
@@ -6003,8 +7153,12 @@
             } else if (data.name === '탄약') { if (gameState.ammoInventory.hasOwnProperty(data.subtype)) { gameState.ammoInventory[data.subtype] += data.amount; showChat('시스템', `<span class="item-name">${data.subtype}</span> ${data.amount}발을 획득했습니다.`); } } 
             else if (data.name === '의료키트') { gameState.health = Math.min(getMaxHealth(), gameState.health + 500); showChat('시스템', `체력이 회복되었습니다!`); onMedkitPickup(); } 
             else if (data.name === '음식') { playerStamina = Math.min(getMaxStamina(), playerStamina + 50); showChat('시스템', `<span class="item-name">음식</span>으로 스태미나를 회복했습니다!`); } 
+            else if (data.name === '수류탄') { gameState.grenadeCount = (gameState.grenadeCount || 0) + (data.amount || 1); if (!gameState.weapons.find(w => w.key === 'Grenade')) gameState.weapons.push({ key: 'Grenade' }); updateUI(); showChat('시스템', `🎯 <span class="item-name">수류탄</span>을(를) ${data.amount || 1}개 획득했습니다! (보유: ${gameState.grenadeCount}개, 마우스 휠로 선택 후 좌클릭 투척)`); } 
             else if (data.name === '에너지드링크') { playerStamina = Math.min(getMaxStamina(), playerStamina + 40); showChat('시스템', `<span class="item-name" style="color:#00ffff">에너지드링크</span>를 마셔 활력을 되찾았습니다!`); } 
             else if (data.name === '심법책') {
+                if (gameState.hasNaegong) {
+                    showChat('시스템', `📖 알 수 없는 심법책을 읽으려 했지만, 이미 몸에 흐르고 있는 <span style="color:#8fe3c4;">내공</span>이 이 사이한 기운을 밀어냅니다...`);
+                } else {
                 gameState.hasCultivation = true;
                 gameState.realm = 1; gameState.qi = 0;
                 gameState.maxMana = CULTIVATION_REALMS[0].maxMana;
@@ -6013,11 +7167,27 @@
                 updateCultivationUI();
                 showChat('시스템', `📖 알 수 없는 심법책을 읽었습니다... 몸 속에서 낯선 기운이 깨어납니다. (경지: ${CULTIVATION_REALMS[0].name})`);
                 showChat('시스템', `G(참격) / H(마법) / J(치유) 키로 심법 스킬을 사용할 수 있습니다. 가만히 서 있으면 마력이 회복됩니다.`);
+                }
             }
             else if (data.name === '마력 회복단') {
                 if (gameState.hasCultivation) {
                     gameState.mana = Math.min(gameState.maxMana, gameState.mana + 40);
                     showChat('시스템', `<span style="color:#b388ff">마력 회복단</span>을 복용하여 기운을 되찾았습니다.`);
+                }
+            }
+            else if (data.name === '쾌검결') {
+                if (gameState.hasCultivation) {
+                    showChat('시스템', '마기에 물든 몸에는 이 정순한 검법이 스며들지 않습니다.');
+                } else {
+                    unlockFlashSlash('manual');
+                }
+                updateUI();
+            }
+            else if (data.name === '내공단') {
+                if (gameState.hasNaegong) {
+                    gameState.naegong = Math.min(gameState.maxNaegong, gameState.naegong + 40);
+                    showChat('시스템', `<span style="color:#8fe3c4">내공단</span>을 복용하여 기운을 되찾았습니다.`);
+                    updateNaegongUI();
                 }
             }
             scene.remove(item); items = items.filter(i => i !== item);
@@ -6042,7 +7212,7 @@
             const range = 3.5; let closestObject = null; let minDistance = range; const checkableObjects = [...getNearbyItems(gameState.position), ...vehicles, ...npcs]; checkableObjects.forEach(obj => { if (!obj.parent) return; const dist = gameState.position.distanceTo(obj.position); if (dist < minDistance) { minDistance = dist; closestObject = obj; } });
             if (closestObject) { const direction = closestObject.position.clone().sub(gameState.position).normalize(); raycaster.set(gameState.position, direction); raycaster.far = range; const intersects = raycaster.intersectObjects([closestObject], true); if (intersects.length > 0 && intersects[0].object) { let target = intersects[0].object; while (target.parent && target.parent !== scene) { target = target.parent; } if (target.userData.type && (target.userData.type === 'item' || target.userData.type === 'weapon' || target.userData.type === 'scope' || target.userData.type === 'vehicle' || target.userData.type === 'npc')) { interactableObject = target; } else { interactableObject = null; } } else { interactableObject = null; } } else { interactableObject = null; }
             const prompt = document.getElementById('interaction-prompt'); const itemNameEl = document.getElementById('interaction-item-name'); const actionEl = document.getElementById('interaction-action');
-            if (interactableObject) { let action = "줍기"; let itemName = interactableObject.userData.name || interactableObject.userData.type; if (interactableObject.userData.type === 'vehicle') { action = "탑승"; itemName = "차량"; } else if (interactableObject.userData.type === 'npc') { action = "대화"; itemName = interactableObject.userData.name; if (itemName === '상인') { action = "거래"; } else if (itemName === '생존자') { const hasClaimable = achievements.some(a => a.unlocked && !a.claimed); if (hasClaimable) { action = "보상 수령"; } } } else if (interactableObject.userData.type === 'weapon') { action = "줍기"; itemName = WEAPON_DATABASE[interactableObject.userData.name].name; } else if (interactableObject.userData.type === 'scope') { action = "장착"; } else if (interactableObject.userData.name === '탄약') { action = "줍기"; itemName = `${interactableObject.userData.subtype} ${interactableObject.userData.amount}발`; } else if (interactableObject.userData.name === '의료키트') { action = "사용"; itemName = `의료키트`; } else if (interactableObject.userData.name === '에너지드링크') { action = "마시기"; itemName = `에너지드링크`; } else if (interactableObject.userData.name === '심법책') { action = "읽기"; itemName = `알 수 없는 책`; } else if (interactableObject.userData.name === '마력 회복단') { action = "복용"; itemName = `마력 회복단`; } itemNameEl.textContent = itemName; actionEl.textContent = action; prompt.style.display = 'block'; } else { prompt.style.display = 'none'; }
+            if (interactableObject) { let action = "줍기"; let itemName = interactableObject.userData.name || interactableObject.userData.type; if (interactableObject.userData.type === 'vehicle') { action = "탑승"; itemName = "차량"; } else if (interactableObject.userData.type === 'npc') { action = "대화"; itemName = interactableObject.userData.name; if (itemName === '상인') { action = "거래"; } else if (itemName === '생존자') { const hasClaimable = achievements.some(a => a.unlocked && !a.claimed); if (hasClaimable) { action = "보상 수령"; } } } else if (interactableObject.userData.type === 'weapon') { action = "줍기"; itemName = WEAPON_DATABASE[interactableObject.userData.name].name; } else if (interactableObject.userData.type === 'scope') { action = "장착"; } else if (interactableObject.userData.name === '탄약') { action = "줍기"; itemName = `${interactableObject.userData.subtype} ${interactableObject.userData.amount}발`; } else if (interactableObject.userData.name === '수류탄') { action = "줍기"; itemName = `수류탄 ${interactableObject.userData.amount || 1}개`; } else if (interactableObject.userData.name === '의료키트') { action = "사용"; itemName = `의료키트`; } else if (interactableObject.userData.name === '에너지드링크') { action = "마시기"; itemName = `에너지드링크`; } else if (interactableObject.userData.name === '심법책') { action = "읽기"; itemName = `알 수 없는 책`; } else if (interactableObject.userData.name === '마력 회복단') { action = "복용"; itemName = `마력 회복단`; } else if (interactableObject.userData.name === '쾌검결') { action = "읽기"; itemName = `낡은 검법서`; } else if (interactableObject.userData.name === '내공단') { action = "복용"; itemName = `내공단`; } itemNameEl.textContent = itemName; actionEl.textContent = action; prompt.style.display = 'block'; } else { prompt.style.display = 'none'; }
         }
 
         function updateUI() {
@@ -6064,13 +7234,19 @@
                 document.getElementById('mana-fill').style.width = `${manaPercent}%`;
                 document.getElementById('mana-text').textContent = `${Math.floor(gameState.mana)} / ${gameState.maxMana}`;
             }
+            if (gameState.hasNaegong) {
+                const naegongPercent = (gameState.naegong / gameState.maxNaegong) * 100;
+                document.getElementById('naegong-fill').style.width = `${naegongPercent}%`;
+                document.getElementById('naegong-text').textContent = `${Math.floor(gameState.naegong)} / ${gameState.maxNaegong}`;
+            }
             document.getElementById('level-badge').textContent = gameState.level;
             const xpPercent = (gameState.xp / gameState.xpToNextLevel) * 100;
             document.getElementById('xp-fill').style.width = `${xpPercent}%`;
             if (playerStamina < JUMP_STAMINA_COST) { document.getElementById('stamina-fill').style.background = '#FF4136'; } else { document.getElementById('stamina-fill').style.background = '#2196F3'; }
             const vehicleStatusRow = document.getElementById('vehicle-status-row'); if (playerInVehicle) { const vh = playerInVehicle.userData; const vhPercent = (vh.health / vh.maxHealth) * 100; document.getElementById('vehicle-health-fill').style.width = `${vhPercent}%`; document.getElementById('vehicle-health-text').textContent = `${Math.floor(vh.health)} / ${vh.maxHealth}`; vehicleStatusRow.style.display = 'flex'; } else { vehicleStatusRow.style.display = 'none'; }
-            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; document.getElementById('current-ammo').textContent = weaponObj.magAmmo; document.getElementById('ammo-total').textContent = ammoType ? inventoryAmmo : '—'; document.getElementById('weapon-name').textContent = weaponData.name; document.getElementById('weapon-ammo-type').textContent = ammoType ? `사용 탄약: ${ammoType}` : ''; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { document.getElementById('reload-prompt').style.display = 'block'; } else { document.getElementById('reload-prompt').style.display = 'none'; } } else { document.getElementById('current-ammo').textContent = '-'; document.getElementById('ammo-total').textContent = '-'; document.getElementById('weapon-name').textContent = '맨손'; document.getElementById('weapon-ammo-type').textContent = ''; document.getElementById('reload-prompt').style.display = 'none'; }
+            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; if (weaponData.type === 'Grenade') { document.getElementById('current-ammo').textContent = gameState.grenadeCount || 0; document.getElementById('ammo-total').textContent = '—'; document.getElementById('weapon-name').textContent = weaponData.name; document.getElementById('weapon-ammo-type').textContent = '마우스 좌클릭으로 투척 (포물선)'; document.getElementById('reload-prompt').style.display = 'none'; } else { const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; document.getElementById('current-ammo').textContent = weaponObj.magAmmo; document.getElementById('ammo-total').textContent = ammoType ? inventoryAmmo : '—'; document.getElementById('weapon-name').textContent = weaponData.name; document.getElementById('weapon-ammo-type').textContent = ammoType ? `사용 탄약: ${ammoType}` : ''; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { document.getElementById('reload-prompt').style.display = 'block'; } else { document.getElementById('reload-prompt').style.display = 'none'; } } } else { document.getElementById('current-ammo').textContent = '-'; document.getElementById('ammo-total').textContent = '-'; document.getElementById('weapon-name').textContent = '맨손'; document.getElementById('weapon-ammo-type').textContent = ''; document.getElementById('reload-prompt').style.display = 'none'; }
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const displayX = Math.round(playerPos.x); const displayY = Math.round(playerPos.z); document.getElementById('coord-display').innerHTML = `X: ${displayX}, Y: ${displayY} <span style="font-size:0.8em; color:#ccc; margin-left:10px;" id="biome-display">[${getBiome(playerPos.x, playerPos.z).toUpperCase()}]</span>`;
+            document.getElementById('grenade-count').textContent = gameState.grenadeCount || 0; // [NEW] 수류탄 개수 표시
         }
         
         // [OPTIMIZATION] 청크 기반 충돌 검사
@@ -6112,7 +7288,19 @@
 
             const maxStamina = getMaxStamina();
             const maxHealth = getMaxHealth();
-            if (!playerInVehicle && controls.sprint && (controls.moveForward || controls.moveBackward || controls.moveLeft || controls.moveRight)) { if (playerStamina > STAMINA_THRESHOLD) { playerStamina = Math.max(0, playerStamina - STAMINA_DRAIN_RATE * delta); } else { controls.sprint = false; } } else { playerStamina = Math.min(maxStamina, playerStamina + STAMINA_RECOVERY_RATE * delta); }
+            if (!playerInVehicle && controls.sprint && (controls.moveForward || controls.moveBackward || controls.moveLeft || controls.moveRight)) {
+                // [NEW] 민첩 극한 스킬: 질주의 숨결 - 질주 중 스태미나를 함께 회복시켜 소모를 상쇄 (티어가 낮으면 조금만 상쇄, 최고 티어면 사실상 무한 질주)
+                const agiExTier = gameState.extremeStatUnlocked.agility;
+                const sprintRegen = agiExTier > 0 ? EXTREME_STAT_SKILLS.agility.tierData[agiExTier - 1].regenPerSecWhileSprint : 0;
+                const netDrain = Math.max(0, STAMINA_DRAIN_RATE - sprintRegen);
+                if (playerStamina > STAMINA_THRESHOLD || netDrain <= 0) { playerStamina = Math.max(0, Math.min(maxStamina, playerStamina - netDrain * delta)); }
+                else { controls.sprint = false; }
+            } else { playerStamina = Math.min(maxStamina, playerStamina + STAMINA_RECOVERY_RATE * delta); }
+            // [NEW] 지구력 극한 스킬: 재생의 육체 - 조건 없이 서서히 체력 자연 회복 (티어가 낮으면 회복량이 적음)
+            const endExTier = gameState.extremeStatUnlocked.endurance;
+            if (endExTier > 0 && gameState.health > 0 && gameState.health < maxHealth) {
+                gameState.health = Math.min(maxHealth, gameState.health + EXTREME_STAT_SKILLS.endurance.tierData[endExTier - 1].regenPerSec * delta);
+            }
             // [NEW] 심법 - 완전히 제자리에 멈춰 있을 때만 마력이 서서히 회복됨 (+ 장시간 정좌 시 운기조식으로 내공까지 축적)
             if (gameState.hasCultivation) {
                 const now2 = Date.now();
@@ -6133,7 +7321,7 @@
                             const auraPos = (playerInVehicle ? playerInVehicle.position : gameState.position).clone(); auraPos.y += 0.2;
                             createDebrisEffect(auraPos, new THREE.Color(0xb388ff), 3); // 저빈도 파티클이라 렉 영향 없음
                         }
-                        if (!gameState.wasMeditating) { gameState.wasMeditating = true; showChat('시스템', `🧘 <span style="color:#b388ff;">운기조식</span>에 들어갑니다. 마력 회복이 2배로 빨라지고 내공이 쌓입니다.`); }
+                        if (!gameState.wasMeditating) { gameState.wasMeditating = true; showChat('시스템', `🧘 <span style="color:#b388ff;">운기조식</span>에 들어갑니다. 마력 회복이 2배로 빨라지고 마기(魔氣)가 쌓입니다.`); }
                     }
                 } else {
                     gameState.meditateSince = 0;
@@ -6143,6 +7331,20 @@
                         gameState.mana = Math.max(0, gameState.mana - 2 * delta);
                     }
                 }
+            }
+            // [NEW] 내공 - 마기와 마찬가지로 가만히 서 있을 때 서서히 회복됨 (단, 주화입마 같은 부작용은 없음 - 정파 정공이므로)
+            if (gameState.hasNaegong) {
+                const isStandingStillNg = !playerInVehicle && gameState.onGround && !controls.moveForward && !controls.moveBackward && !controls.moveLeft && !controls.moveRight;
+                if (isStandingStillNg && gameState.naegong < gameState.maxNaegong) {
+                    const tierData = getNaegongTierData();
+                    const regen = tierData ? tierData.regen : 4;
+                    gameState.naegong = Math.min(gameState.maxNaegong, gameState.naegong + regen * delta);
+                }
+            }
+            // [NEW] 콤보 타임아웃 체크 - 일정 시간 추가 타격이 없으면 연계가 끊김 (심법 각성 여부와 무관하게 항상 동작)
+            if (gameState.comboCount > 0 && Date.now() - gameState.lastComboHitTime > COMBO_TIMEOUT) {
+                gameState.comboCount = 0;
+                updateComboUI(false);
             }
             if (playerStamina >= (maxStamina * 0.9) && gameState.health < maxHealth) { const healthRegenRate = 1 / 3; const healAmount = healthRegenRate * delta; gameState.health += healAmount; playerStamina -= healAmount * 4; if (gameState.health > maxHealth) { gameState.health = maxHealth; } }
             if (playerInVehicle) return;
@@ -6374,6 +7576,69 @@
                     zombie.userData.customTarget = null;
                 } else if (attacker && attacker.userData) {
                     zombie.userData.customTarget = attacker;
+                }
+            }
+        }
+
+        // ── [NEW] 수류탄 시스템: 총처럼 무기 슬롯(휠)으로 선택 후 좌클릭으로 던짐. 포물선으로 날아가 착지하면
+        //         보스 공격범위와 같은 방식의 위험지역(레드 서클)이 표시되고, 남은 퓨즈 시간 뒤 그 범위 안의 적에게만 피해. ──
+        const GRENADE_FUSE_MS = 3000;   // 던지면 3초 후 폭발
+        const GRENADE_RADIUS = 7;       // 이 거리 안의 적만 피해를 입음 ([요청] 일정거리 안에서만 피해)
+        const GRENADE_DAMAGE = 260;
+        const GRENADE_THROW_SPEED = 20;
+        const GRENADE_GRAVITY = 18;
+        const sharedGrenadeGeo = new THREE.SphereGeometry(0.13, 8, 8);
+        const sharedGrenadeMat = new THREE.MeshStandardMaterial({ color: 0x3b4a2e, roughness: 0.6 });
+        // 수류탄 무기 슬롯에서 좌클릭 시 shoot()이 호출 (총과 동일한 발사 방식)
+        function launchGrenade() {
+            const dir = new THREE.Vector3(); camera.getWorldDirection(dir);
+            dir.y += 0.35; dir.normalize(); // 살짝 위로 던지는 포물선 각도
+            const startPos = new THREE.Vector3(); if (muzzle) muzzle.getWorldPosition(startPos); else camera.getWorldPosition(startPos);
+            const g = new THREE.Mesh(sharedGrenadeGeo, sharedGrenadeMat);
+            g.position.copy(startPos);
+            g.userData = {
+                vx: dir.x * GRENADE_THROW_SPEED, vy: dir.y * GRENADE_THROW_SPEED, vz: dir.z * GRENADE_THROW_SPEED,
+                thrownAt: Date.now(), landed: false,
+            };
+            scene.add(g); grenades.push(g);
+        }
+        function explodeGrenade(g) {
+            // 착지하지 못한 채 퓨즈가 다 된 예외적인 경우(공중 폭발) - 즉시 폭발 처리
+            const pos = g.position.clone();
+            const targets = [...zombies, ...rangedEnemies, ...bosses, ...npcs];
+            let hitCount = 0;
+            targets.forEach(t => {
+                if (!t.parent || t.userData.health <= 0) return;
+                if (t.position.distanceTo(pos) > GRENADE_RADIUS) return;
+                applySkillDamage(t, GRENADE_DAMAGE);
+                hitCount++;
+            });
+            if (hitCount > 0) registerComboHit();
+            createDebrisEffect(pos.clone().add(new THREE.Vector3(0, 0.3, 0)), new THREE.Color(0xff8800), 24); // 폭발 이펙트 (가벼운 파티클만 - 렉 방지)
+            if (g.parent) scene.remove(g);
+        }
+        function updateGrenades(delta) {
+            // [요청] 렉 없게 - 동시에 존재 가능한 수류탄 개수를 제한하고, 착지 후엔 물리 계산을 멈춤
+            while (grenades.length > 8) { const old = grenades.shift(); if (old && old.parent) scene.remove(old); }
+            const now = Date.now();
+            for (let i = grenades.length - 1; i >= 0; i--) {
+                const g = grenades[i]; const data = g.userData;
+                // 공중에서 퓨즈가 다 되는 예외적인 경우에 대한 안전장치 (일반적으로는 착지 후 위험지역에서 터짐)
+                if (now - data.thrownAt >= GRENADE_FUSE_MS) { explodeGrenade(g); grenades.splice(i, 1); continue; }
+                if (!data.landed) {
+                    data.vy -= GRENADE_GRAVITY * delta;
+                    g.position.x += data.vx * delta;
+                    g.position.y += data.vy * delta;
+                    g.position.z += data.vz * delta;
+                    g.rotation.x += delta * 6;
+                    const groundY = getTerrainHeight(g.position.x, g.position.z);
+                    if (g.position.y <= groundY + 0.15) {
+                        // [NEW] 착지 = 보스 공격범위와 동일한 방식의 위험지역(레드/오렌지 서클)을 표시하고, 남은 퓨즈 시간 뒤에 그 자리에서 터짐
+                        const remaining = Math.max(GRENADE_FUSE_MS - (now - data.thrownAt), 200);
+                        createPlayerGrenadeZone(g.position.x, groundY, g.position.z, GRENADE_RADIUS, remaining, GRENADE_DAMAGE);
+                        if (g.parent) scene.remove(g);
+                        grenades.splice(i, 1);
+                    }
                 }
             }
         }
@@ -6772,6 +8037,27 @@
             scene.add(beam);
         }
 
+        // [FIX] 상인 판매 목록의 '판매 (게임종료)' 버튼이 호출하던 triggerEnding7()이 파일 어디에도 정의되어 있지 않아
+        // 버튼을 눌러도 아무 반응 없이 에러만 나던 버그. startEndingSequence()와 같은 패턴으로 히든 엔딩을 구현함.
+        function triggerEnding7() {
+            if (gameState.isEnding) return;
+            gameState.isEnding = true;
+            closeTradeModal();
+            document.exitPointerLock();
+
+            showChat('시스템', '================================');
+            showChat('상인', '이, 이건... 정말 백신인가? 자네가 정말 해낸 건가...');
+
+            setTimeout(() => {
+                showChat('상인', '즉시 본부에 연락하겠네. 이 지옥 같은 곳에도 끝이 보이는군.');
+            }, 1500);
+
+            setTimeout(() => {
+                showChat('시스템', '며칠 후, 백신이 전 세계로 퍼지며 좀비 사태가 진정되기 시작합니다...');
+            }, 3500);
+
+            setTimeout(() => showEndingScreen(), 6000);
+        }
         function showEndingScreen() {
             document.exitPointerLock();
             const screen = document.getElementById('ending-screen');
@@ -6792,6 +8078,17 @@
             if (gameState.hasCultivation && gameState.invulnerableUntil > Date.now()) return; // [NEW] 천마유성권 시전 직후 무적 시간
             if (playerInVehicle) { showChat('시스템', '차량이 공격을 방어했습니다! (차량 내구도 감소)'); playerInVehicle.userData.health -= damage * 5; updateUI(); } 
             else { 
+                // [NEW] 민첩 히든 스킬: 회피의 발걸음 - 낮은 확률로 피해를 완전히 무효화
+                const agiTier = gameState.statSkillTiers.agility;
+                if (agiTier > 0) {
+                    const agiData = STAT_SKILLS.agility.tierData[agiTier - 1];
+                    const nowAgi = Date.now();
+                    if (nowAgi - gameState.lastAgilityDodgeTime >= agiData.cooldown && Math.random() < agiData.chance) {
+                        gameState.lastAgilityDodgeTime = nowAgi;
+                        showChat('시스템', `💨 회피의 발걸음! 공격을 완전히 피했습니다.`);
+                        return;
+                    }
+                }
                 // [NEW] 방어구 데미지 경감 적용 (전체 피해의 85%까지만 경감 가능, 완전 무적 방지)
                 const armorDefense = getEquippedArmorBonuses().defense;
                 let reducedDamage = Math.max(damage * 0.15, damage - armorDefense);
@@ -6799,9 +8096,35 @@
                 if (activeSkillEffects.damageShieldUntil > Date.now()) reducedDamage *= 0.5;
                 // [NEW] 심법 생사경(7경지) 이상 각성 시 호신강기 - 마력이 20% 이상 남아있으면 피해 10% 추가 경감
                 if (gameState.hasCultivation && gameState.realm >= 7 && gameState.mana > gameState.maxMana * 0.2) reducedDamage *= 0.9;
+                // [NEW] 지구력 히든 스킬: 불굴의 심장 - 체력이 위험 수준까지 떨어지는 치명타를 자동 경감
+                const endTier = gameState.statSkillTiers.endurance;
+                if (endTier > 0) {
+                    const endData = STAT_SKILLS.endurance.tierData[endTier - 1];
+                    const nowEnd = Date.now();
+                    const wouldBeCritical = (gameState.health - reducedDamage) < getMaxHealth() * 0.15;
+                    if (wouldBeCritical && nowEnd - gameState.lastEnduranceSaveTime >= endData.cooldown) {
+                        reducedDamage *= (1 - endData.reduction);
+                        gameState.lastEnduranceSaveTime = nowEnd;
+                        showChat('시스템', `🛡️ 불굴의 심장이 치명적인 피해를 막아냈습니다!`);
+                    }
+                }
                 gameState.health -= reducedDamage; 
                 showPlayerDamageEffect(); updateUI(); 
-                if (gameState.health <= 0) { gameState.health = 0; handleGameOver(); } 
+                if (gameState.health <= 0) {
+                    // [NEW] 체력 극한 스킬: 불사의 심장 - 치명적인 피해로 쓰러지기 직전 가끔 목숨을 건짐 (티어가 낮으면 확률이 낮고 재사용 대기시간이 김)
+                    const nowVit = Date.now();
+                    const vitExTier = gameState.extremeStatUnlocked.vitality;
+                    const vitExData = vitExTier > 0 ? EXTREME_STAT_SKILLS.vitality.tierData[vitExTier - 1] : null;
+                    const canRevive = vitExData && (nowVit - gameState.lastExtremeReviveTime >= vitExData.cooldown) && Math.random() < vitExData.chance;
+                    if (canRevive) {
+                        gameState.lastExtremeReviveTime = nowVit;
+                        gameState.health = 1;
+                        showChat('시스템', `❤️‍🔥 불사의 심장이 고동친다! 죽음의 문턱에서 살아남았습니다!`);
+                        updateUI();
+                    } else {
+                        gameState.health = 0; handleGameOver();
+                    }
+                } 
             } 
         }
         function updateItems(delta) { 
@@ -6834,11 +8157,16 @@
         function animate() {
             if (isGameOver) return; requestAnimationFrame(animate); 
             const now = Date.now(); const delta = clock.getDelta(); frameCount++;
+            // [FIX] freeze 상태 변경(=구조물 활성/비활성 전환)과 캐시 재계산이 플레이어 30m 이동 조건에 묶여 있어서
+            // 그 사이 몹들이 건물 위/안에서 지면 레이캐스트가 옛 캐시를 참조해 바닥을 못 찾고 떨어지는 문제가 있었음.
+            // dirty 체크 자체는 매우 가벼우므로 매 프레임 확인하고, 실제 재계산(filter)은 dirty일 때만 수행.
+            if (activeStructuresDirty) rebuildActiveStructuresCache();
             
-            updateWorldState(delta); updatePlayer(delta); updateBullets(delta); updateZombies(delta);
+            updateWorldState(delta); updatePlayer(delta); handleAutoFire(); updateBullets(delta); updateGrenades(delta); updateZombies(delta);
             if (isMinimapOpen && frameCount % 4 === 0) drawMinimap(); // [NEW] 미니맵은 4프레임마다 갱신 (성능 최적화)
             if (curseState.active && frameCount % 30 === 0) updateCurseSystem(now); // [NEW] 저주 시스템은 저빈도로 체크 (성능 영향 거의 없음)
             if (frameCount % 60 === 0) checkAchievements(); // 누적형 스탯(주행거리 등) 주기적 체크
+            if (frameCount % 60 === 0) { updateVitalitySkill(now); updatePerceptionSkill(now); updatePerceptionLootSkill(now); } // [NEW] 스탯 히든 스킬(체력/감지력) 주기 체크
             if (frameCount % 6 === 0) updateArmorSkillBar(); // [NEW] 방어구 스킬 쿨다운 바 갱신 (초당 약 10회)
             
             // [OPTIMIZATION] 230m 이상 멀어진 적(일반 원거리 적) 완전 제거 (메모리 해제)
@@ -6877,7 +8205,7 @@
                 const isSafeZone = (hasLeftSafeZone === 0);
                 if (isSafeZone && data.state !== 'chase') return;
 
-                const groundY = getTerrainHeight(enemy.position.x, enemy.position.z);
+                const groundY = getStructureAwareGroundY(enemy.position, data); // [FIX] 도시 건물 바닥 인식 (기존엔 항상 맨땅으로 스냅되어 바닥을 뚫음)
                 if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03; if (enemy.position.y <= groundY + 1.25) { enemy.position.y = groundY + 1.25; data.isJumping = false; data.velocityY = 0; } } else { enemy.position.y = groundY + 1.25; }
 
                 // [NEW] 용암 데미지: 일반 원거리 적과 강도는 용암에 닿으면 피해를 입음
@@ -6953,21 +8281,21 @@
                             const distToVillager = enemy.position.distanceTo(targetEntity.position);
                             if (distToVillager > 2.5) {
                                 const dir = targetEntity.position.clone().sub(enemy.position).normalize(); dir.y = 0;
-                                enemy.position.add(dir.multiplyScalar(data.speed * delta * 0.8));
+                                applyMobMovement(enemy, dir.multiplyScalar(data.speed * delta * 0.8));
                             }
                         } else if (dist <= data.attackRange) {
                             if (now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); }
                             if (data.tactic === 'retreat') {
                                 const awayDir = enemy.position.clone().sub(playerPos).normalize(); awayDir.y = 0;
-                                enemy.position.add(awayDir.multiplyScalar(data.speed * delta * 0.4));
+                                applyMobMovement(enemy, awayDir.multiplyScalar(data.speed * delta * 0.4));
                             }
                         } else if (dist <= data.detectionRange) {
                             const dir = playerPos.clone().sub(enemy.position).normalize(); dir.y = 0;
                             const speedMult = data.tactic === 'charge' ? 1.0 : 0.5;
-                            enemy.position.add(dir.multiplyScalar(data.speed * delta * speedMult));
+                            applyMobMovement(enemy, dir.multiplyScalar(data.speed * delta * speedMult));
                         }
                     } else {
-                        if (dist <= data.attackRange) { if (now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); } } else if (dist <= data.detectionRange) { const dir = playerPos.clone().sub(enemy.position).normalize(); dir.y = 0; enemy.position.add(dir.multiplyScalar(data.speed * delta * 0.5)); }
+                        if (dist <= data.attackRange) { if (now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); } } else if (dist <= data.detectionRange) { const dir = playerPos.clone().sub(enemy.position).normalize(); dir.y = 0; applyMobMovement(enemy, dir.multiplyScalar(data.speed * delta * 0.5)); }
                     }
                     data.lastMoveTime = now;
                 }
@@ -6982,11 +8310,18 @@
                 const t = now * 0.001;
                 const lavaPlayerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
                 const LIGHT_ANIM_RADIUS_SQ = 150 * 150;
+                // [OPTIMIZATION] 탐험할수록 용암/장식 포인트라이트가 계속 생성되어 누적되는데(청크가 얼려도 조명은 꺼지지 않았음),
+                // WebGL은 켜져 있는 라이트 개수만큼 매 픽셀 조명 연산을 하므로 플레이 시간이 길어질수록 렉이 심해지는 원인이었음.
+                // 멀리 있는 라이트는 완전히 visible=false로 꺼서(오브젝트 자체는 그대로 유지) GPU 조명 비용을 원래 수준으로 유지.
+                const LIGHT_CULL_RADIUS_SQ = 220 * 220;
                 lavaLights.forEach(ll => {
-                    if (ll.isLava) return; // [NEW] 용암 조명은 애니메이션 없이 고정된 밝기로만 빛남
                     const ldx = ll.light.position.x - lavaPlayerPos.x;
                     const ldz = ll.light.position.z - lavaPlayerPos.z;
-                    if (ldx * ldx + ldz * ldz > LIGHT_ANIM_RADIUS_SQ) return;
+                    const distSq = ldx * ldx + ldz * ldz;
+                    if (distSq > LIGHT_CULL_RADIUS_SQ) { if (ll.light.visible) ll.light.visible = false; return; }
+                    if (!ll.light.visible) ll.light.visible = true;
+                    if (ll.isLava) return; // 용암 조명은 애니메이션 없이 고정된 밝기로만 빛남
+                    if (distSq > LIGHT_ANIM_RADIUS_SQ) return;
                     ll.light.intensity = ll.baseIntensity + Math.sin(t * 2.0 + ll.light.position.x) * 0.3;
                 });
             }
@@ -7009,8 +8344,6 @@
                 }
                 updateWorldChunks._lastCheckPos.copy(cPos);
                 updateWorldChunks(); 
-                // freeze 상태가 바뀌었을 때만 구조물 캐시 재계산 (매 프레임 X)
-                if (activeStructuresDirty) rebuildActiveStructuresCache();
             }
 
             renderer.render(scene, camera);
