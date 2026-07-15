@@ -3659,29 +3659,19 @@
             return validHit ? validHit.point.y : getTerrainHeight(pos.x, pos.z);
         }
 
-        // [NEW] 용암이 지형지물처럼 위아래로 오르내리는 진폭/주기 (시각 + 데미지 판정 공용)
-        const LAVA_BOB_AMPLITUDE = 1.4; // 위아래로 출렁이는 높이(m)
-        const LAVA_BOB_SPEED = 0.35;    // 출렁이는 속도
-        let lavaBobTime = 0; // animate 루프에서 매 프레임 누적
-        // 위치마다 위상이 달라야 "지형처럼" 굽이쳐 보이므로 좌표 기반 위상 오프셋 사용
-        function getLavaBobOffset(x, z) {
-            const phase = (x * 0.015 + z * 0.011);
-            return Math.sin(lavaBobTime * LAVA_BOB_SPEED + phase) * LAVA_BOB_AMPLITUDE * 0.5 + LAVA_BOB_AMPLITUDE * 0.5;
-        }
-
+        // [MODIFIED] 용암 출렁임(위아래 움직임) 완전 제거 요청 - 더 이상 시간에 따라 흔들리지 않고 고정 높이로만 존재함
         // [NEW] 특정 위치의 용암 높이를 계산하는 함수
         function getLavaHeight(x, z) {
             const tHeight = getTerrainHeight(x, z);
             const biome = getBiome(x, z);
             
             if (biome === 'volcano') {
-                const bob = getLavaBobOffset(x, z);
-                // 1. 웅덩이: 지형이 LAVA_LEVEL보다 낮으면 용암 높이는 LAVA_LEVEL (+ 출렁임)
-                if (tHeight < LAVA_LEVEL) return LAVA_LEVEL + bob;
+                // 1. 웅덩이: 지형이 LAVA_LEVEL보다 낮으면 용암 높이는 LAVA_LEVEL (고정, 출렁임 없음)
+                if (tHeight < LAVA_LEVEL) return LAVA_LEVEL;
                 
-                // 2. 흐르는 용암: 노이즈 조건이 맞으면 지형보다 살짝 위에 존재 (+ 출렁임)
+                // 2. 흐르는 용암: 노이즈 조건이 맞으면 지형보다 살짝 위에 존재 (고정, 출렁임 없음)
                 const flowNoise = simplex.noise2D(x / 40, z / 40);
-                if (flowNoise > 0.3) return tHeight + 0.2 + bob;
+                if (flowNoise > 0.3) return tHeight + 0.2;
             }
             
             // 용암이 없는 곳은 지하 깊숙한 곳으로 처리
@@ -4070,14 +4060,14 @@
                 const bz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createBanditCamp(bx, bz, chunkRand);
             }
-            // 엘프 군락 (숲 바이옴)
-            if (centerBiome === 'forest' && chunkRand() > 0.9675) {
+            // 엘프 군락 (숲, 평지 바이옴에만 생성 / 빈도 축소: 청크 크기가 작아지며 실제 밀도가 크게 늘었던 것을 보정)
+            if ((centerBiome === 'forest' || centerBiome === 'plain') && chunkRand() > 0.998) {
                 const ex = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const ez = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createElfVillage(ex, ez, chunkRand);
             }
-            // 드워프 광산 (산 바이옴)
-            if (centerBiome === 'mountain' && chunkRand() > 0.97) {
+            // 드워프 광산 (산 바이옴, 빈도 축소)
+            if (centerBiome === 'mountain' && chunkRand() > 0.998) {
                 const mx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE;
                 const mz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE;
                 createDwarfMine(mx, mz, chunkRand);
@@ -7925,7 +7915,7 @@
                 if (playerInVehicle === vehicleA) {
                     const data = vehicleA.userData; data.steering = THREE.MathUtils.lerp(data.steering, vehicleSteering, delta * 5); const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion).normalize(); const samplePos = vehicleA.position.clone().add(forwardDir.clone().multiplyScalar(2.0)); const currentH = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const nextH = getTerrainHeight(samplePos.x, samplePos.z); 
                     const slope = nextH - currentH; const gravityFactor = 15.0; const gravityResistance = slope * gravityFactor * delta; 
-                    data.speed -= gravityResistance; if (vehicleAcceleration > 0) { data.speed = Math.min(data.maxSpeed, data.speed + data.acceleration * delta); } else if (vehicleAcceleration < 0) { data.speed -= (data.speed > 0 ? data.braking : data.acceleration) * delta; data.speed = Math.min(data.speed, -MIN_FORWARD_VEHICLE_SPEED); /* [NEW] W만 눌렀을 땐 경사가 아무리 가팔라도 최소 전진 속도를 보장 */ } else { data.speed = THREE.MathUtils.lerp(data.speed, 0, delta * data.friction); } const turnFactor = Math.min(1, Math.abs(data.speed) / (data.maxSpeed * 0.5)); vehicleA.rotation.y -= data.steering * data.turnSpeed * turnFactor * delta; const moveDirection = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion); const displacement = moveDirection.multiplyScalar(data.speed * delta); 
+                    data.speed -= gravityResistance; if (vehicleAcceleration > 0) { data.speed = Math.min(data.maxSpeed, data.speed + data.acceleration * delta); } else if (vehicleAcceleration < 0) { data.speed -= (data.speed > 0 ? data.braking : data.acceleration) * delta; data.speed = Math.min(data.speed, -MIN_FORWARD_VEHICLE_SPEED); /* [NEW] W만 눌렀을 땐 경사가 아무리 가팔라도 최소 전진 속도를 보장 */ } else { data.speed = THREE.MathUtils.lerp(data.speed, 0, delta * data.friction); } data.speed = THREE.MathUtils.clamp(data.speed, -data.maxSpeed * 1.5, data.maxSpeed * 1.5); /* [FIX] 무입력(관성) 상태에서는 경사로 인한 속도 증가에 상한이 없어 가파른 경사를 내려갈 때 속도가 무한정 커지며 차량이 지형을 따라 순간적으로 솟구치는 버그가 있었음 - 최대속도의 1.5배로 상한 고정 */ const turnFactor = Math.min(1, Math.abs(data.speed) / (data.maxSpeed * 0.5)); vehicleA.rotation.y -= data.steering * data.turnSpeed * turnFactor * delta; const moveDirection = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion); const displacement = moveDirection.multiplyScalar(data.speed * delta); 
                     gameStats.treesChopped += displacement.length(); // 누적 주행거리(m) 추적
                     const oldPosition = vehicleA.position.clone(); vehicleA.position.add(displacement); const terrainY = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const targetY = terrainY + 0.4; vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, targetY, Math.min(1, delta * 10)); if (vehicleA.position.y < targetY) { vehicleA.position.y = targetY; } if (vehicleA.position.y > targetY + 3) { vehicleA.position.y = targetY + 3; } /* [FIX] 목표 지형 높이보다 너무 높게 뜨는 것 방지 (차량이 하늘로 날아가는 버그 수정) */ camera.rotation.set(gameState.rotation.x, 0, 0, 'YXZ'); gameState.position.copy(camera.getWorldPosition(new THREE.Vector3())); gameState.rotation.y = vehicleA.rotation.y; 
                     const vehicleBox = vehicleA.userData.collisionBox.clone().translate(vehicleA.position); const oldSpeed = data.speed; 
