@@ -4412,13 +4412,13 @@
                 const zombieCount = (centerBiome === 'city') ? Math.floor(chunkRand() * 2) + 1 : Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano' || zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
             }
 
-            // [NEW] 밤에는 청크가 로딩될 때 확률적으로 좀비/적이 추가로 태어남 (안전구역 밖에서만, 화산 제외)
+            // [MODIFIED] 밤에는 청크가 로딩될 때 10% 확률로 좀비/적이 추가로 태어남 (안전구역 밖에서만, 화산 제외)
             if (isNight && centerBiome !== 'volcano') {
                 const distFromOrigin = Math.sqrt(chunkOriginX * chunkOriginX + chunkOriginZ * chunkOriginZ);
-                if (distFromOrigin > SAFE_ZONE_RADIUS && chunkRand() > 0.92) {
+                if (distFromOrigin > SAFE_ZONE_RADIUS && chunkRand() > 0.90) {
                     const nx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const nz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const ny = getTerrainHeight(nx, nz);
                     if (ny > LAVA_LEVEL) {
-                        const nightZombieCount = Math.floor(chunkRand() * 2) + 1;
+                        const nightZombieCount = Math.floor(chunkRand() * 4) + 1;
                         for (let i = 0; i < nightZombieCount; i++) { const zx = nx + (chunkRand() - 0.5) * 12; const zz = nz + (chunkRand() - 0.5) * 12; const zy = getTerrainHeight(zx, zz); if (zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
                         if (chunkRand() > 0.7) { createRangedEnemy(nx, nz, 500 + chunkRand() * 500, ny); }
                     }
@@ -6116,10 +6116,13 @@
                 if (data.isUsingPortal && now - data.lastPortalUse > data.portalCooldown) data.isUsingPortal = false;
                 if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown) && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager) { data.state = 'portal'; } 
                 else if (((!isPassiveByDefault && !isSafeZone) || isProvoked) && distToTarget <= data.attackRange && Math.abs(heightDiff) < 1.5) { data.state = 'attack'; } 
-                else if (isProvoked || (!isPassiveByDefault && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer) && (hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0))) { data.state = 'chase'; } 
+                else if ((hasLineOfSight || data.lastKnownPlayerPosition.lengthSq() > 0) && (isProvoked || (!isPassiveByDefault && !isSafeZone && (distToTarget <= data.detectionRange || !isTargetPlayer)))) { data.state = 'chase'; } 
                 else if (data.stuckTime > data.stuckThreshold) { data.state = 'stuck'; } else { data.state = 'wander'; }
                 
-                switch (data.state) { case 'portal': handlePortalState(enemy, data, now, effectiveDelta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': { const oldPos = enemy.position.clone(); handleChaseState(enemy, data, now, effectiveDelta, hasLineOfSight, currentTargetPos); resolveEnemyWallCollision(enemy, oldPos); break; } case 'stuck': handleStuckState(enemy, data, effectiveDelta); break; case 'wander': { const oldPos = enemy.position.clone(); handleWanderState(enemy, data, now, effectiveDelta); resolveEnemyWallCollision(enemy, oldPos); break; } case 'knockback': handleKnockbackState(enemy, data, effectiveDelta); break; }
+                // [NEW] 시야가 없으면(hasLineOfSight === false) 실시간 위치가 아니라 마지막으로 목격한 위치를 추적하게 함.
+                // 도중에 다시 시야에 들어오면(hasLineOfSight === true) 곧바로 실시간 위치를 다시 추적함.
+                const chaseTargetPos = hasLineOfSight ? currentTargetPos : (data.lastKnownPlayerPosition.lengthSq() > 0 ? data.lastKnownPlayerPosition : null);
+                switch (data.state) { case 'portal': handlePortalState(enemy, data, now, effectiveDelta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': { const oldPos = enemy.position.clone(); handleChaseState(enemy, data, now, effectiveDelta, hasLineOfSight, chaseTargetPos); resolveEnemyWallCollision(enemy, oldPos); break; } case 'stuck': handleStuckState(enemy, data, effectiveDelta); break; case 'wander': { const oldPos = enemy.position.clone(); handleWanderState(enemy, data, now, effectiveDelta); resolveEnemyWallCollision(enemy, oldPos); break; } case 'knockback': handleKnockbackState(enemy, data, effectiveDelta); break; }
             } 
         }
 
@@ -6145,7 +6148,17 @@
         function handleChaseState(enemy, data, now, delta, hasLOS, targetPos) {
             if (!targetPos && data.lastKnownPlayerPosition.lengthSq() > 0) targetPos = data.lastKnownPlayerPosition;
             if (!targetPos) { data.state = 'wander'; return; }
-            
+
+            // [NEW] 시야가 없을 때는 마지막으로 목격한 위치로 이동하다가, 그 위치에 도달했는데도 여전히 안 보이면 추적을 포기함
+            if (!hasLOS) {
+                const distToLastKnown = enemy.position.distanceTo(targetPos);
+                if (distToLastKnown < 2.0) {
+                    data.lastKnownPlayerPosition.set(0, 0, 0);
+                    data.state = 'wander';
+                    return;
+                }
+            }
+
             const direction = targetPos.clone().sub(enemy.position).normalize(); direction.y = 0;
             if (data.stuckTime > 500) { direction.x += (Math.random() - 0.5); direction.z += (Math.random() - 0.5); direction.normalize(); }
 
@@ -7129,13 +7142,23 @@
         
         function addMoloch(amount) { const finalAmount = (retroModeActive ? amount * 2 : amount) * getMeritMolochBonus(); gameState.moloch += finalAmount; gameStats.totalMolochEarned += finalAmount; updateUI(); checkAchievements(); }
         function openTradeModal() { isTrading = true; gameStats.tradesCompleted++; checkAchievements(); document.exitPointerLock(); document.getElementById('trade-modal').style.display = 'flex'; renderTradeItems(); }
-        function closeTradeModal() { isTrading = false; elfShopOpen = false; dwarfShopOpen = false; wandererShopOpen = false; document.getElementById('trade-modal').style.display = 'none'; document.body.requestPointerLock(); }
+        function closeTradeModal() { isTrading = false; elfShopOpen = false; dwarfShopOpen = false; wandererShopOpen = false; enhanceShopOpen = false; enhanceSelectedItem = null; document.getElementById('trade-modal').style.display = 'none'; document.body.requestPointerLock(); }
 
         // ── 엘프/드워프 전용 거래 상태 ────────────────────────────────────
         let elfShopOpen = false;
         let dwarfShopOpen = false;
         // ── [NEW] 방랑 상인 상점 상태 — 세부 퀘스트를 완료하지 않고 이용할 때 가격이 할증됨
         let wandererShopOpen = false;
+        // [NEW] 드워프 대장장이 강화 시스템
+        let enhanceShopOpen = false;
+        let enhanceSelectedItem = null; // { type: 'weapon', idx } | { type: 'armor', location: 'equipped'|'bag', key }
+        function getEnhanceStats(level) {
+            const baseSuccess = 0.80, baseDestroy = 0.05;
+            let success = Math.max(0, baseSuccess - level * (baseSuccess * 0.05)); // 성공할수록 원래 확률(80%)의 5%씩 감소
+            let destroy = baseDestroy * Math.pow(1.10, level); // 성공할수록 기존 파괴확률의 10%씩 상승 (복리)
+            if (success + destroy > 1) { success = Math.max(0, 1 - destroy); } // 합이 100% 넘으면 성공확률에서 깎아 맞춤
+            return { success, destroy };
+        }
         // [NEW] 방랑 상인 가격 배율: 기본 2배, 퀘스트를 완료할 때마다(호감도 상승) 0.1씩 낮아져 최소 1배(정상가)까지 내려감
         function getWandererPriceMultiplier() {
             if (!wandererShopOpen) return 1;
@@ -7246,6 +7269,164 @@
                 row.appendChild(info); row.appendChild(btn); list.appendChild(row);
             });
         }
+        function openEnhanceShop() {
+            enhanceShopOpen = true; elfShopOpen = false; dwarfShopOpen = false; wandererShopOpen = false;
+            enhanceSelectedItem = null;
+            document.exitPointerLock();
+            const modal = document.getElementById('trade-modal');
+            modal.style.display = 'flex';
+            renderEnhanceShop();
+        }
+
+        function renderEnhanceShop() {
+            const list = document.getElementById('trade-list');
+            list.innerHTML = '';
+            const title = document.createElement('h2');
+            title.style.cssText = 'color:#ff8844;font-size:20px;margin-bottom:16px;border-bottom:2px solid #ff8844;padding-bottom:8px;';
+            title.textContent = '🔨 대장장이 브롬의 강화';
+            list.appendChild(title);
+
+            if (!enhanceSelectedItem) {
+                const desc = document.createElement('div');
+                desc.style.cssText = 'color:#ccc;font-size:13px;margin-bottom:14px;line-height:1.5;';
+                desc.textContent = '강화할 무기 또는 방어구를 선택하시오. 강화에 실패하면 아이템이 파괴될 수도 있으니 신중히 결정하시오.';
+                list.appendChild(desc);
+
+                const weaponHeader = document.createElement('h3');
+                weaponHeader.style.cssText = 'color:#ffaa44;font-size:15px;margin-top:10px;border-bottom:1px solid #555;padding-bottom:4px;';
+                weaponHeader.textContent = '🔫 무기';
+                list.appendChild(weaponHeader);
+
+                let hasWeapon = false;
+                gameState.weapons.forEach((wObj, idx) => {
+                    if (wObj.key === 'Fist') return;
+                    hasWeapon = true;
+                    const wd = WEAPON_DATABASE[wObj.key];
+                    const level = wObj.enhanceLevel || 0;
+                    const row = document.createElement('div'); row.className = 'trade-item';
+                    const info = document.createElement('span'); info.className = 'trade-item-info';
+                    info.innerHTML = `<b style="color:#ffaa44">${wd.name}</b> <span style="color:#7CFC00">+${level}</span>${idx === gameState.currentWeaponIndex ? ' <span style="color:#ffff00">(장착중)</span>' : ''}<br><span style="font-size:12px;color:#aaa">데미지 배율 x${(wObj.damageBonus || 1).toFixed(2)}</span>`;
+                    const btn = document.createElement('button'); btn.className = 'sell-btn';
+                    btn.style.backgroundColor = '#7b4f20';
+                    btn.textContent = '선택';
+                    btn.onclick = () => { enhanceSelectedItem = { type: 'weapon', idx }; renderEnhanceShop(); };
+                    row.appendChild(info); row.appendChild(btn); list.appendChild(row);
+                });
+                if (!hasWeapon) {
+                    const empty = document.createElement('div'); empty.style.cssText = 'padding:8px;color:#888;font-size:13px;'; empty.textContent = '강화할 무기가 없습니다.'; list.appendChild(empty);
+                }
+
+                const armorHeader = document.createElement('h3');
+                armorHeader.style.cssText = 'color:#ffaa44;font-size:15px;margin-top:16px;border-bottom:1px solid #555;padding-bottom:4px;';
+                armorHeader.textContent = '🛡️ 방어구';
+                list.appendChild(armorHeader);
+
+                let hasArmor = false;
+                const addArmorRow = (piece, location, key) => {
+                    hasArmor = true;
+                    const level = piece.enhanceLevel || 0;
+                    const row = document.createElement('div'); row.className = 'trade-item';
+                    const info = document.createElement('span'); info.className = 'trade-item-info';
+                    info.innerHTML = `<b style="color:#ffaa44">${getArmorPieceLabel(piece)}</b> <span style="color:#7CFC00">+${level}</span>${location === 'equipped' ? ' <span style="color:#ffff00">(장착중)</span>' : ''}<br><span style="font-size:12px;color:#aaa">방어력 ${piece.defense.toFixed(1)}</span>`;
+                    const btn = document.createElement('button'); btn.className = 'sell-btn';
+                    btn.style.backgroundColor = '#7b4f20';
+                    btn.textContent = '선택';
+                    btn.onclick = () => { enhanceSelectedItem = { type: 'armor', location, key }; renderEnhanceShop(); };
+                    row.appendChild(info); row.appendChild(btn); list.appendChild(row);
+                };
+                ['helmet', 'chest', 'pants', 'boots'].forEach(slot => { const piece = gameState.armor[slot]; if (piece) addArmorRow(piece, 'equipped', slot); });
+                gameState.bag.forEach((piece, idx) => addArmorRow(piece, 'bag', idx));
+                if (!hasArmor) {
+                    const empty = document.createElement('div'); empty.style.cssText = 'padding:8px;color:#888;font-size:13px;'; empty.textContent = '강화할 방어구가 없습니다.'; list.appendChild(empty);
+                }
+                return;
+            }
+
+            // 상세(강화 시도) 뷰
+            let itemRef;
+            if (enhanceSelectedItem.type === 'weapon') {
+                itemRef = gameState.weapons[enhanceSelectedItem.idx];
+            } else {
+                itemRef = enhanceSelectedItem.location === 'equipped' ? gameState.armor[enhanceSelectedItem.key] : gameState.bag[enhanceSelectedItem.key];
+            }
+            if (!itemRef) { enhanceSelectedItem = null; renderEnhanceShop(); return; }
+
+            const itemName = enhanceSelectedItem.type === 'weapon' ? WEAPON_DATABASE[itemRef.key].name : getArmorPieceLabel(itemRef);
+            const level = itemRef.enhanceLevel || 0;
+            const stats = getEnhanceStats(level);
+            const failChance = Math.max(0, 1 - stats.success - stats.destroy);
+
+            const detail = document.createElement('div');
+            detail.style.cssText = 'color:#eee;font-size:14px;line-height:1.8;margin-bottom:14px;';
+            detail.innerHTML = `
+                <div style="font-size:17px;color:#ffd700;margin-bottom:6px;">${itemName} <span style="color:#7CFC00">+${level}</span></div>
+                <div>${enhanceSelectedItem.type === 'weapon' ? `현재 데미지 배율: x${(itemRef.damageBonus || 1).toFixed(2)}` : `현재 방어력: ${itemRef.defense.toFixed(1)}`}</div>
+                <div style="color:#7CFC00;">성공 확률: ${(stats.success * 100).toFixed(1)}%</div>
+                <div style="color:#ff4444;">파괴 확률: ${(stats.destroy * 100).toFixed(1)}%</div>
+                <div style="color:#aaa;">변화 없음(실패): ${(failChance * 100).toFixed(1)}%</div>
+            `;
+            list.appendChild(detail);
+
+            const btnRow = document.createElement('div'); btnRow.style.cssText = 'display:flex;gap:10px;';
+            const enhanceBtn = document.createElement('button'); enhanceBtn.className = 'sell-btn';
+            enhanceBtn.style.cssText = 'background-color:#ff8844;flex:1;';
+            enhanceBtn.textContent = '강화 시도';
+            if (stats.success <= 0) { enhanceBtn.disabled = true; enhanceBtn.style.backgroundColor = '#555'; enhanceBtn.textContent = '더 이상 강화 불가'; }
+            enhanceBtn.onclick = () => { performEnhance(); };
+            const backBtn = document.createElement('button'); backBtn.className = 'sell-btn';
+            backBtn.style.cssText = 'background-color:#555;flex:1;';
+            backBtn.textContent = '뒤로';
+            backBtn.onclick = () => { enhanceSelectedItem = null; renderEnhanceShop(); };
+            btnRow.appendChild(enhanceBtn); btnRow.appendChild(backBtn);
+            list.appendChild(btnRow);
+        }
+
+        function performEnhance() {
+            if (!enhanceSelectedItem) return;
+            let itemRef;
+            if (enhanceSelectedItem.type === 'weapon') {
+                itemRef = gameState.weapons[enhanceSelectedItem.idx];
+            } else {
+                itemRef = enhanceSelectedItem.location === 'equipped' ? gameState.armor[enhanceSelectedItem.key] : gameState.bag[enhanceSelectedItem.key];
+            }
+            if (!itemRef) { enhanceSelectedItem = null; renderEnhanceShop(); return; }
+
+            const level = itemRef.enhanceLevel || 0;
+            const stats = getEnhanceStats(level);
+            const itemName = enhanceSelectedItem.type === 'weapon' ? WEAPON_DATABASE[itemRef.key].name : getArmorPieceLabel(itemRef);
+            const roll = Math.random();
+
+            if (roll < stats.success) {
+                itemRef.enhanceLevel = level + 1;
+                if (enhanceSelectedItem.type === 'weapon') {
+                    itemRef.damageBonus = (itemRef.damageBonus || 1) * 1.12;
+                } else {
+                    itemRef.defense = +(itemRef.defense * 1.12).toFixed(1);
+                }
+                showChat('드워프 대장장이', `쨍그랑! ${itemName} 강화에 성공했소! (+${itemRef.enhanceLevel})`);
+            } else if (roll < stats.success + stats.destroy) {
+                showChat('드워프 대장장이', `으악... ${itemName}이(가) 강화 도중 파괴되었소... 미안하게 됐소.`);
+                if (enhanceSelectedItem.type === 'weapon') {
+                    const idx = enhanceSelectedItem.idx;
+                    if (idx === gameState.currentWeaponIndex) { switchWeapon(0); }
+                    else if (idx < gameState.currentWeaponIndex) { gameState.currentWeaponIndex--; }
+                    gameState.weapons.splice(idx, 1);
+                } else {
+                    if (enhanceSelectedItem.location === 'equipped') {
+                        gameState.armor[enhanceSelectedItem.key] = null;
+                        if (typeof updateEquippedArmorDisplay === 'function') updateEquippedArmorDisplay();
+                    } else {
+                        gameState.bag.splice(enhanceSelectedItem.key, 1);
+                    }
+                }
+                enhanceSelectedItem = null;
+            } else {
+                showChat('드워프 대장장이', `이번엔 실패했소. 다행히 ${itemName}은(는) 무사하오.`);
+            }
+            renderEnhanceShop();
+            updateUI();
+        }
+
         function renderTradeItems() { 
             const list = document.getElementById('trade-list'); list.innerHTML = ''; 
 
@@ -8199,9 +8380,8 @@
                             giveSideQuest('dwarf', DWARF_QUEST_CHAIN[dwarfChainIndex], '드워프 대장장이'); return;
                         }
                         if (dwarfRaidActive) { showChat('드워프 대장장이', '골렘 미니언을 막아주시오! (' + dwarfRaidKills + '/' + dwarfRaidTotal + ')'); return; }
-                        showChat('드워프 대장장이', data.dialogue[data.dialogueIndex % data.dialogue.length]);
-                        data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
-                        if (data.dialogueIndex % 2 === 0) setTimeout(() => showChat('드워프 대장장이', '드워프 상인에게도 말을 걸어보시오. 특산품이 있소.'), 2500);
+                        // [NEW] 드워프 대장장이는 이제 무기/방어구 강화를 담당함
+                        openEnhanceShop();
                         return;
                     }
 
@@ -9550,14 +9730,47 @@
 
 
                 if (now - data.lastMoveTime > 100) {
-                    enemy.lookAt(playerPos.x, enemy.position.y, playerPos.z); const dist = Math.sqrt(distSq);
+                    const dist = Math.sqrt(distSq);
+
+                    // [NEW] 시야 확인: 실제로 플레이어가 보일 때만 정확한 위치를 갱신하고, 안 보이면 마지막으로 목격한 위치로 이동
+                    let hasLOS = true;
+                    if (dist <= Math.max(data.detectionRange, data.attackRange) + 5) {
+                        if (data.state === 'chase' && (frameCount + index) % 10 !== 0) { hasLOS = true; }
+                        else { hasLOS = checkLineOfSight(enemy.position, playerPos); }
+                    }
+                    if (hasLOS) { data.lastKnownPlayerPosition.copy(playerPos); }
+                    const hasLastKnown = data.lastKnownPlayerPosition.lengthSq() > 0;
+                    // 시야가 없으면 마지막으로 본 위치를 목표로 삼음. 도중에 다시 보이면(hasLOS) 실시간 위치로 전환됨.
+                    // 한 번도 본 적이 없으면(hasLastKnown === false) 플레이어 위치를 아예 모르는 상태이므로 목표 없음(null)
+                    const chaseTarget = hasLOS ? playerPos : (hasLastKnown ? data.lastKnownPlayerPosition : null);
+
+                    // 시야를 잃은 채 마지막 목격 위치에 도착하면 추적을 포기하고 대기 상태로 전환
+                    if (!hasLOS && hasLastKnown) {
+                        const distToLastKnown = enemy.position.distanceTo(data.lastKnownPlayerPosition);
+                        if (distToLastKnown < 3.0) {
+                            data.lastKnownPlayerPosition.set(0, 0, 0);
+                            data.state = 'idle';
+                            data.customTarget = null;
+                            data.lastMoveTime = now;
+                            return;
+                        }
+                    }
+
+                    // 플레이어의 위치를 전혀 모르는 상태면(한 번도 안 보였고 기억도 없음) 이번 틱은 아무것도 하지 않고 대기
+                    if (!chaseTarget && !(data.customTarget && data.customTarget.userData.health > 0)) {
+                        data.lastMoveTime = now;
+                        return;
+                    }
+
+                    if (chaseTarget) enemy.lookAt(chaseTarget.x, enemy.position.y, chaseTarget.z);
 
                     // [NEW] 포탈(계단/엘리베이터) 인식 - 플레이어와 층이 크게 다를 때 창문 밖으로 그냥 걸어나가
                     // 떨어지지 않도록, 좀비와 동일하게 포탈을 찾아서 이용하게 함
-                    const reHeightDiff = playerPos.y - enemy.position.y;
+                    const portalTargetY = chaseTarget ? chaseTarget.y : enemy.position.y;
+                    const reHeightDiff = portalTargetY - enemy.position.y;
                     if (now - data.lastPortalCheck > data.portalCheckInterval) {
                         data.lastPortalCheck = now;
-                        data.portalAction = (Math.abs(reHeightDiff) > 2.5 && dist < 80) ? findBestPortalAction(enemy.position, playerPos.y) : null;
+                        data.portalAction = (chaseTarget && Math.abs(reHeightDiff) > 2.5 && dist < 80) ? findBestPortalAction(enemy.position, portalTargetY) : null;
                     }
                     if (data.portalAction && !data.isUsingPortal && (now - data.lastPortalUse > data.portalCooldown)) {
                         handlePortalState(enemy, data, now, delta);
@@ -9629,20 +9842,23 @@
                                 enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * 0.8));
                             }
                         } else if (dist <= data.attackRange) {
-                            if (now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); }
+                            if (hasLOS && now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); }
                             if (data.tactic === 'retreat') {
-                                const awayDir = enemy.position.clone().sub(playerPos).normalize(); awayDir.y = 0;
+                                const awayDir = enemy.position.clone().sub(chaseTarget).normalize(); awayDir.y = 0;
                                 enemy.position.add(awayDir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * 0.4));
+                            } else if (!hasLOS) {
+                                const dir = chaseTarget.clone().sub(enemy.position).normalize(); dir.y = 0;
+                                enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * 0.5));
                             }
                         } else if (dist <= data.detectionRange && !reBlockedByHeight) {
-                            const dir = playerPos.clone().sub(enemy.position).normalize(); dir.y = 0;
+                            const dir = chaseTarget.clone().sub(enemy.position).normalize(); dir.y = 0;
                             const speedMult = data.tactic === 'charge' ? 1.0 : 0.5;
                             enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * speedMult));
                         }
                         resolveEnemyWallCollision(enemy, reOldPos); // [NEW] 건물 벽 통과 방지
                     } else {
                         const reOldPos2 = enemy.position.clone(); // [NEW] 벽 충돌 처리를 위한 이동 전 위치 저장
-                        if (dist <= data.attackRange) { if (now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); } } else if (dist <= data.detectionRange && !reBlockedByHeight) { const dir = playerPos.clone().sub(enemy.position).normalize(); dir.y = 0; enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * 0.5)); }
+                        if (dist <= data.attackRange) { if (hasLOS && now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); } else if (!hasLOS) { const dir = chaseTarget.clone().sub(enemy.position).normalize(); dir.y = 0; enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * 0.5)); } } else if (dist <= data.detectionRange && !reBlockedByHeight) { const dir = chaseTarget.clone().sub(enemy.position).normalize(); dir.y = 0; enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * 0.5)); }
                         resolveEnemyWallCollision(enemy, reOldPos2); // [NEW] 건물 벽 통과 방지
                     }
                     data.lastMoveTime = now;
@@ -9713,8 +9929,12 @@
             let currentColor, currentFog;
             if (sunHeight < 0.1 && sunHeight > -0.1) { const t = (sunHeight + 0.1) / 0.2; if (timeOfDay < 0.5) { currentColor = nightColor.clone().lerp(dayColor, t); currentFog = nightFog.clone().lerp(dayFog, t); currentColor.lerp(sunsetColor, 0.3 * (1 - Math.abs(t - 0.5) * 2)); } else { currentColor = dayColor.clone().lerp(nightColor, 1-t); currentFog = dayFog.clone().lerp(nightFog, 1-t); currentColor.lerp(sunsetColor, 0.3 * (1 - Math.abs(t - 0.5) * 2)); } } else if (sunHeight >= 0.1) { currentColor = dayColor; currentFog = dayFog; } else { currentColor = nightColor; currentFog = nightFog; }
             scene.background.copy(currentColor); scene.fog.color.copy(currentFog);
-            const oldIsNight = isNight; isNight = sunHeight < 0; if (isNight && !oldIsNight) showChat('시스템', '밤이 되었습니다. 주변이 위험해집니다...'); else if (!isNight && oldIsNight) { showChat('시스템', '아침이 밝았습니다.'); gameStats.nightsSurvived++; checkAchievements(); }
-            if (isNight && hasLeftSafeZone === 1 && !gameState.hordeActive && (gameTime - gameState.lastHordeTime > gameState.hordeCooldown)) { startHordeEvent(); }
+            const oldIsNight = isNight; isNight = sunHeight < 0;
+            if (isNight && !oldIsNight) {
+                showChat('시스템', '밤이 되었습니다. 주변이 위험해집니다...');
+                // [MODIFIED] 밤이 될 때마다 무조건 좀비떼가 오는 것이 아니라, 밤이 시작될 때 15% 확률로만 발생
+                if (hasLeftSafeZone === 1 && !gameState.hordeActive && Math.random() < 0.15) { startHordeEvent(); }
+            } else if (!isNight && oldIsNight) { showChat('시스템', '아침이 밝았습니다.'); gameStats.nightsSurvived++; checkAchievements(); }
             if (hasLeftSafeZone === 0) { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const distFromSpawn = playerPos.length(); if (distFromSpawn > SAFE_ZONE_RADIUS) { hasLeftSafeZone = 1; showChat('시스템', '⚠️ 안전 구역을 벗어났습니다! 이제부터 적들이 당신을 인식합니다. (되돌아와도 소용없음)'); } }
         }
         
