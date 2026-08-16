@@ -17,6 +17,11 @@
         #coord-display { position: fixed; top: 20px; left: 20px; color: #00ff00; font-size: 20px; font-weight: 700; font-family: 'Consolas', monospace; text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.8); z-index: 102; pointer-events: none; background: rgba(0, 0, 0, 0.5); padding: 5px 10px; border-radius: 5px; border: 1px solid #00ff00; }
         /* [UI] 게임 시간 표시 */
         #time-display { position: fixed; top: 65px; left: 20px; color: #00ffff; font-size: 20px; font-weight: 700; font-family: 'Consolas', monospace; text-shadow: 2px 2px 2px rgba(0, 0, 0, 0.8); z-index: 102; pointer-events: none; background: rgba(0, 0, 0, 0.5); padding: 5px 10px; border-radius: 5px; border: 1px solid #00ffff; }
+        /* [NEW] 울슈쎈성 성벽 체력 표시 (시계 아래) */
+        #castle-hp-bar { display: none; position: fixed; top: 108px; left: 20px; width: 180px; z-index: 102; pointer-events: none; background: rgba(0, 0, 0, 0.5); padding: 6px 10px; border-radius: 5px; border: 1px solid #ff8844; }
+        #castle-hp-bar .castle-hp-label { color: #ff8844; font-size: 13px; font-weight: 700; font-family: 'Consolas', monospace; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); margin-bottom: 4px; }
+        #castle-hp-bar .castle-hp-track { width: 100%; height: 10px; background: rgba(255,255,255,0.15); border-radius: 4px; overflow: hidden; }
+        #castle-hp-bar .castle-hp-fill { height: 100%; background: linear-gradient(90deg, #ff8844, #ffcc00); width: 100%; transition: width 0.3s; }
         /* 몰록(화폐) 스코어 표시 UI */
         #moloch-display { position: fixed; top: 30px; right: 50px; color: #ffd700; font-size: 28px; font-weight: 700; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8); z-index: 101; letter-spacing: 1px; pointer-events: none; }
 
@@ -237,6 +242,12 @@
         .pause-btn:hover { background: #3d3d5c; transform: scale(1.02); }
         #keybind-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); border: 2px solid #4ecdc4; padding: 25px; border-radius: 15px; color: white; z-index: 2300; width: 380px; max-height: 80vh; overflow-y: auto; display: none; flex-direction: column; gap: 12px; box-shadow: 0 0 30px rgba(78, 205, 196, 0.4); }
         #keybind-modal h2 { color: #4ecdc4; text-align: center; margin: 0 0 6px 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #4ecdc4; }
+        #accessibility-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); border: 2px solid #a0e0a0; padding: 25px; border-radius: 15px; color: white; z-index: 2300; width: 380px; display: none; flex-direction: column; gap: 14px; box-shadow: 0 0 30px rgba(160, 224, 160, 0.4); }
+        #accessibility-modal h2 { color: #a0e0a0; text-align: center; margin: 0 0 6px 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #a0e0a0; }
+        .accessibility-row { display: flex; flex-direction: column; gap: 4px; }
+        .accessibility-label { font-size: 14px; font-weight: bold; color: #ddd; display: flex; justify-content: space-between; }
+        .accessibility-label span { color: #a0e0a0; }
+        #accessibility-modal input[type="range"] { width: 100%; accent-color: #a0e0a0; cursor: pointer; }
         .keybind-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; }
         .keybind-name { font-size: 14px; }
         .keybind-key-btn { background: #333; color: #ffd700; border: 1px solid #666; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; min-width: 60px; text-align: center; }
@@ -341,6 +352,7 @@
         
         <div id="coord-display">X: 0, Y: 0 <span style="font-size:0.8em; color:#ccc; margin-left:10px;" id="biome-display"></span></div>
         <div id="time-display">00:00</div>
+        <div id="castle-hp-bar"><div class="castle-hp-label">🏰 울슈쎈성 성벽 <span id="castle-hp-text">0/0</span></div><div class="castle-hp-track"><div class="castle-hp-fill" id="castle-hp-fill"></div></div></div>
         <div id="equipped-armor-display"></div>
         <div id="moloch-display">몰록 / <span id="moloch-count">0</span></div>
 
@@ -398,8 +410,25 @@
             <button class="pause-btn" id="pause-keybind-btn" style="border-color:#4ecdc4;">🎹 스킬 키 설정</button>
             <button class="pause-btn" id="pause-stats-btn" style="border-color:#88ccff;">📊 상태창 보기</button>
             <button class="pause-btn" id="pause-merit-btn" style="border-color:#ff2222;">🏅 격 보기</button>
+            <button class="pause-btn" id="pause-accessibility-btn" style="border-color:#a0e0a0;">♿ 접근성 설정</button>
             <div id="pause-status-msg"></div>
             <input type="file" id="pause-load-input" accept="application/json,.json" style="display:none;">
+        </div>
+
+        <!-- [NEW] 접근성 설정 창 (일시정지 메뉴 -> 접근성 설정) -->
+        <div id="accessibility-modal">
+            <h2>♿ 접근성 설정</h2>
+            <div class="accessibility-row">
+                <div class="accessibility-label">청크 로딩 반경 <span id="accessibility-chunk-radius-val">180m</span></div>
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">값이 클수록 더 멀리까지 보이지만 렉이 심해질 수 있습니다.</div>
+                <input type="range" id="accessibility-chunk-radius" min="80" max="400" step="20" value="180">
+            </div>
+            <div class="accessibility-row">
+                <div class="accessibility-label">마우스 감도 <span id="accessibility-mouse-sensitivity-val">1.00x</span></div>
+                <input type="range" id="accessibility-mouse-sensitivity" min="20" max="300" step="5" value="100">
+            </div>
+            <button id="accessibility-reset-btn" class="pause-btn" style="border-color:#ff8844;">↺ 기본값으로 초기화</button>
+            <button id="close-accessibility-btn" class="pause-btn">닫기</button>
         </div>
 
         <!-- [NEW] 스킬 키 설정 창 (일시정지 메뉴 -> 스킬 키 설정) -->
@@ -646,6 +675,34 @@
         
         let ammoPrices = {};
         let weaponPrices = {};
+
+        // ═══════════════════════════════════════════════════════════
+        // [NEW] 최종보스 처치 이후 "울슈쎈성 방어전" 퀘스트 시스템
+        // ═══════════════════════════════════════════════════════════
+        const CASTLE_CENTER = { x: 480, z: 480 };
+        const CASTLE_WALL_RADIUS = 40;
+        const CASTLE_WALL_SEGMENTS = 12;
+        let castleQuest = {
+            phase: 'inactive', // inactive -> started -> recruiting -> collecting -> wallBuilt -> siege -> victory
+            meteorsCollected: 0,
+            meteorsNeeded: 10,
+            wallHealth: 0,
+            wallMaxHealth: 12000,
+            siegeDay: 0,
+            maxSiegeDays: 10,
+            recruits: { dwarf: false, elf: false, orc: false }, // [NEW] 종족 영입 여부
+            recruitProgress: { dwarf: 0, elf: 0, orc: 0 }, // [NEW] 영입 퀘스트 진행도(처치 수)
+            mercenaryDamageMultiplier: 1.0, // [NEW] 드워프 영입 후 대장간에서 강화할 때마다 상승
+        };
+        const RECRUIT_TARGETS = { dwarf: 15, elf: 12, orc: 10 }; // [NEW] 종족별 영입 퀘스트 목표 처치 수
+        const MERCENARY_ENHANCE_COST = 150; // [NEW] 드워프 영입 후 용병 강화 비용
+        let survivorCompanion = null; // 최종보스 처치 후 생성되는 동료 생존자 메시
+        let castleWallProxies = [];
+        let mercenaries = []; // 고용된 용병 배열
+        let pendingMercenaryCount = 0; // [NEW] 불러오기 시 복원할 용병 수 (임시 저장)
+        const MAX_MERCENARIES = 12;
+        const MERCENARY_HIRE_COST = 100;
+        const SIEGE_MOB_WEAPON_KEYS = ['UMP45', 'S1897', 'M249', 'P1911', 'SKS', 'AKM', 'M416', 'Vector'];
 
         const CHUNK_SIZE = 100; // [MODIFIED] 200 -> 100: 더 작은 단위로 쪼개서 필요한 범위만 로딩되도록 함
         const RENDER_DISTANCE = 1; // 최적화: 기존 유지 (이미 1)
@@ -1541,6 +1598,11 @@
 
         // 세부 퀘스트가 특정 타입 킬에 반응하도록 처리
         function onSqKill(killType) {
+            // [NEW] 울슈쎈성 종족 영입 퀘스트 진행도 갱신 (드워프: 좀비/트롤 처치, 엘프: 강도 처치)
+            if (castleQuest.phase === 'recruiting') {
+                if (!castleQuest.recruits.dwarf && (killType === 'zombie' || killType === 'troll')) castleQuest.recruitProgress.dwarf++;
+                if (!castleQuest.recruits.elf && (killType === 'bandit' || killType === 'banditLeader')) castleQuest.recruitProgress.elf++;
+            }
             // sqKills 카운터 증가
             if (killType === 'zombie') sqKills.zombie++;
             else if (killType === 'troll') sqKills.troll++;
@@ -2496,6 +2558,7 @@
             else if (isStatsOpen) { closeStatsModal(); }
             else if (isEquipOpen) { closeEquipmentModal(); }
             else if (isKeybindOpen) { closeKeybindModal(); document.body.requestPointerLock(); }
+            else if (isAccessibilityOpen) { closeAccessibilityModal(); document.body.requestPointerLock(); }
             else if (isMeritOpen) { closeMeritModal(); }
             else { togglePauseModal(); }
         }
@@ -2635,7 +2698,8 @@
                 achievements: achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed })),
                 shopArmorStock: shopArmorStock,
                 curseState: { active: curseState.active, intensity: curseState.intensity, victimNames: curseState.victimNames, curseEventCount: curseState.curseEventCount, apparitionEncountered: curseState.apparitionEncountered },
-                hiddenQuests: hiddenQuests
+                hiddenQuests: hiddenQuests,
+                castleQuest: castleQuest, mercenaryCount: mercenaries.length // [NEW] 울슈쎈성 방어전 진행상황 저장 (용병은 수량만 저장, 불러올 때 재배치)
             };
         }
 
@@ -2747,6 +2811,10 @@
                 elfChainIndex = data.elfChainIndex || 0;
                 dwarfChainIndex = data.dwarfChainIndex || 0;
                 if (Array.isArray(data.shopArmorStock)) shopArmorStock = data.shopArmorStock;
+
+                // [NEW] 울슈쎈성 방어전 진행상황 복원 (실제 월드 오브젝트는 startGame()에서 createCastleVillage() 이후 재생성됨)
+                if (data.castleQuest) { Object.assign(castleQuest, data.castleQuest); }
+                pendingMercenaryCount = typeof data.mercenaryCount === 'number' ? data.mercenaryCount : 0;
 
                 if (Array.isArray(data.achievements)) {
                     data.achievements.forEach(saved => {
@@ -3111,6 +3179,24 @@
             switchWeapon(gameState.currentWeaponIndex || 0); 
             syncStatSkillTiers(); // [NEW] 저장된(혹은 초기) 스탯 기준으로 히든 스킬 티어를 조용히 동기화
             loadKeyBindings(); // [NEW] 이전에 저장해둔 스킬 키 설정 불러오기 (없으면 기본값)
+            loadAccessibilitySettings(); // [NEW] 이전에 저장해둔 접근성 설정(청크 로딩 반경/마우스 감도) 불러오기
+            createCastleVillage(); // [NEW] 울슈쎈성 마을 - 게임 시작부터 고정된 위치에 항상 존재
+            // [NEW] 불러오기로 복원된 울슈쎈성 방어전 진행상황 반영 (성벽/용병/생존자 동료 재생성) - 대사는 다시 출력하지 않음
+            if (castleQuest.phase !== 'inactive') {
+                spawnSurvivorCompanionMesh(gameState.position.clone());
+                if (castleQuest.phase === 'started' || castleQuest.phase === 'recruiting') {
+                    castleQuest.phase = 'recruiting'; // 인트로 대사 도중 저장했더라도 영입 단계로 정리
+                } else if (castleQuest.phase === 'collecting') {
+                    startMeteorShower(); castleQuest.meteorsCollected = 0; // 진행 중이던 운석은 새로 배치 (기존 수집 개수는 안내 메시지 없이 초기화)
+                } else if (castleQuest.phase === 'wallBuilt' || castleQuest.phase === 'siege' || castleQuest.phase === 'victory') {
+                    const restoredDay = castleQuest.siegeDay; const restoredPhase = castleQuest.phase;
+                    castleQuest.wallHealth = 0; buildCastleWallSilent(); // 성벽 재생성 (안내 메시지 없이)
+                    castleQuest.siegeDay = restoredDay; castleQuest.phase = restoredPhase === 'siege' ? 'wallBuilt' : restoredPhase; // 공성 도중이었다면 다음 밤에 이어서 시작
+                    for (let i = 0; i < pendingMercenaryCount; i++) spawnMercenaryMesh(); // 용병 무료 재배치 (이미 지불했었으므로)
+                    document.getElementById('castle-hp-bar').style.display = 'block';
+                }
+                updateQuestUI();
+            }
             if (!loadedFromSave) {
                 const startY = getTerrainHeight(gameState.position.x, gameState.position.z); 
                 gameState.position.y = startY + 1.8; 
@@ -3271,8 +3357,8 @@
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; 
             const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); 
             const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); 
-            // [MODIFIED] 청크가 작아진 만큼(100m) 미리 로딩 반경도 합리적인 범위로 축소
-            const PRELOAD_RADIUS = 180; // 플레이어 반경 180m
+            // [MODIFIED] 청크가 작아진 만큼(100m) 미리 로딩 반경도 합리적인 범위로 축소 - [NEW] 접근성 설정에서 조정 가능
+            const PRELOAD_RADIUS = accessibilitySettings.chunkPreloadRadius; // 플레이어 반경(m), 기본 180m
             const chunkRadius = Math.ceil(PRELOAD_RADIUS / CHUNK_SIZE) + RENDER_DISTANCE;
             for (let x = playerChunkX - chunkRadius; x <= playerChunkX + chunkRadius; x++) { 
                 for (let z = playerChunkZ - chunkRadius; z <= playerChunkZ + chunkRadius; z++) { 
@@ -3885,7 +3971,24 @@
             ctx.fillText('N', cx, 12);
         }
         
+        // [NEW] 울슈쎈성 반경 100m는 완전한 평지로 고정 (건축물/몬스터가 없는 마을 부지가 자연스럽게 자리잡도록)
+        const CASTLE_FLAT_RADIUS = 100;
+        const CASTLE_FLAT_BLEND = 40; // 100m~140m 구간은 평지에서 원래 지형으로 부드럽게 전환
+        let _castleFlatY = null; // 지연 계산 캐시 (최초 1회만 계산)
         function getTerrainHeight(x, z) {
+            const dxC = x - CASTLE_CENTER.x, dzC = z - CASTLE_CENTER.z;
+            const distC = Math.sqrt(dxC * dxC + dzC * dzC);
+            if (distC <= CASTLE_FLAT_RADIUS + CASTLE_FLAT_BLEND) {
+                if (_castleFlatY === null) _castleFlatY = getTerrainHeightRaw(CASTLE_CENTER.x, CASTLE_CENTER.z);
+                if (distC <= CASTLE_FLAT_RADIUS) return _castleFlatY;
+                let t = (distC - CASTLE_FLAT_RADIUS) / CASTLE_FLAT_BLEND;
+                t = t * t * (3 - 2 * t); // 스무스스텝 - 경계에서 절벽 없이 자연스럽게 이어짐
+                return _castleFlatY * (1 - t) + getTerrainHeightRaw(x, z) * t;
+            }
+            return getTerrainHeightRaw(x, z);
+        }
+
+        function getTerrainHeightRaw(x, z) {
             const scale = 3000;
             const biomeValue = simplex.noise2D(x / scale, z / scale);
             let y = simplex.noise2D(x / 500, z / 500) * 15;
@@ -4249,6 +4352,9 @@
 
         function generateChunk(chunkX, chunkZ) {
             const chunkKey = `${chunkX},${chunkZ}`; // [OPTIMIZATION] 키 생성
+            // [NEW] 울슈쎈성 반경 100m 이내 청크는 완전한 평지로 유지하고, 건물/몬스터/랜드마크 생성을 전부 건너뜀
+            const castleChunkX = Math.round(CASTLE_CENTER.x / CHUNK_SIZE), castleChunkZ = Math.round(CASTLE_CENTER.z / CHUNK_SIZE);
+            if (Math.max(Math.abs(chunkX - castleChunkX), Math.abs(chunkZ - castleChunkZ)) <= 1) { return; }
             const chunkOriginX = chunkX * CHUNK_SIZE; const chunkOriginZ = chunkZ * CHUNK_SIZE; const centerBiome = getBiome(chunkOriginX, chunkOriginZ); const seed = chunkX * 31 + chunkZ * 17; let rand = (s) => () => (s = Math.sin(s) * 10000, s - Math.floor(s)); let chunkRand = rand(seed); let buildingsInChunk = [];
             // [MODIFIED] 청크 개수가 4배로 늘어난 만큼 건물 배치 확률 게이트도 1/4 수준으로 낮춰 월드 밀도 유지
             let objectDensityMultiplier = 1.0; let buildingChance = 0.025;
@@ -4509,7 +4615,27 @@
             createOrc(centerX, centerZ, centerY, true);
             if (size >= 3) { createOrc(centerX + 10, centerZ + 10, getTerrainHeight(centerX+10, centerZ+10), true); }
             for(let i=0; i<size; i++) { createRandomLoot(centerX + (randFunc()-0.5)*20, centerZ + (randFunc()-0.5)*20, centerY + 1.0); }
+            createOrcEmissary(centerX - 8, centerZ - 8, getTerrainHeight(centerX - 8, centerZ - 8)); // [NEW] 울슈쎈성 오크 영입 퀘스트용 - 평화로운 오크 사절
             showChat('시스템', `주변에서 거대한 오크 군락(${size}구역 급)의 기운이 느껴집니다...`);
+        }
+
+        // [NEW] 오크 사절 - 다른 오크와 달리 적대적이지 않은 NPC. 울슈쎈성 방어전의 오크 영입 퀘스트를 담당함.
+        function createOrcEmissary(x, z, yBase) {
+            const mat = new THREE.MeshLambertMaterial({ color: 0x5a7a3a });
+            const npc = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 2.0, 8), mat);
+            npc.position.set(x, yBase + 1.0, z); npc.castShadow = false;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 8, 8), mat); head.position.set(0, 1.25, 0); npc.add(head);
+            const tuskMat = new THREE.MeshLambertMaterial({ color: 0xeeeedd });
+            const tuskL = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.3, 4), tuskMat); tuskL.position.set(-0.2, 1.05, 0.35); tuskL.rotation.x = -0.5; npc.add(tuskL);
+            const tuskR = tuskL.clone(); tuskR.position.set(0.2, 1.05, 0.35); npc.add(tuskR);
+            npc.userData = {
+                type: 'npc', name: '오크 사절', isOrcEmissary: true,
+                dialogue: ['우리 부족은 함부로 인간을 믿지 않는다.', '힘없는 자의 말은 바람 소리와 다를 바 없지.', '네가 진정 강하다면, 그 힘을 우리에게 보여라.'],
+                dialogueIndex: 0, spawnPosition: npc.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.5,
+                health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
+            };
+            const cKey = `${Math.round(x / CHUNK_SIZE)},${Math.round(z / CHUNK_SIZE)}`;
+            scene.add(npc); npcs.push(npc); registerChunkObject(cKey, npc);
         }
 
         function createOrcHut(x, z, yBase) {
@@ -4579,6 +4705,7 @@
             const health = isChief ? 3000 : 800; const speed = isChief ? 28 : 32; 
             // [FIX] wanderTarget 초기값을 null로 설정하여 (0,0,0)으로 이동하는 문제 해결
             orc.userData = { health: health, maxHealth: health, speed: speed, originalSpeed: speed, type: 'zombie', isOrc: true, name: name, originalColor: orcMat.color.clone(), state: 'idle', lastAttackTime: 0, attackCooldown: 1500, attackRange: 2.0 * scale, detectionRange: 200, lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000, stuckTime: 0, stuckThreshold: 1000, lastPosition: orc.position.clone(), targetPortal: null, isUsingPortal: false, portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false, targetHeight: 0, playerElevated: false, lastKnownPlayerPosition: new THREE.Vector3(), velocityY: 0, isJumping: false, isProvoked: false };
+            if (!isChief) tryMutateEnemy(orc, orc.userData, false); // [NEW] 1% 확률로 변이 오크 생성 (워치프 제외)
             scene.add(orc); zombies.push(orc); 
         }
 
@@ -4611,6 +4738,372 @@
             };
             scene.add(proj); bullets.push(proj);
             return proj;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // [NEW] 울슈쎈성 마을 - 게임 시작부터 고정된 위치(CASTLE_CENTER)에 항상 존재.
+        // 성능을 위해 부품 수를 최소화하고, 정적 오브젝트로 한 번만 생성함 (매 프레임 갱신 없음).
+        // ═══════════════════════════════════════════════════════════
+        function createCastleVillage() {
+            const cx = CASTLE_CENTER.x, cz = CASTLE_CENTER.z;
+            const chunkKey = `${Math.round(cx / CHUNK_SIZE)},${Math.round(cz / CHUNK_SIZE)}`;
+
+            // 엘프 - 용병 대장 (몰록을 내면 용병을 고용해주는 NPC)
+            {
+                const ex = cx - 6, ez = cz + 4; const ey = getTerrainHeight(ex, ez);
+                const mat = new THREE.MeshLambertMaterial({ color: 0x80cbc4 });
+                const npc = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.6, 8), mat);
+                npc.position.set(ex, ey + 0.8, ez); npc.castShadow = false;
+                const earL = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.4, 4), mat); earL.position.set(-0.25, 0.9, 0); npc.add(earL);
+                const earR = earL.clone(); earR.position.set(0.25, 0.9, 0); npc.add(earR);
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), mat); head.position.set(0, 1.0, 0); npc.add(head);
+                npc.userData = {
+                    type: 'npc', name: '용병 대장 에일린', isElf: true,
+                    dialogue: ['나는 에일린. 한때는 용병단을 이끌었지만, 지금은 이 폐허를 지키는 게 내 마지막 임무요.', `몰록을 가져오면 용병을 고용해 드리리다. 한 명당 ${MERCENARY_HIRE_COST} 몰록 — 다시 말을 걸면 바로 계약이 성사되오.`],
+                    dialogueIndex: 0, spawnPosition: npc.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.8,
+                    health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
+                };
+                scene.add(npc); npcs.push(npc); registerChunkObject(chunkKey, npc);
+            }
+            // 드워프 촌장 (분위기용 대화 NPC, 드워프 영입 후에는 용병 강화도 담당)
+            {
+                const dx = cx + 6, dz = cz + 3; const dy = getTerrainHeight(dx, dz);
+                const mat = new THREE.MeshLambertMaterial({ color: 0xd2a679 });
+                const npc = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 1.1, 8), mat);
+                npc.position.set(dx, dy + 0.55, dz); npc.castShadow = false;
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), mat); head.position.set(0, 0.75, 0); npc.add(head);
+                const beard = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 6), new THREE.MeshLambertMaterial({ color: 0xeeeeee })); beard.position.set(0, 0.55, 0.2); npc.add(beard);
+                npc.userData = {
+                    type: 'npc', name: '드워프 촌장', isDwarf: true,
+                    dialogue: ['이 작은 마을이... 울슈쎈성의 마지막 희망이라고들 하더군.', '벽 하나 없이 밤을 보내는 게 얼마나 무서운 일인지, 자네는 모를 거요.', '고맙소, 생존자여. 당신 덕에 다시 잠을 이룰 수 있을 것 같소.'],
+                    dialogueIndex: 0, spawnPosition: npc.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.6,
+                    health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
+                };
+                scene.add(npc); npcs.push(npc); registerChunkObject(chunkKey, npc);
+            }
+            // 인간 - 마을 이장 (분위기용 대화 NPC)
+            {
+                const hx = cx, hz = cz - 6; const hy = getTerrainHeight(hx, hz);
+                const mat = new THREE.MeshLambertMaterial({ color: 0x6b8e23 });
+                const npc = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.7, 8), mat);
+                npc.position.set(hx, hy + 0.85, hz); npc.castShadow = false;
+                const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), new THREE.MeshLambertMaterial({ color: 0xe0b090 })); head.position.set(0, 1.05, 0); npc.add(head);
+                npc.userData = {
+                    type: 'npc', name: '마을 이장',
+                    dialogue: ['여기가 울슈쎈성이오. 폐허가 되었지만... 아직은 우리의 집이지.', '하늘에서 운석이 떨어졌다는 소문을 들었소. 엘프들이라면 그 뜻을 읽어낼 수 있을지도 모르지.', '부디 우리를 지켜주시오. 더는 잃을 게 남아있지 않으니까.'],
+                    dialogueIndex: 0, spawnPosition: npc.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.6,
+                    health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
+                };
+                scene.add(npc); npcs.push(npc); registerChunkObject(chunkKey, npc);
+            }
+        }
+
+        // [NEW] 생존자 동료 메시만 생성 (대사/퀘스트 진행 변경 없음) - 최초 등장과 불러오기 복원 양쪽에서 공용으로 사용
+        function spawnSurvivorCompanionMesh(pos) {
+            const mat = new THREE.MeshLambertMaterial({ color: 0xffcc66 });
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 1.7, 8), mat);
+            body.position.set(pos.x, pos.y + 0.85, pos.z); body.castShadow = false;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), new THREE.MeshLambertMaterial({ color: 0xe0b090 })); head.position.set(0, 1.05, 0); body.add(head);
+            body.userData = {
+                type: 'npc', name: '생존자', isCompanion: true,
+                dialogue: ['...'], dialogueIndex: 0, spawnPosition: body.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0,
+                health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
+            };
+            scene.add(body); npcs.push(body);
+            survivorCompanion = body;
+            return body;
+        }
+
+        // [NEW] 최종보스를 쓰러뜨린 자리에 생존자를 등장시켜 "울슈쎈성 방어전" 퀘스트를 시작함
+        function spawnSurvivorCompanion(pos) {
+            spawnSurvivorCompanionMesh(pos);
+            castleQuest.phase = 'started';
+            setTimeout(() => showChat('생존자', '...헉, 헉... 살아있다니. 정말로... 그게 쓰러졌어...'), 1000);
+            setTimeout(() => showChat('생존자', '몇 년 만입니다. 저게 쓰러지는 걸 두 눈으로 본 게. 카엘이라고 합니다. 예전엔... 그냥 떠돌이 상인이었죠.'), 3800);
+            setTimeout(() => showChat('생존자', '당신 같은 사람이 있다면, 어쩌면... 여기서 다시 시작할 수 있을지도 모르겠네요.'), 6600);
+            setTimeout(() => showChat('생존자', '이 근처에 아직 무너지지 않은 곳이 하나 있습니다. 울슈쎈성. 폐허나 다름없지만, 성벽만 다시 세울 수 있다면.'), 9400);
+            setTimeout(() => showChat('생존자', '혼자서는 어림도 없어요. 이 땅에 흩어진 종족들의 힘을 빌려야 합니다.'), 12200);
+            setTimeout(() => showChat('생존자', '드워프는 대장장이 기술이 뛰어나니 용병들의 무기를 벼려줄 수 있을 거고, 엘프는 하늘의 뜻을 읽는 이들이니 운석으로 성벽을 세우는 법을 알 겁니다.'), 15000);
+            setTimeout(() => showChat('생존자', '오크는... 굳이 필요하진 않아요. 하지만 그들이 곁에 있으면, 주변 몬스터들도 함부로 덤비진 못할 겁니다.'), 17800);
+            setTimeout(() => showChat('생존자', '다만 그들도 아무나 믿진 않을 거예요. 당신의 힘을 직접 보여줘야 할 겁니다. 드워프 대장장이, 엘프 장로... 그리고 원한다면 오크 마을에도 가보세요.'), 20600);
+            setTimeout(() => { castleQuest.phase = 'recruiting'; updateQuestUI(); }, 21200);
+        }
+
+        // [NEW] 하늘에서 운석 10개가 떨어짐 - 플레이어 주변에 흩어진 채로 생성되며 주워서 모아야 함
+        function startMeteorShower() {
+            castleQuest.phase = 'collecting';
+            castleQuest.meteorsCollected = 0;
+            showChat('생존자', '엘프의 말이 맞았어요... 하늘을 보세요!');
+            showChat('시스템', `☄️ 하늘에서 운석이 쏟아집니다! 흩어진 운석 조각 ${castleQuest.meteorsNeeded}개를 모아 오세요.`);
+            const originPos = gameState.position;
+            for (let i = 0; i < castleQuest.meteorsNeeded; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const dist = 20 + Math.random() * 160;
+                const mx = originPos.x + Math.cos(angle) * dist;
+                const mz = originPos.z + Math.sin(angle) * dist;
+                const my = getTerrainHeight(mx, mz);
+                spawnMeteorItem(mx, my, mz);
+            }
+            updateQuestUI();
+        }
+
+        function spawnMeteorItem(x, y, z) {
+            const mat = new THREE.MeshStandardMaterial({ color: 0xff6a00, emissive: 0xff3300, emissiveIntensity: 0.8, roughness: 0.4 });
+            const mesh = new THREE.Mesh(new THREE.DodecahedronGeometry(0.35, 0), mat);
+            mesh.position.set(x, y + 0.4, z); mesh.castShadow = false;
+            mesh.userData = { type: 'item', name: '운석 조각', isMeteor: true };
+            scene.add(mesh); objects.push(mesh);
+        }
+
+        // 운석 조각을 주웠을 때 호출됨 (pickupItem에서 분기)
+        function onMeteorPickup() {
+            castleQuest.meteorsCollected++;
+            showChat('시스템', `☄️ 운석 조각을 주웠습니다. (${castleQuest.meteorsCollected}/${castleQuest.meteorsNeeded})`);
+            updateQuestUI();
+            if (castleQuest.meteorsCollected >= castleQuest.meteorsNeeded) {
+                showChat('생존자', '이걸로 충분해요! 엘프가 뜻을 읽어낼 수 있을 만큼 모였습니다. 이제 성벽을 쌓을 수 있겠어요...');
+                setTimeout(() => buildCastleWall(), 2000);
+            }
+        }
+
+        // [NEW] 운석 10개를 모으면 자동으로 건설되는 울슈쎈성 성벽.
+        // 렉 방지를 위해 최소 개수의 정적 박스 세그먼트로만 구성하고, 한 번 배치된 뒤엔 절대 움직이지 않음(matrixAutoUpdate 끔).
+        function buildCastleWall() {
+            if (castleQuest.wallHealth > 0) return; // 이미 건설됨
+            constructCastleWallSegments();
+            castleQuest.wallHealth = castleQuest.wallMaxHealth;
+            castleQuest.phase = 'wallBuilt';
+            document.getElementById('castle-hp-bar').style.display = 'block';
+            updateCastleWallUI();
+            showChat('시스템', '🏰 운석의 힘으로 울슈쎈성 성벽이 다시 섰습니다!');
+            showChat('생존자', '드디어... 벽이 생겼어요. 이제 용병 대장 에일린에게 몰록을 주면 용병을 고용할 수 있어요. 준비되는 대로 곧 밤이 찾아올 겁니다.');
+            updateQuestUI();
+        }
+
+        // [NEW] 불러오기로 복원할 때 쓰는 조용한 버전 - 메시지 없이 성벽만 다시 세움
+        function buildCastleWallSilent() {
+            constructCastleWallSegments();
+            castleQuest.wallHealth = castleQuest.wallMaxHealth;
+            updateCastleWallUI();
+        }
+
+        // 성벽 세그먼트 메시/충돌체 생성 (공용 로직)
+        function constructCastleWallSegments() {
+            const chunkKey = `${Math.round(CASTLE_CENTER.x / CHUNK_SIZE)},${Math.round(CASTLE_CENTER.z / CHUNK_SIZE)}`;
+            const wallMat = new THREE.MeshLambertMaterial({ color: 0x6b6b5a });
+            const wallHeight = 7, wallThickness = 2;
+            const segAngle = (Math.PI * 2) / CASTLE_WALL_SEGMENTS;
+            const segLen = 2 * CASTLE_WALL_RADIUS * Math.sin(segAngle / 2) * 1.08; // 약간 겹치게 해서 틈 방지
+            castleWallProxies = [];
+            for (let i = 0; i < CASTLE_WALL_SEGMENTS; i++) {
+                const a = i * segAngle;
+                const cx = CASTLE_CENTER.x + Math.cos(a) * CASTLE_WALL_RADIUS;
+                const cz = CASTLE_CENTER.z + Math.sin(a) * CASTLE_WALL_RADIUS;
+                const cy = getTerrainHeight(cx, cz);
+                const seg = new THREE.Mesh(new THREE.BoxGeometry(segLen, wallHeight, wallThickness), wallMat);
+                seg.position.set(cx, cy + wallHeight / 2, cz);
+                seg.lookAt(CASTLE_CENTER.x, cy + wallHeight / 2, CASTLE_CENTER.z); // 두께 축이 성 중심을 향하게, 길이 축은 자동으로 접선 방향이 됨
+                seg.castShadow = false;
+                seg.userData = { type: 'object', health: 999999, maxHealth: 999999, playerPassable: true, isCastleWall: true, originalColor: wallMat.color.clone() };
+                seg.matrixAutoUpdate = false; seg.updateMatrix();
+                scene.add(seg); objects.push(seg); registerChunkObject(chunkKey, seg);
+                castleWallProxies.push(seg);
+            }
+        }
+
+        function updateCastleWallUI() {
+            const bar = document.getElementById('castle-hp-bar');
+            if (castleQuest.wallHealth <= 0 && castleQuest.phase !== 'wallBuilt' && castleQuest.phase !== 'siege' && castleQuest.phase !== 'victory') { bar.style.display = 'none'; return; }
+            bar.style.display = 'block';
+            const pct = Math.max(0, Math.min(100, (castleQuest.wallHealth / castleQuest.wallMaxHealth) * 100));
+            document.getElementById('castle-hp-fill').style.width = pct + '%';
+            document.getElementById('castle-hp-text').textContent = `${Math.max(0, Math.floor(castleQuest.wallHealth))}/${castleQuest.wallMaxHealth}`;
+        }
+
+        // [NEW] 용병 메시 생성 (고용 시/불러오기 복원 시 공용으로 사용)
+        function spawnMercenaryMesh() {
+            const angle = Math.random() * Math.PI * 2;
+            const dist = 6 + Math.random() * (CASTLE_WALL_RADIUS - 12);
+            const mx = CASTLE_CENTER.x + Math.cos(angle) * dist;
+            const mz = CASTLE_CENTER.z + Math.sin(angle) * dist;
+            const my = getTerrainHeight(mx, mz);
+            const wKey = SIEGE_MOB_WEAPON_KEYS[Math.floor(Math.random() * SIEGE_MOB_WEAPON_KEYS.length)];
+            const wData = WEAPON_DATABASE[wKey];
+            const mat = new THREE.MeshLambertMaterial({ color: 0x2255aa });
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 1.8, 8), mat);
+            body.position.set(mx, my + 0.9, mz); body.castShadow = false;
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshLambertMaterial({ color: 0xe0b090 })); head.position.set(0, 1.05, 0); body.add(head);
+            try {
+                const gun = wData.model(); gun.scale.set(1, 1, 1); gun.position.set(0.3, 0.5, 0.3); gun.traverse(c => { if (c.isMesh) c.castShadow = false; }); body.add(gun);
+            } catch (e) { /* 무기 모델 생성 실패 시 무시하고 용병은 그대로 배치 */ }
+            body.matrixAutoUpdate = false; body.updateMatrix();
+            body.userData = { type: 'mercenary', name: '용병', weapon: wKey, lastShotTime: 0, fireRate: Math.max(400, (wData.fireRate || 500) * 2.5), range: 75 };
+            scene.add(body); mercenaries.push(body);
+            return body;
+        }
+
+        // [NEW] 용병 고용 - 몰록 100당 1명, 최대 인원 제한. 용병은 상인처럼 한 자리에 고정되어 움직이지 않음.
+        function hireMercenary() {
+            if (mercenaries.length >= MAX_MERCENARIES) { showChat('용병 대장 에일린', '더 이상 용병을 받을 수 없습니다. 이미 충분히 모였습니다.'); return; }
+            if (gameState.moloch < MERCENARY_HIRE_COST) { showChat('용병 대장 에일린', `용병 한 명을 고용하려면 몰록 ${MERCENARY_HIRE_COST}이 필요합니다. (보유: ${gameState.moloch})`); return; }
+            gameState.moloch -= MERCENARY_HIRE_COST;
+            spawnMercenaryMesh();
+            showChat('용병 대장 에일린', `용병 한 명을 고용했습니다! (현재 ${mercenaries.length}/${MAX_MERCENARIES}명, 몰록 ${MERCENARY_HIRE_COST} 지불)`);
+            updateUI();
+        }
+
+        // [NEW] 용병 AI - 상인처럼 한 자리에 고정. 정식 총알(Bullet) 오브젝트를 만들지 않고 즉시 판정(히트스캔)으로 처리해서 렉을 방지함.
+        function updateMercenaries() {
+            if (mercenaries.length === 0) return;
+            const now = Date.now();
+            for (const merc of mercenaries) {
+                if (!merc.parent) continue;
+                const data = merc.userData;
+                if (now - data.lastShotTime < data.fireRate) continue;
+                let target = null, bestDistSq = data.range * data.range;
+                for (const z of zombies) { if (!z.parent || z.userData.health <= 0) continue; const dsq = merc.position.distanceToSquared(z.position); if (dsq < bestDistSq) { bestDistSq = dsq; target = z; } }
+                for (const e of rangedEnemies) { if (!e.parent || e.userData.health <= 0) continue; const dsq = merc.position.distanceToSquared(e.position); if (dsq < bestDistSq) { bestDistSq = dsq; target = e; } }
+                for (const b of bosses) { if (!b.parent || b.userData.health <= 0) continue; const dsq = merc.position.distanceToSquared(b.position); if (dsq < bestDistSq) { bestDistSq = dsq; target = b; } }
+                if (!target) continue;
+                merc.lookAt(target.position.x, merc.position.y, target.position.z);
+                data.lastShotTime = now;
+                const wData = WEAPON_DATABASE[data.weapon];
+                const dmg = calculateDamage(wData, merc.position.distanceTo(target.position)) * 0.8 * castleQuest.mercenaryDamageMultiplier; // [MODIFIED] 드워프 영입 후 대장간 강화 배율 적용
+                target.userData.health -= dmg;
+                showDamage(target.position, Math.floor(dmg), '#66ccff');
+                if (target.userData.health <= 0) {
+                    if (zombies.includes(target)) { handleZombieDeath(target, zombies.indexOf(target), false); }
+                    else if (bosses.includes(target)) { handleBossDeath(target, bosses.indexOf(target)); }
+                    else if (rangedEnemies.includes(target)) { if (target.userData.isMutant) dropMutantLoot(target.position); createDebrisEffect(target.position, target.material.color); scene.remove(target); rangedEnemies.splice(rangedEnemies.indexOf(target), 1); addMoloch(15); }
+                } else {
+                    if (zombies.includes(target)) { target.userData.state = 'chase'; target.userData.isProvoked = true; }
+                }
+            }
+        }
+
+        // [NEW] 새로운 몹 타입 "골렘" - 트롤보다 살짝 큰 몸집. 공성전 4일차부터 등장하며, 성벽이 서 있는 동안엔
+        // 플레이어가 아니라 성벽을 최우선으로 공격함 (updateZombies 루프에서 특수 분기 처리됨).
+        // [NEW] 울슈쎈성 종족 영입 퀘스트 - 처치 목표를 채우면 해당 종족을 영입함 (엘프/드워프는 필수, 오크는 선택)
+        const RACE_RECRUIT_QUEST_TEXT = {
+            dwarf: '울슈쎈성이라... 우리 조상들이 세운 지하 왕국과 그리 멀지 않은 곳이지. 좋소, 돕겠소. 허나 요즘 이 근방에 좀비와 트롤이 들끓어 대장간까지 위협받고 있소. 그것들부터 정리해주면, 내 손수 용병들의 무기를 벼려주겠소.',
+            elf: '숲을 위협하는 강도들 말인가요... 그대도 느꼈겠지만, 세계수는 이미 오염으로 신음하고 있습니다. 그 위에 강도들까지 날뛰니 정령의 힘이 흩어지고 있어요. 그들을 몰아내 주면, 하늘에서 내린 운석의 뜻을 읽어 성벽 세우는 법을 알려드리죠.',
+            orc: '흥, 인간이 감히 우리 부족에게 손을 벌려? ...허나 네가 그 괴물을 쓰러뜨렸다는 소문은 들었다. 소문인지 진짜 힘인지 이 눈으로 확인해야겠군. 이 근방을 어슬렁대는 나약한 적들을 처리해 증명해 보아라.'
+        };
+        const RACE_RECRUIT_ACCEPT_TEXT = {
+            dwarf: '좋소! 약속은 지키는 법이오. 망치와 화로를 챙겨 울슈쎈성으로 가겠소.',
+            elf: '...신뢰를 얻으셨군요. 세계수의 가호가 함께하기를. 성으로 향하겠습니다.',
+            orc: '크르릉... 제법이군, 인간. 좋다, 함께 가주마. 실망시키지 마라.'
+        };
+        const RACE_RECRUIT_LABEL = { dwarf: '드워프', elf: '엘프', orc: '오크' };
+        function handleRaceRecruitTalk(raceKey, npcName) {
+            if (castleQuest.phase !== 'recruiting' || castleQuest.recruits[raceKey]) return false; // 해당 없으면 false를 반환해 일반 대화 로직으로 넘어가게 함
+            const target = RECRUIT_TARGETS[raceKey];
+            const progress = castleQuest.recruitProgress[raceKey];
+            if (progress >= target) {
+                castleQuest.recruits[raceKey] = true;
+                showChat(npcName, RACE_RECRUIT_ACCEPT_TEXT[raceKey]);
+                showChat('시스템', `🤝 ${RACE_RECRUIT_LABEL[raceKey]}를 영입했습니다!`);
+                if (raceKey === 'dwarf') setTimeout(() => showChat('생존자', '드워프가 왔어요! 이제 대장간에서 용병들을 강화할 수 있겠네요.'), 1500);
+                if (raceKey === 'elf') setTimeout(() => showChat('생존자', '엘프가 왔어요! 이제 운석만 모으면 성벽을 세울 수 있어요.'), 1500);
+                if (raceKey === 'orc') setTimeout(() => showChat('생존자', '오크까지... 대단하네요. 이제 놈들도 예전만큼 기세등등하진 못할 거예요.'), 1500);
+                if (castleQuest.recruits.dwarf && castleQuest.recruits.elf) { setTimeout(() => startMeteorShower(), 3000); }
+                updateQuestUI();
+                return true;
+            } else {
+                showChat(npcName, RACE_RECRUIT_QUEST_TEXT[raceKey] + ` (${progress}/${target})`);
+                return true;
+            }
+        }
+
+        function createGolem(x, z, yBase) {
+            if (!yBase) yBase = getTerrainHeight(x, z);
+            const golemMat = new THREE.MeshLambertMaterial({ color: 0x4a4a42 });
+            const golem = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 0.95, 3.3, 8), golemMat);
+            golem.position.set(x, yBase + 1.65, z); golem.castShadow = false;
+            const speed = 16 + Math.random() * 2; const health = 4000;
+            golem.userData = {
+                health, maxHealth: health, speed, originalSpeed: speed, type: 'zombie', isGolem: true, attacksWall: true, name: '골렘',
+                originalColor: golemMat.color.clone(), state: 'idle', lastAttackTime: 0, attackCooldown: 2200, attackRange: 3.0, detectionRange: 260,
+                lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000,
+                stuckTime: 0, stuckThreshold: 1000, lastPosition: golem.position.clone(),
+                targetPortal: null, isUsingPortal: false, portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false,
+                targetHeight: 0, playerElevated: false, lastKnownPlayerPosition: new THREE.Vector3(), velocityY: 0, isJumping: false, isProvoked: true, isSiegeMob: true
+            };
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), new THREE.MeshLambertMaterial({ color: 0x333330 })); head.position.set(0, 1.9, 0); head.castShadow = false; golem.add(head);
+            scene.add(golem); zombies.push(golem);
+            return golem;
+        }
+
+        // [NEW] 울슈쎈성 공성전 - 밤마다 정해진 구성의 적이 성 밖에 등장함
+        const SIEGE_DAY_INTRO = {
+            1: '드디어 첫날 밤이군요. 저 멀리서 보스급 몬스터의 기운과 함께... 좀비 떼가 몰려오고 있어요. 성벽을 믿으세요!',
+            2: '이틀째 밤입니다. 어제보다 더 강한 기운이 느껴져요. 좀비 떼에 무장한 적들까지 섞여 있어요. 조심하세요!',
+            3: '사흘째 밤... 오늘은 몬스터가 아니라 강도 무리예요. 숫자가 상당합니다.',
+            4: '나흘째 밤이에요. ...저게 뭐죠? 처음 보는 놈들이에요. 성벽을 노리고 있어요! 벽이 무너지기 전에 막아야 해요!',
+            5: '닷새째 밤. 벌써 절반이 지났네요. 오늘은 보스가 둘이나 옵니다. 대량의 좀비도 함께요. 정신 바짝 차리세요!',
+            6: '엿새째 밤. 보스 둘에 강도, 무장한 적들까지... 사방에서 몰려오고 있어요.',
+            7: '이레째 밤. 그 골렘들이 무리로 옵니다. 게다가 좀비 떼까지. 성벽이 버텨줄지 걱정이에요.',
+            8: '여드레째 밤. 보스가 셋이라니... 이런 밤은 처음이에요. 침착하게 버텨내세요.',
+            9: '아흐레째 밤. 마지막 밤을 앞두고 강도 대군과 골렘 무리가 함께 몰려옵니다.',
+            10: '열흘째... 마지막 밤이에요. 놈들이 총공세를 퍼붓고 있어요. 여기까지 왔으니, 끝까지 버텨내야 해요!'
+        };
+        function startSiegeDay(day) {
+            castleQuest.phase = 'siege';
+            castleQuest.siegeDay = day;
+            showChat('생존자', SIEGE_DAY_INTRO[day] || SIEGE_DAY_INTRO[10]);
+            showChat('시스템', `⚔️ ${day}/${castleQuest.maxSiegeDays}일째 밤 - 공격이 시작됩니다!`);
+            const spawnPos = (angle, dist) => { const x = CASTLE_CENTER.x + Math.cos(angle) * dist; const z = CASTLE_CENTER.z + Math.sin(angle) * dist; return { x, z, y: getTerrainHeight(x, z) }; };
+            const tagSiege = (mob) => { if (!mob || !mob.userData) return; mob.userData.isSiegeMob = true; mob.userData.isProvoked = true; mob.userData.state = 'chase'; if (mob.userData.lastKnownPlayerPosition) mob.userData.lastKnownPlayerPosition.copy(gameState.position); };
+            const spawnZombies = (count) => { for (let i = 0; i < count; i++) { const p = spawnPos(Math.random() * Math.PI * 2, CASTLE_WALL_RADIUS + 15 + Math.random() * 40); createZombie(p.x, p.z, 0, p.y); tagSiege(zombies[zombies.length - 1]); } };
+            const spawnBandits = (count) => { for (let i = 0; i < count; i++) { const p = spawnPos(Math.random() * Math.PI * 2, CASTLE_WALL_RADIUS + 15 + Math.random() * 40); const b = createBandit(p.x, p.z, p.y, false); tagSiege(b); } };
+            const spawnRangedEnemies = (count) => { for (let i = 0; i < count; i++) { const p = spawnPos(Math.random() * Math.PI * 2, CASTLE_WALL_RADIUS + 15 + Math.random() * 40); createRangedEnemy(p.x, p.z, 600, p.y); tagSiege(rangedEnemies[rangedEnemies.length - 1]); } };
+            const spawnGolems = (count) => { for (let i = 0; i < count; i++) { const p = spawnPos(Math.random() * Math.PI * 2, CASTLE_WALL_RADIUS + 20 + Math.random() * 20); createGolem(p.x, p.z, p.y); } };
+            const spawnBosses = (count) => { const types = ['witch', 'fire_demon', 'golem', 'necromancer']; for (let i = 0; i < count; i++) { const t = types[Math.floor(Math.random() * types.length)]; const p = spawnPos(Math.random() * Math.PI * 2, CASTLE_WALL_RADIUS + 30 + Math.random() * 30); createBoss(t, p.x, p.z, p.y); const b = bosses[bosses.length - 1]; if (b) b.userData.isSiegeMob = true; } };
+
+            if (day === 1) { spawnBosses(1); spawnZombies(25); }
+            else if (day === 2) { spawnBosses(1); spawnZombies(25); spawnRangedEnemies(6); }
+            else if (day === 3) { spawnBandits(20); }
+            else if (day === 4) { spawnGolems(4); spawnZombies(15); }
+            else if (day === 5) { spawnBosses(2); spawnZombies(30); }
+            else if (day === 6) { spawnBosses(2); spawnRangedEnemies(10); spawnBandits(20); }
+            else if (day === 7) { spawnGolems(6); spawnZombies(40); }
+            else if (day === 8) { spawnBosses(3); spawnRangedEnemies(15); }
+            else if (day === 9) { spawnBandits(30); spawnGolems(8); }
+            else { spawnBosses(3); spawnGolems(10); spawnZombies(50); spawnBandits(20); spawnRangedEnemies(15); }
+            updateQuestUI();
+        }
+
+        // [NEW] 밤을 무사히 버텨내면(새벽이 오면) 지급되는 보상 + 남은 공성 몹 정리
+        const DAWN_SURVIVE_LINES = [
+            '해가 뜨네요... 오늘 밤도 버텨냈어요.', '성벽이 아직 서 있어요! 우리가 해냈어요.', '휴... 살았다. 다들 무사하네요.',
+            '또 하루를 살아남았네요. 계속 이렇게만...', '아침이에요. 이 성은 아직 무너지지 않았어요.'
+        ];
+        function clearSiegeDay() {
+            const day = castleQuest.siegeDay;
+            const molochReward = 500 * day; const xpReward = 300 * day;
+            addMoloch(molochReward); gainXP(xpReward);
+            const line = day >= castleQuest.maxSiegeDays ? '' : (DAWN_SURVIVE_LINES[Math.min(day - 1, DAWN_SURVIVE_LINES.length - 1)] + ' ');
+            if (line) showChat('생존자', line);
+            showChat('시스템', `🌅 ${day}일째 밤을 버텨냈습니다! (보상: 몰록 ${molochReward}, 경험치 ${xpReward})`);
+            // 남은 공성 몹 정리 (다음 날을 위해 깔끔하게)
+            for (let i = zombies.length - 1; i >= 0; i--) { if (zombies[i].userData.isSiegeMob) { scene.remove(zombies[i]); zombies.splice(i, 1); } }
+            for (let i = rangedEnemies.length - 1; i >= 0; i--) { if (rangedEnemies[i].userData.isSiegeMob) { scene.remove(rangedEnemies[i]); rangedEnemies.splice(i, 1); } }
+            for (let i = bosses.length - 1; i >= 0; i--) { if (bosses[i].userData.isSiegeMob) { scene.remove(bosses[i]); bosses.splice(i, 1); } }
+            if (day >= castleQuest.maxSiegeDays) {
+                castleQuest.phase = 'victory';
+                showChat('생존자', '...끝났어요. 정말로 끝났어요. 열흘 밤을... 우리가 버텨냈어요.');
+                setTimeout(() => showChat('생존자', '당신이 아니었다면 이 성도, 저도, 여기 있는 모두도 없었을 거예요. 정말 고맙습니다.'), 2500);
+                gameState.isEnding = true;
+                setTimeout(() => triggerGameEnding(
+                    '울슈쎈성의 새벽',
+                    '열흘간의 공성전에서 살아남았습니다!',
+                    '무너질 것 같던 성벽이 열흘 밤을 버텨냈습니다.<br>드워프의 대장간에서는 다시 망치질 소리가 울리고, 엘프는 세계수를 향해 기도를 올립니다.<br>생존자들의 마을에 다시 아침 햇살이 비칩니다. 당신은 진정한 수호자입니다.',
+                    'GUARDIAN ENDING — 울슈쎈성의 새벽'
+                ), 5500);
+            } else {
+                castleQuest.phase = 'wallBuilt'; // 다음 밤을 기다리는 상태로 복귀
+            }
+            updateQuestUI();
         }
 
         function createBoss(type, x, z, yBase) {
@@ -5595,13 +6088,9 @@
             } else {
                 gameState.finalBossAlive = false;
                 showChat('시스템', `👑 최종보스 ${boss.userData.name}을(를) 쓰러뜨렸습니다! 당신은 진정한 생존자입니다.`);
-                gameState.isEnding = true;
-                setTimeout(() => triggerGameEnding(
-                    '혼돈의 종언',
-                    '혼돈의 군주 아바돈을 쓰러뜨렸습니다!',
-                    '세상을 집어삼키려던 혼돈의 군주가 마침내 무너졌습니다.<br>먹구름이 걷히고, 오랫동안 잊고 있던 햇살이 폐허 위로 다시 비칩니다.',
-                    'CHAOS ENDING — 혼돈의 종언'
-                ), 3000);
+                // [MODIFIED] 최종보스 처치 즉시 엔딩으로 가지 않고, 생존자를 그 자리에 등장시켜
+                // "울슈쎈성 방어전" 퀘스트를 이어감. 엔딩은 10일간의 공성전을 모두 버텨낸 뒤로 미룸.
+                spawnSurvivorCompanion(boss.position.clone());
             }
 
             // ── 메인스토리 보스 처치 연동 ──
@@ -5927,6 +6416,29 @@
                     continue;
                 }
                 const distSq = npc.position.distanceToSquared(playerPos);
+                // [NEW] 최종보스 처치 후 동료가 된 생존자는 항상 플레이어를 따라다님 (일반 배회 로직을 건너뜀)
+                if (data.isCompanion) {
+                    npc.visible = true;
+                    const distToPlayer = Math.sqrt(distSq);
+                    if (distToPlayer > 60) {
+                        const groundY = getTerrainHeight(playerPos.x - 2, playerPos.z);
+                        npc.position.set(playerPos.x - 2, groundY + 0.85, playerPos.z);
+                    } else if (distToPlayer > 3.5) {
+                        const dir = playerPos.clone().sub(npc.position); dir.y = 0;
+                        if (dir.lengthSq() > 0.0001) {
+                            dir.normalize();
+                            const followSpeed = getMoveSpeed(); // [요청] 플레이어와 같은 속도로 따라다님
+                            npc.position.add(dir.multiplyScalar(followSpeed * delta));
+                            const groundY = getTerrainHeight(npc.position.x, npc.position.z);
+                            npc.position.y = groundY + 0.85;
+                        }
+                        npc.lookAt(playerPos.x, npc.position.y, playerPos.z);
+                    } else {
+                        npc.lookAt(playerPos.x, npc.position.y, playerPos.z);
+                    }
+                    if (distSq <= LABEL_VISIBLE_SQ) renderEntityLabel(labelsEl, npc, data.name, 2.8, 'survivor', false, playerPos);
+                    continue;
+                }
                 // 80m 밖: 렌더링 끄고 AI 정지
                 if (distSq > NPC_ACTIVE_SQ) { npc.visible = false; continue; }
                 npc.visible = true;
@@ -6050,7 +6562,7 @@
                 
                 const effectiveDelta = delta * updateRate;
 
-                if (isDayTime && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager && !data.isGiant && data.health > 0) {
+                if (isDayTime && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager && !data.isGiant && !data.isMutant && !data.isGolem && data.health > 0) {
                     if ((frameCount + index) % 60 === 0) {
                         const damagePerSec = 100; 
                         data.health -= damagePerSec;
@@ -6064,6 +6576,33 @@
                 if (isNight) { data.speed = playerBaseSpeed + 0.01; } else { data.speed = Math.max(0, playerBaseSpeed - 0.1); }
                 data.speed *= getSlowMultiplier(data); // [NEW] '냉기의' 인첸트 등으로 둔화 상태면 이동속도 감소
                 if (data.health <= 0) { handleZombieDeath(enemy, index, true); continue; }
+                
+                // [NEW] 골렘: 성벽이 서 있는 동안엔 플레이어가 아니라 성벽을 최우선 표적으로 삼아 직진하여 공격함
+                if (data.attacksWall && castleQuest.wallHealth > 0 && castleQuest.phase === 'siege') {
+                    const toCenterX = CASTLE_CENTER.x - enemy.position.x, toCenterZ = CASTLE_CENTER.z - enemy.position.z;
+                    const distToCenter = Math.sqrt(toCenterX * toCenterX + toCenterZ * toCenterZ);
+                    const golemGroundY = getStructureAwareGroundY(enemy.position, data);
+                    enemy.position.y = golemGroundY + 1.65;
+                    if (distToCenter <= CASTLE_WALL_RADIUS + 3) {
+                        // 성벽 앞에 도달함 - 이동을 멈추고 성벽을 공격
+                        const nowAtk = Date.now();
+                        if (nowAtk - data.lastAttackTime > data.attackCooldown) {
+                            data.lastAttackTime = nowAtk;
+                            castleQuest.wallHealth = Math.max(0, castleQuest.wallHealth - 250);
+                            updateCastleWallUI();
+                            if (castleQuest.wallHealth <= 0) { showChat('시스템', '💥 성벽이 무너졌습니다!! 적들이 마을로 몰려옵니다!'); }
+                        }
+                        enemy.lookAt(CASTLE_CENTER.x, enemy.position.y, CASTLE_CENTER.z);
+                    } else {
+                        // 성벽을 향해 직진
+                        const dir = new THREE.Vector3(toCenterX, 0, toCenterZ).normalize();
+                        const oldPos = enemy.position.clone();
+                        enemy.position.add(dir.multiplyScalar(data.speed * effectiveDelta));
+                        resolveEnemyWallCollision(enemy, oldPos);
+                        enemy.lookAt(CASTLE_CENTER.x, enemy.position.y, CASTLE_CENTER.z);
+                    }
+                    continue;
+                }
                 
                 // [FIX] 좀비 지면(건물 바닥 포함) 높이 계산 - 공용 함수 사용으로 통일 (기존엔 레이캐스트가 실패하면 높이 갱신을 아예 건너뛰어 붕 뜨거나 어긋나는 문제가 있었음)
                 const zombieGroundY = getStructureAwareGroundY(enemy.position, data);
@@ -6241,7 +6780,61 @@
         }
 
         function handleKnockbackState(enemy, data, delta) { data.state = 'chase'; }
-        
+
+        // ─── [NEW] 변이 좀비/적 시스템 ─────────────────────────────────────
+        // 좀비/적이 생성될 때 1% 확률로 다양한 스킬 중 하나를 가진 "변이체"로 생성됨.
+        // 변이체는 체력이 높고 보라색으로 발광하며, 처치 시 무기를 무조건 1개 드랍함(수류탄 제외).
+        const MUTATION_SKILLS = [
+            { id: 'slow_touch', name: '둔화의 손길', desc: '공격에 맞으면 잠시 이동속도가 느려짐', rangedOnly: false, color: 0x9b30ff },
+            { id: 'piercing_shot', name: '관통 탄환', desc: '벽을 뚫고 날아오는 탄환을 발사함', rangedOnly: true, color: 0xff8c00 },
+            { id: 'brutal_force', name: '흉포화', desc: '공격력이 크게 증가함', rangedOnly: false, color: 0xdc143c },
+            { id: 'frenzy', name: '광폭화', desc: '이동 속도가 크게 증가함', rangedOnly: false, color: 0xffd700 },
+            { id: 'vampiric', name: '흡혈', desc: '가한 피해의 일부만큼 체력을 회복함', rangedOnly: false, color: 0x8b0000 },
+        ];
+        // 처치 시 드랍할 수 있는 무기 목록 (맨손/마력탄 등 특수무기 제외, 수류탄은 애초에 무기 목록에 없음)
+        const MUTANT_DROP_WEAPON_KEYS = Object.keys(WEAPON_DATABASE).filter(key => WEAPON_DATABASE[key].type !== 'Melee' && key !== 'FlashGun' && key !== 'MagicBolt');
+
+        // mesh/data: 생성된 좀비 또는 원거리 적. isRanged: true면 원거리 적(탄환) 전용 스킬도 후보에 포함됨.
+        function tryMutateEnemy(mesh, data, isRanged) {
+            if (Math.random() >= 0.002) return; // 0.2% 확률
+            const pool = isRanged ? MUTATION_SKILLS : MUTATION_SKILLS.filter(s => !s.rangedOnly);
+            const skill = pool[Math.floor(Math.random() * pool.length)];
+            data.isMutant = true;
+            data.mutantSkillId = skill.id;
+            data.mutantSkillName = skill.name;
+            // 체력 강화 및 이름 표시
+            data.health = Math.floor(data.health * 1.8); data.maxHealth = data.health;
+            data.name = `${data.name || (isRanged ? '적' : '몹')} (변이: ${skill.name})`;
+            // 광폭화는 즉시 이동속도를 높임 (다른 스킬은 공격/피격 시점에 발동)
+            if (skill.id === 'frenzy' && typeof data.speed === 'number') {
+                data.speed *= 1.6;
+                if (typeof data.originalSpeed === 'number') data.originalSpeed = data.speed;
+            }
+            // 시각적 표시: 살짝 크게 + 스킬 색상으로 발광
+            mesh.scale.multiplyScalar(1.3);
+            mesh.traverse(child => {
+                if (child.isMesh && child.material) {
+                    child.material = child.material.clone();
+                    child.material.emissive = new THREE.Color(skill.color);
+                    child.material.emissiveIntensity = 0.55;
+                }
+            });
+        }
+
+        // 변이체 처치 시 무기 1개를 무조건 드랍 (수류탄 제외)
+        function dropMutantLoot(position) {
+            const weaponKey = MUTANT_DROP_WEAPON_KEYS[Math.floor(Math.random() * MUTANT_DROP_WEAPON_KEYS.length)];
+            spawnItem({ type: 'weapon', name: weaponKey }, position.x, position.y + 0.3, position.z);
+            showChat('시스템', `☣️ 변이체가 <span class="weapon-name-chat">${WEAPON_DATABASE[weaponKey].name}</span>을(를) 떨어뜨렸습니다!`);
+        }
+
+        // 플레이어에게 일시적인 이동속도 감소(둔화)를 적용
+        function applySlowToPlayer(durationMs, ratio) {
+            gameState.speedBoost = Math.max(0.1, (gameState.speedBoost || 1) * ratio);
+            showChat('시스템', '🩸 변이체의 공격에 다리가 무거워집니다...');
+            setTimeout(() => { gameState.speedBoost = Math.max(1, (gameState.speedBoost || ratio) / ratio); }, durationMs);
+        }
+
         function createRangedEnemy(x, z, health, yBase) { 
             if (yBase === 0) yBase = getTerrainHeight(x, z);
             const enemyMaterial = new THREE.MeshLambertMaterial({ color: 0x800000 }); const enemy = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 2.5, 8), enemyMaterial); enemy.position.set(x, yBase + 1.25, z); enemy.castShadow = false;
@@ -6255,7 +6848,9 @@
             enemy.userData = { type: 'enemy', health: health, maxHealth: health, speed: 15 + Math.random() * 5, lastShotTime: 0, fireRate: weaponData.fireRate * fireRateMultiplier, originalColor: enemyMaterial.color.clone(), weapon: randomWeaponKey, muzzle: enemyGun.getObjectByName('muzzle'), magAmmo: weaponData.magSize || 10, reloadsLeft: 20, isReloading: false, reloadStartTime: 0, outOfAmmo: (weaponData.type === 'Melee' || !weaponData.magSize), state: 'idle', lastMoveTime: 0, wanderTarget: null, detectionRange: detectionRange, attackRange: attackRange, lastKnownPlayerPosition: new THREE.Vector3(), lastPosition: enemy.position.clone(), path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000, velocityY: 0, isJumping: false, isRepositioning: false,
                 // [NEW] 좀비와 동일하게 포탈(계단/엘리베이터)을 사용해 층을 오갈 수 있도록 필드 추가 - 이게 없어서 다른 층의 플레이어를 쫓다가 창문 밖으로 그냥 걸어나가 떨어지는 버그가 있었음
                 targetPortal: null, isUsingPortal: false, portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false, portalAction: null, name: '적' };
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshLambertMaterial({ color: 0x600000 })); head.position.set(0, 1.4, 0); head.castShadow = false; enemy.add(head); scene.add(enemy); rangedEnemies.push(enemy); 
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshLambertMaterial({ color: 0x600000 })); head.position.set(0, 1.4, 0); head.castShadow = false; enemy.add(head);
+            tryMutateEnemy(enemy, enemy.userData, true); // [NEW] 1% 확률로 변이 적 생성
+            scene.add(enemy); rangedEnemies.push(enemy); 
         }
 
         // ─── 강도(Bandit) 시스템 ───────────────────────────────────────────────
@@ -6294,6 +6889,7 @@
                 // [NEW] 좀비와 동일하게 포탈(계단/엘리베이터)을 사용해 층을 오갈 수 있도록 필드 추가 - 이게 없어서 다른 층의 플레이어를 쫓다가 창문 밖으로 그냥 걸어나가 떨어지는 버그가 있었음
                 targetPortal: null, isUsingPortal: false, portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false, portalAction: null
             };
+            if (!isBanditLeader) tryMutateEnemy(body, body.userData, true); // [NEW] 1% 확률로 변이 강도 생성 (두목 제외)
             scene.add(body); rangedEnemies.push(body);
             return body;
         }
@@ -6734,7 +7330,9 @@
             const speed = 30.1 + Math.random();
             // [FIX] wanderTarget 초기값을 null로 설정
             zombie.userData = { health: health, maxHealth: health, speed: speed, originalSpeed: speed, type: 'zombie', originalColor: zombieMaterial.color.clone(), state: 'idle', lastAttackTime: 0, attackCooldown: 2000, attackRange: 1.5, detectionRange: 100, lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000, stuckTime: 0, stuckThreshold: 1000, lastPosition: zombie.position.clone(), targetPortal: null, isUsingPortal: false, portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false, targetHeight: 0, playerElevated: false, lastKnownPlayerPosition: new THREE.Vector3(), velocityY: 0, isJumping: false, isProvoked: false, name: '좀비' };
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshLambertMaterial({ color: 0x006400 })); head.position.set(0, 1.1, 0); head.castShadow = false; zombie.add(head); scene.add(zombie); zombies.push(zombie); 
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshLambertMaterial({ color: 0x006400 })); head.position.set(0, 1.1, 0); head.castShadow = false; zombie.add(head);
+            tryMutateEnemy(zombie, zombie.userData, false); // [NEW] 1% 확률로 변이 좀비 생성
+            scene.add(zombie); zombies.push(zombie); 
         }
 
         // [NEW] 초희귀(0.01%) 거대 좀비 - 건물(최고층 30m)보다 훨씬 큼. SCP-173/Weeping Angel처럼
@@ -6773,7 +7371,9 @@
             const speed = 25.0 + Math.random() * 2; const health = 1500;
             // [FIX] wanderTarget 초기값을 null로 설정
             troll.userData = { health: health, maxHealth: health, speed: speed, originalSpeed: speed, type: 'zombie', isTroll: true, name: '트롤', originalColor: trollMaterial.color.clone(), state: 'idle', lastAttackTime: 0, attackCooldown: 2500, attackRange: 2.5, detectionRange: 150, lastMoveTime: 0, wanderTarget: null, path: [], currentPathIndex: 0, lastPathUpdate: 0, pathUpdateInterval: 1000, stuckTime: 0, stuckThreshold: 1000, lastPosition: troll.position.clone(), targetPortal: null, isUsingPortal: false, portalCooldown: 1000, lastPortalUse: 0, portalCheckInterval: 500, lastPortalCheck: 0, isAtPortalEntrance: false, targetHeight: 0, playerElevated: false, lastKnownPlayerPosition: new THREE.Vector3(), velocityY: 0, isJumping: false, isProvoked: false };
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshLambertMaterial({ color: 0x1a2e1a })); head.position.set(0, 1.65, 0); head.castShadow = false; troll.add(head); scene.add(troll); zombies.push(troll);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 8, 8), new THREE.MeshLambertMaterial({ color: 0x1a2e1a })); head.position.set(0, 1.65, 0); head.castShadow = false; troll.add(head);
+            tryMutateEnemy(troll, troll.userData, false); // [NEW] 1% 확률로 변이 트롤 생성
+            scene.add(troll); zombies.push(troll);
         }
 
         function createVehicle(x, z, yBase) { 
@@ -6846,6 +7446,45 @@
         }
         function saveKeyBindings() {
             try { localStorage.setItem('gameKeyBindings', JSON.stringify(keyBindings)); } catch (e) { /* 무시 */ }
+        }
+
+        // ── [NEW] 접근성 설정 (청크 로딩 반경 / 마우스 감도) ──────────────────────────────
+        const DEFAULT_ACCESSIBILITY_SETTINGS = { chunkPreloadRadius: 180, mouseSensitivity: 1.0 };
+        let accessibilitySettings = { ...DEFAULT_ACCESSIBILITY_SETTINGS };
+        function loadAccessibilitySettings() {
+            try {
+                const saved = localStorage.getItem('gameAccessibilitySettings');
+                if (saved) { accessibilitySettings = { ...DEFAULT_ACCESSIBILITY_SETTINGS, ...JSON.parse(saved) }; }
+            } catch (e) { /* localStorage 사용 불가 - 기본값 사용 */ }
+        }
+        function saveAccessibilitySettings() {
+            try { localStorage.setItem('gameAccessibilitySettings', JSON.stringify(accessibilitySettings)); } catch (e) { /* 무시 */ }
+        }
+        let isAccessibilityOpen = false;
+        function toggleAccessibilityModal() {
+            isAccessibilityOpen = !isAccessibilityOpen;
+            const modal = document.getElementById('accessibility-modal');
+            if (isAccessibilityOpen) {
+                document.exitPointerLock();
+                modal.style.display = 'flex';
+                renderAccessibilityModal();
+            } else {
+                modal.style.display = 'none';
+            }
+        }
+        function closeAccessibilityModal() {
+            isAccessibilityOpen = false;
+            document.getElementById('accessibility-modal').style.display = 'none';
+        }
+        function renderAccessibilityModal() {
+            const radiusSlider = document.getElementById('accessibility-chunk-radius');
+            const radiusVal = document.getElementById('accessibility-chunk-radius-val');
+            const sensSlider = document.getElementById('accessibility-mouse-sensitivity');
+            const sensVal = document.getElementById('accessibility-mouse-sensitivity-val');
+            if (radiusSlider) radiusSlider.value = accessibilitySettings.chunkPreloadRadius;
+            if (radiusVal) radiusVal.textContent = `${accessibilitySettings.chunkPreloadRadius}m`;
+            if (sensSlider) sensSlider.value = Math.round(accessibilitySettings.mouseSensitivity * 100);
+            if (sensVal) sensVal.textContent = `${accessibilitySettings.mouseSensitivity.toFixed(2)}x`;
         }
         let listeningForAction = null; // 현재 키 입력을 기다리는 중인 액션 이름
         function renderKeybindModal() {
@@ -6941,6 +7580,28 @@
                 renderKeybindModal();
             });
 
+            // [NEW] 일시정지 메뉴 -> 접근성 설정 버튼
+            document.getElementById('pause-accessibility-btn').addEventListener('click', () => {
+                closePauseModal(true);
+                toggleAccessibilityModal();
+            });
+            document.getElementById('close-accessibility-btn').addEventListener('click', () => { closeAccessibilityModal(); document.body.requestPointerLock(); });
+            document.getElementById('accessibility-chunk-radius').addEventListener('input', (e) => {
+                accessibilitySettings.chunkPreloadRadius = parseInt(e.target.value, 10);
+                document.getElementById('accessibility-chunk-radius-val').textContent = `${accessibilitySettings.chunkPreloadRadius}m`;
+                saveAccessibilitySettings();
+            });
+            document.getElementById('accessibility-mouse-sensitivity').addEventListener('input', (e) => {
+                accessibilitySettings.mouseSensitivity = parseInt(e.target.value, 10) / 100;
+                document.getElementById('accessibility-mouse-sensitivity-val').textContent = `${accessibilitySettings.mouseSensitivity.toFixed(2)}x`;
+                saveAccessibilitySettings();
+            });
+            document.getElementById('accessibility-reset-btn').addEventListener('click', () => {
+                accessibilitySettings = { ...DEFAULT_ACCESSIBILITY_SETTINGS };
+                saveAccessibilitySettings();
+                renderAccessibilityModal();
+            });
+
             document.addEventListener('keydown', (e) => { 
                 // [NEW] 키 설정 창에서 새 키를 입력받는 중이라면, 이 키 입력을 바인딩에만 사용하고 게임 조작으로는 전달하지 않음
                 if (isKeybindOpen && listeningForAction) {
@@ -6999,9 +7660,9 @@
             // [FIX] WrongDocumentError Fix
             document.addEventListener('click', (event) => { 
                 // UI 클릭 시 포인터 잠금 방지
-                if (event.target.closest('button') || event.target.closest('#trade-modal') || event.target.closest('#stats-modal') || event.target.closest('#pause-modal') || event.target.closest('#equipment-modal') || event.target.closest('#keybind-modal')) return;
+                if (event.target.closest('button') || event.target.closest('#trade-modal') || event.target.closest('#stats-modal') || event.target.closest('#pause-modal') || event.target.closest('#equipment-modal') || event.target.closest('#keybind-modal') || event.target.closest('#accessibility-modal')) return;
 
-                if (!isPointerLocked && !isTrading && !isStatsOpen && !isPaused && !isEquipOpen && !isKeybindOpen) { 
+                if (!isPointerLocked && !isTrading && !isStatsOpen && !isPaused && !isEquipOpen && !isKeybindOpen && !isAccessibilityOpen) { 
                     // document.body 대신 renderer.domElement 사용 시도
                     const target = renderer ? renderer.domElement : document.body;
                     if(target && target.requestPointerLock) {
@@ -7025,7 +7686,7 @@
                 if (isPointerLocked && isKeybindOpen) { closeKeybindModal(); }
             });
             
-            document.addEventListener('mousemove', (e) => { if (isPointerLocked) { const sensitivity = 0.0015; if (!playerInVehicle) { gameState.rotation.y -= e.movementX * sensitivity; } gameState.rotation.x -= e.movementY * sensitivity; gameState.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gameState.rotation.x)); } });
+            document.addEventListener('mousemove', (e) => { if (isPointerLocked) { const sensitivity = 0.0015 * accessibilitySettings.mouseSensitivity; if (!playerInVehicle) { gameState.rotation.y -= e.movementX * sensitivity; } gameState.rotation.x -= e.movementY * sensitivity; gameState.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, gameState.rotation.x)); } });
             
             // [수정] 우클릭 줌 로직 변경: 1번(1x) -> 2번(2x) -> 3번(4x) -> 4번(8x) -> 5번(초기화)
             document.addEventListener('mousedown', (e) => { 
@@ -7402,6 +8063,7 @@
                     itemRef.damageBonus = (itemRef.damageBonus || 1) * 1.12;
                 } else {
                     itemRef.defense = +(itemRef.defense * 1.12).toFixed(1);
+                    invalidateArmorBonusCache(); // [FIX] 방어구 강화로 방어력이 바뀌었는데 캐시를 갱신하지 않아 실제 피해 경감에 반영되지 않던 버그 수정
                 }
                 showChat('드워프 대장장이', `쨍그랑! ${itemName} 강화에 성공했소! (+${itemRef.enhanceLevel})`);
             } else if (roll < stats.success + stats.destroy) {
@@ -7414,6 +8076,7 @@
                 } else {
                     if (enhanceSelectedItem.location === 'equipped') {
                         gameState.armor[enhanceSelectedItem.key] = null;
+                        invalidateArmorBonusCache(); // [FIX] 장착 중이던 방어구가 파괴됐는데 캐시가 갱신되지 않아 사라진 방어구의 방어력이 계속 적용되던 버그 수정
                         if (typeof updateEquippedArmorDisplay === 'function') updateEquippedArmorDisplay();
                     } else {
                         gameState.bag.splice(enhanceSelectedItem.key, 1);
@@ -7603,7 +8266,7 @@
                     // 적도 맞으면 customTarget을 플레이어로 재설정 (혹시 다른 몹이랑 싸우고 있었을 수도 있으니까)
                     enemy.userData.customTarget = null;
                 } 
-                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } tryDropArmor(enemy.position, 0.08, false); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
+                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } tryDropArmor(enemy.position, 0.08, false); if (enemy.userData.isMutant) dropMutantLoot(enemy.position); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
             }
             else if (target.userData.type === 'npc') {
                 damageNpc(target, damage);
@@ -8044,7 +8707,9 @@
 
         // [FIXED] 중복 및 문법 오류 수정
         function rangedEnemyShoot(enemy) { 
-            const bullet = new THREE.Mesh(sharedBulletGeo, new THREE.MeshBasicMaterial({ color: 0xff0000 })); 
+            // [NEW] 변이체("관통 탄환" 스킬)는 벽을 뚫는 보라/주황색 탄환을 발사함
+            const isPiercing = enemy.userData.isMutant && enemy.userData.mutantSkillId === 'piercing_shot';
+            const bullet = new THREE.Mesh(sharedBulletGeo, new THREE.MeshBasicMaterial({ color: isPiercing ? 0xff8c00 : 0xff0000 })); 
             const targetPos = playerInVehicle ? playerInVehicle.position.clone().add(new THREE.Vector3(0, 1, 0)) : gameState.position.clone().add(new THREE.Vector3(0, -0.5, 0)); 
             const weaponKey = enemy.userData.weapon; 
             const weaponData = WEAPON_DATABASE[weaponKey]; 
@@ -8058,8 +8723,8 @@
             enemy.userData.muzzle.getWorldPosition(firePosition); 
             const direction = new THREE.Vector3().subVectors(targetPos, firePosition).normalize(); 
             bullet.position.copy(firePosition); 
-            // [MODIFIED] 총알에 발사한 주인(enemy) 정보를 ownerRef로 확실히 전달
-            bullet.userData = { velocity: direction, spawnPosition: bullet.position.clone(), weaponKey: enemy.userData.weapon, owner: 'enemy', ownerRef: enemy }; 
+            // [MODIFIED] 총알에 발사한 주인(enemy) 정보를 ownerRef로 확실히 전달, 변이체 스킬 정보도 함께 전달
+            bullet.userData = { velocity: direction, spawnPosition: bullet.position.clone(), weaponKey: enemy.userData.weapon, owner: 'enemy', ownerRef: enemy, wallPiercing: isPiercing, mutantSkillId: enemy.userData.isMutant ? enemy.userData.mutantSkillId : null }; 
             scene.add(bullet); 
             bullets.push(bullet); 
         }
@@ -8307,6 +8972,26 @@
 
                     // ── 생존자 (레이든) ────────────────────────────
                     if (data.name === '생존자') {
+                        // [NEW] 최종보스 처치 후 등장하는 동료 생존자는 별도로 처리 (울슈쎈성 방어전 퀘스트 안내)
+                        if (data.isCompanion) {
+                            if (castleQuest.phase === 'recruiting') {
+                                const rd = castleQuest.recruits.dwarf ? '완료' : `${castleQuest.recruitProgress.dwarf}/${RECRUIT_TARGETS.dwarf}`;
+                                const re = castleQuest.recruits.elf ? '완료' : `${castleQuest.recruitProgress.elf}/${RECRUIT_TARGETS.elf}`;
+                                const ro = castleQuest.recruits.orc ? '완료' : `${castleQuest.recruitProgress.orc}/${RECRUIT_TARGETS.orc}`;
+                                showChat('생존자', `드워프 대장장이(${rd}), 엘프 장로(${re}), 오크 사절(${ro}, 선택)... 그들의 신뢰를 얻어야 해요. 서두르지 않아도 괜찮으니, 하나씩 부탁드려요.`);
+                            } else if (castleQuest.phase === 'collecting') {
+                                showChat('생존자', `아직 하늘 어딘가에 운석이 흩어져 있을 거예요. (${castleQuest.meteorsCollected}/${castleQuest.meteorsNeeded}개 모음) 주변을 잘 살펴보세요.`);
+                            } else if (castleQuest.phase === 'wallBuilt') {
+                                showChat('생존자', `성벽이 튼튼히 서 있어요. 에일린에게 몰록 ${MERCENARY_HIRE_COST}을 주면 용병도 더 부를 수 있고요. 준비되는 대로 곧 밤이 찾아올 거예요. (${castleQuest.siegeDay}/${castleQuest.maxSiegeDays}일째 버텨냄)`);
+                            } else if (castleQuest.phase === 'siege') {
+                                showChat('생존자', `${castleQuest.siegeDay}일째 밤이에요! 저도 옆에서 함께할게요. 성벽과 용병들을 믿고 버텨내요!`);
+                            } else if (castleQuest.phase === 'victory') {
+                                showChat('생존자', '당신이 아니었다면 여기 서 있는 사람은 아무도 없었을 거예요. 정말, 정말 고맙습니다.');
+                            } else {
+                                showChat('생존자', '...');
+                            }
+                            return;
+                        }
                         // 업적 보상 먼저 처리
                         const claimable = achievements.filter(ach => ach.unlocked && !ach.claimed);
                         if (claimable.length > 0) {
@@ -8339,6 +9024,7 @@
 
                     // ── 엘프 장로 ──────────────────────────────────
                     if (data.name === '엘프 장로') {
+                        if (handleRaceRecruitTalk('elf', '엘프 장로')) return;
                         if (handleStoryNpcTalk('엘프 장로')) return;
                         if (tryReportSideQuest('elf', '엘프 장로')) { elfChainIndex++; return; }
                         if (sideQuests.elf && sideQuests.elf.status === 'active') {
@@ -8359,6 +9045,40 @@
                     // ── 엘프 상인 ──────────────────────────────────────
                     if (data.name === '엘프 상인') { openElfShop(); return; }
 
+                    // ── [NEW] 용병 대장 에일린 (울슈쎈성) ────────────────
+                    if (data.name === '용병 대장 에일린') { hireMercenary(); return; }
+
+                    // ── [NEW] 드워프 촌장 (울슈쎈성) - 드워프 영입 후에는 용병 강화도 담당 ──
+                    if (data.name === '드워프 촌장') {
+                        if (castleQuest.recruits.dwarf) {
+                            if (mercenaries.length === 0) { showChat('드워프 촌장', '강화할 용병이 없소. 먼저 에일린에게 용병을 고용하시오.'); return; }
+                            if (gameState.moloch < MERCENARY_ENHANCE_COST) { showChat('드워프 촌장', `용병들을 강화하려면 몰록 ${MERCENARY_ENHANCE_COST}이 필요하오. (보유: ${gameState.moloch})`); return; }
+                            gameState.moloch -= MERCENARY_ENHANCE_COST;
+                            castleQuest.mercenaryDamageMultiplier += 0.15;
+                            showChat('드워프 촌장', `쨍그랑! 모든 용병의 무기를 손봐드렸소. (공격력 ${Math.round((castleQuest.mercenaryDamageMultiplier - 1) * 100)}% 증가, 몰록 ${MERCENARY_ENHANCE_COST} 지불)`);
+                            updateUI();
+                            return;
+                        }
+                        showChat(data.name, data.dialogue[data.dialogueIndex % data.dialogue.length]);
+                        data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
+                        return;
+                    }
+                    // ── [NEW] 마을 이장 (울슈쎈성, 분위기용) ──
+                    if (data.name === '마을 이장') {
+                        showChat(data.name, data.dialogue[data.dialogueIndex % data.dialogue.length]);
+                        data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
+                        return;
+                    }
+
+                    // ── [NEW] 오크 사절 (울슈쎈성 오크 영입 퀘스트, 선택) ──
+                    if (data.name === '오크 사절') {
+                        if (handleRaceRecruitTalk('orc', '오크 사절')) return;
+                        if (castleQuest.recruits.orc) { showChat(data.name, '크르릉... 성은 잘 있나? 우리 부족의 이름에 먹칠하지 말아라, 인간.'); return; }
+                        showChat(data.name, data.dialogue[data.dialogueIndex % data.dialogue.length]);
+                        data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
+                        return;
+                    }
+
                     // ── 엘프 전사 ──────────────────────────────────────
                     if (data.name && data.name.startsWith('엘프 전사')) {
                         showChat(data.name, data.dialogue[data.dialogueIndex % data.dialogue.length]);
@@ -8369,6 +9089,7 @@
 
                     // ── 드워프 대장장이 ────────────────────────────
                     if (data.name === '드워프 대장장이') {
+                        if (handleRaceRecruitTalk('dwarf', '드워프 대장장이')) return;
                         if (handleStoryNpcTalk('드워프 대장장이')) return;
                         if (tryReportSideQuest('dwarf', '드워프 대장장이')) { dwarfChainIndex++; return; }
                         if (sideQuests.dwarf && sideQuests.dwarf.status === 'active') {
@@ -8451,6 +9172,20 @@
                 entries.push({ label: '⚔️ 드워프 광산 습격', html: `골렘 미니언을 처치하라 <span style="color:#888;font-size:11px;">(${dwarfRaidKills}/${dwarfRaidTotal})</span>`, ready: false });
             }
 
+            // ── [NEW] 울슈쎈성 방어전 표시 ──
+            if (castleQuest.phase === 'recruiting') {
+                const rd = castleQuest.recruits.dwarf ? '✅' : `${castleQuest.recruitProgress.dwarf}/${RECRUIT_TARGETS.dwarf}`;
+                const re = castleQuest.recruits.elf ? '✅' : `${castleQuest.recruitProgress.elf}/${RECRUIT_TARGETS.elf}`;
+                const ro = castleQuest.recruits.orc ? '✅' : `${castleQuest.recruitProgress.orc}/${RECRUIT_TARGETS.orc}(선택)`;
+                entries.push({ label: '🤝 울슈쎈성 방어전', html: `<span style="color:#aaa;font-size:12px;">각 종족을 영입하라</span> 드워프 ${rd} · 엘프 ${re} · 오크 ${ro}`, ready: false });
+            } else if (castleQuest.phase === 'collecting') {
+                entries.push({ label: '☄️ 울슈쎈성 방어전', html: `운석 조각을 모아라 <span style="color:#888;font-size:11px;">(${castleQuest.meteorsCollected}/${castleQuest.meteorsNeeded})</span>`, ready: false });
+            } else if (castleQuest.phase === 'wallBuilt') {
+                entries.push({ label: '🏰 울슈쎈성 방어전', html: `<span style="color:#aaa;font-size:12px;">용병을 고용하고 밤을 준비하세요</span> <span style="color:#888;font-size:11px;">(${castleQuest.siegeDay}/${castleQuest.maxSiegeDays}일째 성공)</span>`, ready: false });
+            } else if (castleQuest.phase === 'siege') {
+                entries.push({ label: '🏰 울슈쎈성 방어전', html: `${castleQuest.siegeDay}일째 밤을 버텨내라!`, ready: false });
+            }
+
             // ── 세부 퀘스트 표시 ──
             for (const [slot, q] of Object.entries(sideQuests)) {
                 if (!q) continue;
@@ -8494,6 +9229,7 @@
         function pickupItem(item) { 
             const data = item.userData; 
             gameStats.itemsLooted++; checkAchievements();
+            if (data.isMeteor) { onMeteorPickup(); scene.remove(item); objects = objects.filter(o => o !== item); return; }
             if (data.type === 'weapon') { 
                 const weaponData = WEAPON_DATABASE[data.name]; const alreadyOwned = gameState.weapons.find(w => w.key === data.name); 
                 if (!alreadyOwned) { gameState.weapons.push({ key: data.name, magAmmo: 0 }); if (weaponData.ammoType) { gameState.ammoInventory[weaponData.ammoType] = (gameState.ammoInventory[weaponData.ammoType] || 0) + (weaponData.magSize * 2); } showChat('시스템', `<span class="weapon-name-chat">${weaponData.name}</span>을(를) 획득했습니다.`); switchWeapon(gameState.weapons.length - 1); } 
@@ -8849,7 +9585,7 @@
                     // 건물의 중심점이 멀더라도 벽은 가까울 수 있으므로 넉넉하게 체크해야 함
                     if (distSq > COLLISION_CHECK_DISTANCE_SQ) continue; 
                     
-                    if (!object.geometry || !object.parent || object.userData.type === 'roof' || object.userData.type === 'decoration' || object.userData.type === 'teleporter' || object.geometry.type === 'PlaneGeometry' || object.userData.type === 'lava') { continue; } 
+                    if (!object.geometry || !object.parent || object.userData.type === 'roof' || object.userData.type === 'decoration' || object.userData.type === 'teleporter' || object.geometry.type === 'PlaneGeometry' || object.userData.type === 'lava' || object.userData.playerPassable) { continue; } 
                     if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); 
                     const objectBox = tempBox.setFromObject(object); // 재사용 박스
                     if (playerWorldCollider.intersectsBox(objectBox)) { gameState.position.x = oldPosition.x; break; } 
@@ -8863,7 +9599,7 @@
                     // [FIX] Z축 이동 시에도 동일하게 거리 체크 수정
                     if (distSq > COLLISION_CHECK_DISTANCE_SQ) continue; 
                     
-                    if (!object.geometry || !object.parent || object.userData.type === 'roof' || object.userData.type === 'decoration' || object.userData.type === 'teleporter' || object.geometry.type === 'PlaneGeometry' || object.userData.type === 'lava') { continue; } 
+                    if (!object.geometry || !object.parent || object.userData.type === 'roof' || object.userData.type === 'decoration' || object.userData.type === 'teleporter' || object.geometry.type === 'PlaneGeometry' || object.userData.type === 'lava' || object.userData.playerPassable) { continue; } 
                     if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); 
                     const objectBox = tempBox.setFromObject(object); 
                     if (playerWorldCollider.intersectsBox(objectBox)) { gameState.position.z = oldPosition.z; break; } 
@@ -8936,10 +9672,13 @@
                                     if (enemy.userData.health <= 0) { 
                                         const isBandit = enemy.userData.type === 'bandit';
                                         showChat('시스템', `로드킬! (${enemy.userData.name || '적'} 처치)`); 
+                                        if (enemy.userData.isMutant) dropMutantLoot(enemy.position);
                                         createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); 
                                         addMoloch(isBandit ? (enemy.userData.isBanditLeader ? 200 : 80) : 20); 
                                         if (isBandit) { gameStats.banditKills++; if (enemy.userData.isBanditLeader) gameStats.banditLeaderKills++; onSqKill(enemy.userData.isBanditLeader ? 'banditLeader' : 'bandit'); onStoryKill('bandit'); onElfRaidBanditKill(); checkAchievements(); }
                                         if (isBandit && enemy.userData.isBanditLeader && elfQuestActive && !elfQuestDone) { elfQuestDone = true; gameStats.elfQuestsCompleted++; checkAchievements(); showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.'); }
+                                        // [NEW] 울슈쎈성 오크 영입 퀘스트 진행도 (강도가 아닌 일반 적 처치)
+                                        if (!isBandit && castleQuest.phase === 'recruiting' && !castleQuest.recruits.orc) castleQuest.recruitProgress.orc++;
                                         // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
                                         tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
                                     } else { enemy.userData.state = 'chase'; } 
@@ -9277,20 +10016,25 @@
                 }
                 
                 // 정적 오브젝트 충돌 검사 (potentialHits는 이제 start/end 주변 오브젝트 모두 포함)
-                for (const object of potentialHits) { 
-                    if (data.owner === 'player' && playerInVehicle && object === playerInVehicle) continue; 
-                    if (!object.parent) continue; 
-                    // [OPTIMIZATION] 거리 체크는 여전히 유효 (다만 fullRayLength 고려)
-                    if (bullet.position.distanceToSquared(object.position) > dynamicCheckSq && oldPosition.distanceToSquared(object.position) > dynamicCheckSq) continue; 
-                    
-                    if (object.geometry && object.userData.type !== 'decoration') {
-                        if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
-                        const box = tempBox.setFromObject(object);
-                        if (bulletRay.intersectsBox(box)) {
-                           raycaster.set(rayStart, direction); raycaster.far = fullRayLength + 0.1; const intersections = raycaster.intersectObject(object, true);
-                           if (intersections.length > 0) { const hit = intersections[0]; if (hit.distance < minHitDist) { minHitDist = hit.distance; bestHit = { type: 'object', obj: object, point: hit.point, actualObj: hit.object }; } }
-                        }
-                    } 
+                // [NEW] 변이체의 "관통 탄환"은 벽/건물 등 정적 오브젝트를 무시하고 그대로 통과함
+                if (!data.wallPiercing) {
+                    for (const object of potentialHits) { 
+                        if (data.owner === 'player' && playerInVehicle && object === playerInVehicle) continue; 
+                        if (!object.parent) continue; 
+                        // [NEW] 플레이어가 쏜 총알은 울슈쎈성 성벽을 그대로 통과함 (성벽 안에서 밖의 골렘 등을 조준 사격 가능)
+                        if (data.owner === 'player' && object.userData.playerPassable) continue;
+                        // [OPTIMIZATION] 거리 체크는 여전히 유효 (다만 fullRayLength 고려)
+                        if (bullet.position.distanceToSquared(object.position) > dynamicCheckSq && oldPosition.distanceToSquared(object.position) > dynamicCheckSq) continue; 
+                        
+                        if (object.geometry && object.userData.type !== 'decoration') {
+                            if (!object.geometry.boundingBox) object.geometry.computeBoundingBox();
+                            const box = tempBox.setFromObject(object);
+                            if (bulletRay.intersectsBox(box)) {
+                               raycaster.set(rayStart, direction); raycaster.far = fullRayLength + 0.1; const intersections = raycaster.intersectObject(object, true);
+                               if (intersections.length > 0) { const hit = intersections[0]; if (hit.distance < minHitDist) { minHitDist = hit.distance; bestHit = { type: 'object', obj: object, point: hit.point, actualObj: hit.object }; } }
+                            }
+                        } 
+                    }
                 }
 
                 if (bestHit) {
@@ -9323,8 +10067,10 @@
                                 gameStats.elfQuestsCompleted++; checkAchievements();
                                 showChat('시스템', '🌿 [엘프 퀘스트] 강도 두목을 처치했습니다! 엘프 장로에게 돌아가세요.');
                             }
-                            createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
+                            createDebrisEffect(enemy.position, enemy.material.color); if (enemy.userData.isMutant) dropMutantLoot(enemy.position); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
                             showChat('시스템', isBandit ? `💰 ${enemy.userData.name} 처치! (+${molochReward} 몰록)` : '적을 처치했습니다!');
+                            // [NEW] 울슈쎈성 오크 영입 퀘스트 진행도 (강도가 아닌 일반 적 처치)
+                            if (!isBandit && castleQuest.phase === 'recruiting' && !castleQuest.recruits.orc) castleQuest.recruitProgress.orc++;
                             // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
                             tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
                         }
@@ -9334,7 +10080,19 @@
                         hitZombie(zTarget, damage, null); 
                         if (data.skillDmgMult) gainQi(willKill ? 12 : 2.5); // [NEW]
                     } 
-                    else if (bestHit.type === 'player') { const pDmg = damage * 0.5; attackPlayer(pDmg); if (data.ownerRef && data.ownerRef.userData) { data.ownerRef.userData.consecutiveMisses = 0; } }
+                    else if (bestHit.type === 'player') { 
+                        // [NEW] 변이체 스킬 적용: 흉포화(데미지 증가), 둔화의 손길(플레이어 둔화), 흡혈(체력 회복)
+                        let pDmg = damage * 0.5; 
+                        const ownerData = data.ownerRef && data.ownerRef.userData;
+                        if (ownerData && ownerData.isMutant && ownerData.mutantSkillId === 'brutal_force') pDmg *= 1.8;
+                        if (data.owner === 'enemy' && castleQuest.recruits.orc) pDmg *= 0.85; // [NEW] 오크 영입 시 적 공격력 15% 감소
+                        attackPlayer(pDmg); 
+                        if (ownerData) {
+                            ownerData.consecutiveMisses = 0;
+                            if (ownerData.isMutant && ownerData.mutantSkillId === 'slow_touch') applySlowToPlayer(3000, 0.5);
+                            if (ownerData.isMutant && ownerData.mutantSkillId === 'vampiric') ownerData.health = Math.min(ownerData.maxHealth, ownerData.health + pDmg * 0.5);
+                        }
+                    }
                     else if (bestHit.type === 'boss') { const boss = bestHit.obj; const bDmg = data.owner === 'player' ? damage * getMeritDamageBonusToBoss() : damage; boss.userData.health -= bDmg; showDamage(boss.position, bDmg); if (data.skillDmgMult) gainQi(4); }
                     else if (bestHit.type === 'npc') { damageNpc(bestHit.obj, damage); }
 
@@ -9386,8 +10144,13 @@
                         if (data.isTroll) baseDamage = 25; // 트롤은 훨씬 강함
                         if (data.name && data.name.includes('워치프')) baseDamage = 30; // 워치프
 
-                        const totalDamage = baseDamage + difficultyBonus;
+                        const totalDamage0 = baseDamage + difficultyBonus;
+                        // [NEW] 변이체 스킬 적용: 흉포화(데미지 증가), 둔화의 손길(플레이어 둔화), 흡혈(체력 회복)
+                        let totalDamage = data.isMutant && data.mutantSkillId === 'brutal_force' ? Math.floor(totalDamage0 * 1.8) : totalDamage0;
+                        if (castleQuest.recruits.orc) totalDamage = Math.floor(totalDamage * 0.85); // [NEW] 오크 영입 시 좀비/적 공격력 15% 감소
                         attackPlayer(totalDamage); 
+                        if (data.isMutant && data.mutantSkillId === 'slow_touch') { applySlowToPlayer(3000, 0.5); }
+                        if (data.isMutant && data.mutantSkillId === 'vampiric') { data.health = Math.min(data.maxHealth, data.health + totalDamage * 0.5); }
                     } else if (data.customTarget && data.customTarget.userData) { 
                         // [MODIFIED] 몬스터 간 전투 (Mob vs Mob)
                         const dmg = 20; 
@@ -9422,6 +10185,7 @@
         function handleZombieDeath(enemy, index, isPlayerKill = true) { 
             createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); zombies.splice(index, 1); 
             if (enemy.userData.isGiant) giantZombieActive = false; // [NEW] 거대 좀비 사망 시 재생성 가능하도록 플래그 해제 (환경 피해로 죽은 경우도 포함)
+            if (enemy.userData.isMutant) dropMutantLoot(enemy.position); // [NEW] 변이체 처치 시 무기 무조건 드랍
             if (isPlayerKill) {
                 // 원거리(50m+) 처치 추적 (저격 업적)
                 const killPos = playerInVehicle ? playerInVehicle.position : gameState.position;
@@ -9660,13 +10424,14 @@
         }
         
         // [NEW] 일시정지 메뉴(E)가 떠 있으면 true - 이 동안은 좀비/적/보스/차량/아이템 등 모든 오브젝트 계산을 멈춤
-        function isWorldFrozen() { return isPaused || isKeybindOpen; }
+        function isWorldFrozen() { return isPaused || isKeybindOpen || isAccessibilityOpen; }
         function animate() {
             if (isGameOver) return; requestAnimationFrame(animate); 
             const now = Date.now(); const delta = clock.getDelta(); frameCount++;
             
             if (!isWorldFrozen()) {
             updateWorldState(delta); updatePlayer(delta); handleAutoFire(); updateBullets(delta); updateGrenades(delta); updateZombies(delta);
+            if (frameCount % 3 === 0) updateMercenaries(); // [NEW] 용병 AI (히트스캔이라 가벼움 - 3프레임마다 체크로 더 절약)
             if (isMinimapOpen && frameCount % 4 === 0) drawMinimap(); // [NEW] 미니맵은 4프레임마다 갱신 (성능 최적화)
             if (curseState.active && frameCount % 30 === 0) updateCurseSystem(now); // [NEW] 저주 시스템은 저빈도로 체크 (성능 영향 거의 없음)
             if (frameCount % 60 === 0) checkAchievements(); // 누적형 스탯(주행거리 등) 주기적 체크
@@ -9722,6 +10487,7 @@
                     if (enemy.position.y - 1.25 <= reLavaHeight + 0.2) {
                         data.health -= 10.7; // 약 4프레임(≈0.267초)분 누적 데미지 (40/s 기준)
                         if (data.health <= 0) {
+                            if (data.isMutant) dropMutantLoot(enemy.position);
                             createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
                             return;
                         }
@@ -9934,7 +10700,13 @@
                 showChat('시스템', '밤이 되었습니다. 주변이 위험해집니다...');
                 // [MODIFIED] 밤이 될 때마다 무조건 좀비떼가 오는 것이 아니라, 밤이 시작될 때 15% 확률로만 발생
                 if (hasLeftSafeZone === 1 && !gameState.hordeActive && Math.random() < 0.15) { startHordeEvent(); }
-            } else if (!isNight && oldIsNight) { showChat('시스템', '아침이 밝았습니다.'); gameStats.nightsSurvived++; checkAchievements(); }
+                // [NEW] 울슈쎈성 방어전 - 성벽이 완성된 상태로 밤이 되면 다음 공성일을 시작함
+                if (castleQuest.phase === 'wallBuilt') { startSiegeDay(castleQuest.siegeDay + 1); }
+            } else if (!isNight && oldIsNight) {
+                showChat('시스템', '아침이 밝았습니다.'); gameStats.nightsSurvived++; checkAchievements();
+                // [NEW] 공성전 중이었다면 밤을 버텨낸 것으로 처리하고 보상 지급
+                if (castleQuest.phase === 'siege') { clearSiegeDay(); }
+            }
             if (hasLeftSafeZone === 0) { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const distFromSpawn = playerPos.length(); if (distFromSpawn > SAFE_ZONE_RADIUS) { hasLeftSafeZone = 1; showChat('시스템', '⚠️ 안전 구역을 벗어났습니다! 이제부터 적들이 당신을 인식합니다. (되돌아와도 소용없음)'); } }
         }
         
