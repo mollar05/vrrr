@@ -3278,6 +3278,135 @@
         // (완전 삭제 후 재생성 방식보다 안전하고, instancedMesh 재구축 비용도 없음)
         const FREEZE_CHUNK_DISTANCE = 6; // [MODIFIED] 청크 크기가 100m로 절반이 된 만큼 동일한 실거리(약 600m)를 유지하도록 6으로 조정
         let frozenChunks = new Set();
+        // [NEW] 청크 언로드(완전 해제) 시스템: freeze(숨김)보다 훨씬 먼 거리까지 가면
+        // 청크의 지형(땅/용암) GPU 지오메트리를 실제로 dispose()하여 메모리를 회수함.
+        // - 대상은 오직 지형(ground/lava)뿐이며, 건물/나무/좀비/아이템/퀘스트 등 "게임 요소"는 전혀 건드리지 않음
+        //   (건물/나무/돌은 이미 shared geometry/material의 InstancedMesh라 메모리 부담이 적고, freeze 시스템으로 충분히 처리됨)
+        // - 지형은 월드 시드 기반의 순수 함수(getTerrainHeight/getBiome)로 생성되므로, 플레이어가 되돌아오면
+        //   완전히 동일한 모양으로 즉시 재생성됨 (구멍 없음, 중복/리스폰 없음)
+        const UNLOAD_CHUNK_DISTANCE = FREEZE_CHUNK_DISTANCE * 3; // 약 1800m - 이 이상 멀어진 청크만 지형 데이터를 실제로 해제
+        let chunkTerrainRefs = new Map(); // chunkKey -> { ground, lava } (현재 씬에 존재하는 지형 메시 참조)
+        let terrainUnloadedChunks = new Set(); // 지형이 dispose되어 현재 씬에 없는 청크 키 목록
+        const groundMaterialCache = {}; // 바이옴별 지면 재질 캐시 (청크마다 새로 만들지 않고 재사용 -> 메모리/드로우콜 절약)
+        function getSharedGroundMaterial(biome) {
+            if (groundMaterialCache[biome]) return groundMaterialCache[biome];
+            let groundColor = 0x3a5f3a;
+            if (biome === 'mountain') groundColor = 0x5a5a5a; else if (biome === 'forest') groundColor = 0x1a3f1a; else if (biome === 'city') groundColor = 0x222222; else if (biome === 'volcano') groundColor = 0x111111;
+            const mat = new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.9 });
+            groundMaterialCache[biome] = mat;
+            return mat;
+        }
+        let sharedLavaMat = null; // 용암 재질도 청크마다 새로 만들지 않고 하나만 공유
+        function getSharedLavaMaterial() {
+            if (!sharedLavaMat) {
+                sharedLavaMat = new THREE.MeshStandardMaterial({
+                    color: 0xff2200, emissive: 0xff4400, emissiveIntensity: 1.1,
+                    roughness: 0.3, metalness: 0.0, transparent: true, opacity: 0.95, side: THREE.DoubleSide
+                });
+            }
+            return sharedLavaMat;
+        }
+        function removeFromArray(arr, item) { const i = arr.indexOf(item); if (i !== -1) arr.splice(i, 1); }
+        // [NEW] 지형 전용 헬퍼: 땅(ground) 메시 생성 (최초 생성/재생성 양쪽에서 공용으로 사용, 완전히 결정론적)
+        function createChunkGroundMesh(chunkOriginX, chunkOriginZ, centerBiome) {
+            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 50, 50);
+            const vertices = terrainGeo.attributes.position.array;
+            for (let i = 0, j = 0; i < vertices.length; i += 3, j++) {
+                const wx = vertices[i] + chunkOriginX;
+                const wz = chunkOriginZ - vertices[i + 1];
+                let wy = getTerrainHeight(wx, wz);
+                vertices[i + 2] = wy;
+            }
+            terrainGeo.computeVertexNormals();
+            const ground = new THREE.Mesh(terrainGeo, getSharedGroundMaterial(centerBiome));
+            ground.rotation.x = -Math.PI / 2; ground.position.set(chunkOriginX, 0, chunkOriginZ); ground.receiveShadow = true;
+            return ground;
+        }
+        // [NEW] 지형 전용 헬퍼: 용암(lava) 메시 생성 (없으면 null 반환). 최초 생성/재생성 양쪽에서 공용으로 사용, 완전히 결정론적
+        function createChunkLavaMesh(chunkOriginX, chunkOriginZ, centerBiome) {
+            const neighborVolcano =
+                getBiome(chunkOriginX + CHUNK_SIZE, chunkOriginZ) === 'volcano' ||
+                getBiome(chunkOriginX - CHUNK_SIZE, chunkOriginZ) === 'volcano' ||
+                getBiome(chunkOriginX, chunkOriginZ + CHUNK_SIZE) === 'volcano' ||
+                getBiome(chunkOriginX, chunkOriginZ - CHUNK_SIZE) === 'volcano';
+            if (centerBiome !== 'volcano' && !neighborVolcano) return null;
+            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 10, 10);
+            const lavaVerts = lavaGeo.attributes.position.array;
+            let hasLava = false;
+            for (let i = 0; i < lavaVerts.length; i += 3) {
+                const wx = lavaVerts[i] + chunkOriginX;
+                const wz = chunkOriginZ - lavaVerts[i + 1];
+                const tHeight = getTerrainHeight(wx, wz);
+                const biome = getBiome(wx, wz);
+                let lHeight = -500;
+                if (biome === 'volcano') {
+                    if (tHeight < LAVA_LEVEL) {
+                        lHeight = LAVA_LEVEL;
+                    } else {
+                        const flowNoise = simplex.noise2D(wx / 40, wz / 40);
+                        if (flowNoise > 0.3) { lHeight = tHeight + 0.2; } else { lHeight = tHeight - 3.0; }
+                    }
+                } else {
+                    lHeight = tHeight - 3.0;
+                }
+                lavaVerts[i + 2] = lHeight;
+                if (lHeight > -100) hasLava = true;
+            }
+            if (!hasLava) return null;
+            lavaGeo.computeVertexNormals();
+            const lava = new THREE.Mesh(lavaGeo, getSharedLavaMaterial());
+            lava.rotation.x = -Math.PI / 2;
+            lava.position.set(chunkOriginX, 0, chunkOriginZ);
+            lava.userData = { type: 'lava', isSteppable: true, mat: sharedLavaMat, timeOffset: Math.random() * 100 };
+            lava.matrixAutoUpdate = false; lava.updateMatrix();
+            return lava;
+        }
+        // [NEW] 아주 멀리 떨어진 청크의 지형 GPU 메모리를 실제로 해제 (건물/좀비/아이템 등은 그대로 유지됨)
+        function unloadChunkTerrain(chunkKey) {
+            if (terrainUnloadedChunks.has(chunkKey)) return;
+            const ref = chunkTerrainRefs.get(chunkKey);
+            if (!ref) return;
+            if (ref.ground) {
+                scene.remove(ref.ground);
+                ref.ground.geometry.dispose();
+                removeFromArray(objects, ref.ground);
+                removeFromArray(structures, ref.ground);
+                removeFromArray(chunkStaticObjects.get(chunkKey) || [], ref.ground);
+            }
+            if (ref.lava) {
+                scene.remove(ref.lava);
+                ref.lava.geometry.dispose();
+                removeFromArray(objects, ref.lava);
+                removeFromArray(structures, ref.lava);
+                removeFromArray(lavaPlanes, ref.lava);
+                removeFromArray(chunkStaticObjects.get(chunkKey) || [], ref.lava);
+            }
+            chunkTerrainRefs.set(chunkKey, { ground: null, lava: null });
+            terrainUnloadedChunks.add(chunkKey);
+            activeStructuresDirty = true;
+        }
+        // [NEW] 언로드했던 청크에 플레이어가 다시 접근하면 지형을 원래와 완전히 동일하게(결정론적) 재생성
+        // frozen: 재생성 시점에 이미 freeze 거리(FREEZE_CHUNK_DISTANCE) 밖이라면 true로 넘겨 처음부터 숨김 상태로 맞춤
+        function reloadChunkTerrain(chunkKey, chunkX, chunkZ, frozen) {
+            if (!terrainUnloadedChunks.has(chunkKey)) return;
+            const chunkOriginX = chunkX * CHUNK_SIZE, chunkOriginZ = chunkZ * CHUNK_SIZE;
+            const centerBiome = getBiome(chunkOriginX, chunkOriginZ);
+            const ground = createChunkGroundMesh(chunkOriginX, chunkOriginZ, centerBiome);
+            ground.userData.isFrozen = !!frozen; ground.visible = !frozen;
+            scene.add(ground); objects.push(ground); structures.push(ground); registerChunkObject(chunkKey, ground);
+            let lava = null;
+            const lavaMesh = createChunkLavaMesh(chunkOriginX, chunkOriginZ, centerBiome);
+            if (lavaMesh) {
+                lava = lavaMesh;
+                lava.userData.isFrozen = !!frozen; lava.visible = !frozen;
+                scene.add(lava); lavaPlanes.push(lava); objects.push(lava); structures.push(lava);
+                registerChunkObject(chunkKey, lava);
+                if (centerBiome === 'volcano') ensureMainVolcanoLight();
+            }
+            chunkTerrainRefs.set(chunkKey, { ground, lava });
+            terrainUnloadedChunks.delete(chunkKey);
+            activeStructuresDirty = true;
+        }
         // [NEW] 마을/캠프/군락 등 대형 구조물이 서로 겹쳐서 생성되지 않도록 위치를 기록해두는 registry
         let landmarkRegistry = []; // { x, z, radius, type }
         const LANDMARK_MIN_GAP = 25; // 서로 다른 랜드마크 사이에 두는 최소 여유 간격(m)
@@ -3333,6 +3462,13 @@
                 const dist = Math.max(Math.abs(cx - playerChunkX), Math.abs(cz - playerChunkZ));
                 if (dist > FREEZE_CHUNK_DISTANCE) newFrozen.add(chunkKey);
                 else newActive.add(chunkKey);
+                // [NEW] freeze보다 훨씬 먼 청크는 지형 GPU 메모리까지 완전히 해제 (건물/좀비/아이템/퀘스트는 그대로 유지)
+                if (dist > UNLOAD_CHUNK_DISTANCE) {
+                    unloadChunkTerrain(chunkKey);
+                } else if (terrainUnloadedChunks.has(chunkKey)) {
+                    // 되돌아왔다면 원래와 완전히 동일한 지형을 즉시 재생성 (구멍 없음)
+                    reloadChunkTerrain(chunkKey, cx, cz, dist > FREEZE_CHUNK_DISTANCE);
+                }
             }
             // 새로 얼어야 할 청크: freeze 적용
             for (const key of newFrozen) { if (!frozenChunks.has(key)) setChunkFrozen(key, true); }
@@ -3530,6 +3666,9 @@
                     onTrigger: (egg) => {
                         showChat('시스템', '🌀 발밑의 초록빛 서클이 강렬하게 빛나며 몸이 붕 떠오른다!');
                         removeEasterEgg(egg); // [NEW] 크롭서클은 발동 즉시 임무를 마치고 사라짐
+                        // [FIX] 차량에 탑승 중이면 먼저 하차시킴 - 안 그러면 gameState.position만 순간이동하고
+                        // 실제 표시 위치인 vehicle.position은 그대로 남아있어 새 위치의 청크가 로딩되지 않던 문제가 있었음
+                        if (playerInVehicle) { toggleVehicle(playerInVehicle); }
                         setTimeout(() => {
                             showChat('???', '표본 확보... 좌표를 기록한다...');
                             gameState.isAbducted = true;
@@ -3766,6 +3905,154 @@
                             showChat('시스템', '✨ [이스터에그] 숨겨진 방송 신호 해독 - XP 1000 획득!');
                             removeEasterEgg(egg);
                         }, 3000);
+                    }
+                },
+                {
+                    // [NEW] 선물을 주고 떠나는 천사
+                    id: 'angel', x: 150, z: -150, radius: 8,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffaa, emissiveIntensity: 0.5, roughness: 0.3 });
+                        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.32, 1.7, 8), bodyMat); body.position.y = 1.2; group.add(body);
+                        const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 12), bodyMat); head.position.y = 2.25; group.add(head);
+                        const haloMat = new THREE.MeshStandardMaterial({ color: 0xffee88, emissive: 0xffee66, emissiveIntensity: 1.4 });
+                        const halo = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.05, 8, 16), haloMat); halo.position.y = 2.75; halo.rotation.x = Math.PI / 2; group.add(halo);
+                        const wingMat = new THREE.MeshStandardMaterial({ color: 0xf0f0f0, emissive: 0xffffff, emissiveIntensity: 0.3, transparent: true, opacity: 0.85, side: THREE.DoubleSide });
+                        const wingL = new THREE.Mesh(new THREE.ConeGeometry(0.7, 2.0, 4), wingMat); wingL.position.set(-0.65, 1.35, -0.2); wingL.rotation.z = Math.PI / 2.2; wingL.rotation.y = 0.3; group.add(wingL);
+                        const wingR = wingL.clone(); wingR.position.x = 0.65; wingR.rotation.z = -Math.PI / 2.2; wingR.rotation.y = -0.3; group.add(wingR);
+                        const glow = new THREE.PointLight(0xffeeaa, 3, 35); glow.position.y = 1.6; group.add(glow);
+                        group.position.y = 0.9; // 지면에서 살짝 떠 있음
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '✨ 눈부신 빛과 함께 날개 달린 존재가 하늘에서 조용히 내려온다...');
+                        setTimeout(() => showChat('천사', '고통받는 이여, 그대의 여정을 지켜보았습니다. 이 축복을 받으세요.'), 1800);
+                        setTimeout(() => {
+                            showChat('시스템', '👼 [이스터에그] 천사의 축복 - 체력/스태미나 완전 회복 + 몰록 1000 + XP 500!');
+                            gameState.health = getMaxHealth(); playerStamina = getMaxStamina(); addMoloch(1000); gainXP(500);
+                            updateUI();
+                            const startY = egg.mesh.position.y;
+                            const flyStart = Date.now(); const flyDuration = 2000;
+                            (function ascend() {
+                                const t = Math.min(1, (Date.now() - flyStart) / flyDuration);
+                                egg.mesh.position.y = startY + t * t * 150;
+                                egg.mesh.scale.setScalar(Math.max(0.02, 1 - t));
+                                if (t < 1) { requestAnimationFrame(ascend); }
+                                else { showChat('시스템', '✨ 빛무리와 함께 천사가 하늘로 승천했다...'); removeEasterEgg(egg); }
+                            })();
+                        }, 4000);
+                    }
+                },
+                {
+                    // [NEW] 외계인 시리즈 1/5 - 추락한 비행체 잔해
+                    id: 'alien_wreckage', x: -200, z: -600, radius: 7,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const hullMat = new THREE.MeshStandardMaterial({ color: 0x556677, metalness: 0.7, roughness: 0.5 });
+                        const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.6, 3.5, 8), hullMat);
+                        hull.rotation.z = Math.PI / 2.6; hull.position.set(0, 0.6, 0); group.add(hull);
+                        const crack = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), new THREE.MeshStandardMaterial({ color: 0x66ffcc, emissive: 0x33ffaa, emissiveIntensity: 1.5 })); crack.position.set(0.6, 1.0, 0); group.add(crack);
+                        const glow = new THREE.PointLight(0x66ffcc, 2, 20); glow.position.copy(crack.position); group.add(glow);
+                        for (let i = 0; i < 4; i++) { const debris = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), hullMat); debris.position.set((Math.random() - 0.5) * 3, 0.15, (Math.random() - 0.5) * 3); group.add(debris); }
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🛸 [외계인 시리즈 1/5] 추락한 비행체의 잔해를 발견했습니다...');
+                        setTimeout(() => showChat('시스템', '아직 온기가 남은 엔진 코어를 회수했습니다. 몰록 600 + XP 300!'), 1800);
+                        setTimeout(() => { addMoloch(600); gainXP(300); removeEasterEgg(egg); }, 2400);
+                    }
+                },
+                {
+                    // [NEW] 외계인 시리즈 2/5 - 검은 기록석 오벨리스크
+                    id: 'alien_obelisk', x: 800, z: 300, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, emissive: 0x8844ff, emissiveIntensity: 0.6, metalness: 0.6, roughness: 0.3 });
+                        const stone = new THREE.Mesh(new THREE.BoxGeometry(1.2, 4, 0.6), mat); stone.position.y = 2; group.add(stone);
+                        const glyph = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.5, 6), new THREE.MeshStandardMaterial({ color: 0xaa66ff, emissive: 0xaa66ff, emissiveIntensity: 1.5, side: THREE.DoubleSide })); glyph.position.set(0, 2.5, 0.32); group.add(glyph);
+                        const glow = new THREE.PointLight(0x8844ff, 2, 20); glow.position.set(0, 2.5, 1); group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🛸 [외계인 시리즈 2/5] 검은 돌기둥에 새겨진 문양이 스스로 빛나기 시작한다...');
+                        setTimeout(() => showChat('???', '...우리는... 오래전... 이곳에... 있었다...'), 2000);
+                        setTimeout(() => { showChat('시스템', '📜 고대 외계 지식이 머릿속에 흘러들어온다 - XP 800 획득!'); gainXP(800); removeEasterEgg(egg); }, 4200);
+                    }
+                },
+                {
+                    // [NEW] 외계인 시리즈 3/5 - 맥동하는 외계 포자
+                    id: 'alien_pod', x: -550, z: -150, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const podMat = new THREE.MeshStandardMaterial({ color: 0x224422, emissive: 0x66ff33, emissiveIntensity: 0.4, roughness: 0.6 });
+                        const pod = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 10), podMat); pod.scale.set(1, 1.3, 1); pod.position.y = 0.9; group.add(pod);
+                        const vein = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.04, 6, 16), new THREE.MeshStandardMaterial({ color: 0x88ff44, emissive: 0x88ff44, emissiveIntensity: 1.2 })); vein.position.y = 0.9; vein.rotation.x = Math.PI / 2; group.add(vein);
+                        const glow = new THREE.PointLight(0x66ff33, 1.8, 15); glow.position.y = 0.9; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🛸 [외계인 시리즈 3/5] 낯선 초록빛 포자가 맥동하고 있다...');
+                        setTimeout(() => showChat('시스템', '조심스레 만지자 포자가 터지며 이상한 기운이 몸에 스며든다!'), 1800);
+                        setTimeout(() => {
+                            if (Math.random() < 0.5) {
+                                gameState.speedBoost = (gameState.speedBoost || 1) * 1.25;
+                                showChat('시스템', '👽 [이스터에그] 외계 포자의 힘 - 60초간 이동속도 +25%!');
+                                setTimeout(() => { gameState.speedBoost = Math.max(1, (gameState.speedBoost || 1.25) / 1.25); }, 60000);
+                            } else {
+                                gainXP(700);
+                                showChat('시스템', '👽 [이스터에그] 외계 포자의 지식 - XP 700 획득!');
+                            }
+                            removeEasterEgg(egg);
+                        }, 3000);
+                    }
+                },
+                {
+                    // [NEW] 외계인 시리즈 4/5 - 응답하는 신호탑 (보급 상자 소환)
+                    id: 'alien_beacon', x: 50, z: 900, radius: 7,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const poleMat = new THREE.MeshStandardMaterial({ color: 0x334455, metalness: 0.8, roughness: 0.3 });
+                        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.2, 3, 8), poleMat); pole.position.y = 1.5; group.add(pole);
+                        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), new THREE.MeshStandardMaterial({ color: 0x44ddff, emissive: 0x44ddff, emissiveIntensity: 1.3 })); orb.position.y = 3.2; group.add(orb);
+                        const glow = new THREE.PointLight(0x44ddff, 2.5, 25); glow.position.y = 3.2; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🛸 [외계인 시리즈 4/5] 신호탑이 활성화되며 하늘로 빛줄기를 쏘아 올린다!');
+                        setTimeout(() => showChat('시스템', '멀리서 응답 신호가 돌아온다... 무언가 떨어지고 있다!'), 2000);
+                        setTimeout(() => {
+                            const dropPos = egg.mesh.position.clone(); dropPos.x += 3;
+                            const weaponKeys = ['M416', 'AKM', 'SKS', 'Kar98k', 'Vector'];
+                            const wKey = weaponKeys[Math.floor(Math.random() * weaponKeys.length)];
+                            spawnItem({ type: 'weapon', name: wKey }, dropPos.x, dropPos.y, dropPos.z);
+                            showChat('시스템', `📦 [이스터에그] 외계의 보급 상자가 떨어졌다! ${WEAPON_DATABASE[wKey].name} 획득 가능!`);
+                            removeEasterEgg(egg);
+                        }, 4200);
+                    }
+                },
+                {
+                    // [NEW] 외계인 시리즈 5/5 - 깨진 냉동 캡슐 속 생명체 (시리즈의 마무리)
+                    id: 'alien_specimen', x: 900, z: -700, radius: 7,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const capsuleMat = new THREE.MeshStandardMaterial({ color: 0x88ccee, transparent: true, opacity: 0.4, metalness: 0.3, roughness: 0.1 });
+                        const capsule = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 2.4, 10), capsuleMat); capsule.position.y = 1.2; group.add(capsule);
+                        const frameMat = new THREE.MeshStandardMaterial({ color: 0x445566, metalness: 0.8, roughness: 0.3 });
+                        const frameTop = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.08, 8, 16), frameMat); frameTop.position.y = 2.4; frameTop.rotation.x = Math.PI / 2; group.add(frameTop);
+                        const frameBottom = frameTop.clone(); frameBottom.position.y = 0; group.add(frameBottom);
+                        const silhouette = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), new THREE.MeshStandardMaterial({ color: 0x223311, emissive: 0x335522, emissiveIntensity: 0.5 })); silhouette.position.y = 1.6; silhouette.scale.set(1, 1.4, 1); group.add(silhouette);
+                        const glow = new THREE.PointLight(0x88ccee, 1.8, 18); glow.position.y = 1.2; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🛸 [외계인 시리즈 5/5] 깨진 냉동 캡슐 속에서 무언가의 실루엣이 보인다...');
+                        setTimeout(() => showChat('???', '...마침내... 풀려났다... 이 힘을... 그대에게...'), 2200);
+                        setTimeout(() => {
+                            showChat('시스템', '👽 [이스터에그] 외계 생명체의 마지막 선물 - 자유 배분 가능한 스탯 포인트 +5 + 몰록 1200!');
+                            gameState.statPoints = (gameState.statPoints || 0) + 5; addMoloch(1200);
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 4400);
                     }
                 },
             ];
@@ -4391,100 +4678,26 @@
                 }
             }
             
-            const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 50, 50); // [MODIFIED] 청크 크기 절반(200->100)에 맞춰 세그먼트도 절반(100->50)으로 줄여 동일한 정밀도 유지
-            const vertices = terrainGeo.attributes.position.array; 
-            for (let i = 0, j = 0; i < vertices.length; i += 3, j++) { 
-                const wx = vertices[i] + chunkOriginX; 
-                const wz = chunkOriginZ - vertices[i + 1]; 
-                let wy = getTerrainHeight(wx, wz); 
-                vertices[i + 2] = wy; 
-            } 
-            terrainGeo.computeVertexNormals(); 
+            // [MODIFIED] 지형(땅) 생성 로직을 공용 헬퍼(createChunkGroundMesh)로 분리 - 청크 언로드/재생성 시에도 동일 함수를 재사용해
+            // 완전히 똑같은 지형을 다시 만들 수 있게 함 (아래 [OPTIMIZATION] 청크 지형 언로드 시스템 참고)
+            const ground = createChunkGroundMesh(chunkOriginX, chunkOriginZ, centerBiome);
+            scene.add(ground); objects.push(ground); structures.push(ground); registerChunkObject(chunkKey, ground);
 
-            let groundColor = 0x3a5f3a; if (centerBiome === 'mountain') groundColor = 0x5a5a5a; else if (centerBiome === 'forest') groundColor = 0x1a3f1a; else if (centerBiome === 'city') groundColor = 0x222222; else if (centerBiome === 'volcano') groundColor = 0x111111; 
-            const ground = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.9 })); ground.rotation.x = -Math.PI / 2; ground.position.set(chunkOriginX, 0, chunkOriginZ); ground.receiveShadow = true; scene.add(ground); objects.push(ground); structures.push(ground); registerChunkObject(chunkKey, ground);
-            
-            // [MODIFIED] 용암 생성 로직 개선 (청크 경계 문제 해결 및 흐르는 효과)
-            // 기존: 중심 바이옴이 화산일 때만 평평한 판 생성 -> 변경: 모든 청크에서 버텍스 단위로 검사하여 지형 적응형 용암 생성
-            // [OPTIMIZATION] 화산 바이옴이 아닌 청크는 용암 생성 자체를 스킵하여 렉 방지
-            // 화산 바이옴이거나 그 인접 청크(경계 용암)일 때만 생성
-            const neighborVolcano = 
-                getBiome(chunkOriginX + CHUNK_SIZE, chunkOriginZ) === 'volcano' ||
-                getBiome(chunkOriginX - CHUNK_SIZE, chunkOriginZ) === 'volcano' ||
-                getBiome(chunkOriginX, chunkOriginZ + CHUNK_SIZE) === 'volcano' ||
-                getBiome(chunkOriginX, chunkOriginZ - CHUNK_SIZE) === 'volcano';
-
-            if (centerBiome === 'volcano' || neighborVolcano) {
-            const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 10, 10); // [MODIFIED] 청크 크기 절반에 맞춰 세그먼트도 절반(20->10)으로 축소
-            const lavaVerts = lavaGeo.attributes.position.array;
-            let hasLava = false;
-
-            for (let i = 0; i < lavaVerts.length; i += 3) {
-                const wx = lavaVerts[i] + chunkOriginX;
-                const wz = chunkOriginZ - lavaVerts[i + 1]; // Plane 회전 고려 (local Y가 world -Z)
-                
-                const tHeight = getTerrainHeight(wx, wz);
-                const biome = getBiome(wx, wz);
-                
-                let lHeight = -500; // 기본값: 지하로 숨김
-
-                // 화산 지대이거나, 낮은 지대(용암 웅덩이 가능성)
-                if (biome === 'volcano') {
-                    if (tHeight < LAVA_LEVEL) {
-                        // 1. 웅덩이: 지형이 용암 수위보다 낮으면 수위 유지
-                        lHeight = LAVA_LEVEL;
-                    } else {
-                        // 2. 흘러내림: 지형이 높아도 노이즈에 따라 용암 줄기 생성
-                        // 흐름 노이즈 생성 (크기 40 정도로 조정)
-                        const flowNoise = simplex.noise2D(wx / 40, wz / 40);
-                        // 특정 패턴(줄기)에만 용암 배치
-                        if (flowNoise > 0.3) {
-                            lHeight = tHeight + 0.2; // 지형 바로 위를 덮음
-                        } else {
-                            lHeight = tHeight - 3.0; // 나머지는 지형 바로 아래로 숨김 (수직 절벽 방지)
-                        }
-                    }
-                } else {
-                    // 화산이 아닌 곳은 지형 아래로 숨김
-                    lHeight = tHeight - 3.0; 
-                }
-
-                // PlaneGeometry는 XY 평면이므로 Z값을 높이로 사용 (회전 전 기준)
-                lavaVerts[i + 2] = lHeight;
-                
-                if (lHeight > -100) hasLava = true;
-            }
-
-            lavaGeo.computeVertexNormals();
-
-            if (hasLava) {
-                // 용암 소재 개선: MeshStandardMaterial로 발광 효과 추가
-                const lavaMat = new THREE.MeshStandardMaterial({ 
-                    color: 0xff2200, 
-                    emissive: 0xff4400, 
-                    emissiveIntensity: 1.1, // [MODIFIED] 조명 개수를 줄인 만큼 용암 자체 발광을 살짝 높여서 빛나는 느낌은 유지 (재질 속성이라 성능 비용은 거의 없음)
-                    roughness: 0.3,
-                    metalness: 0.0,
-                    transparent: true, 
-                    opacity: 0.95, 
-                    side: THREE.DoubleSide 
-                }); 
-                const lava = new THREE.Mesh(lavaGeo, lavaMat); 
-                lava.rotation.x = -Math.PI / 2; 
-                lava.position.set(chunkOriginX, 0, chunkOriginZ); 
-                lava.userData = { type: 'lava', isSteppable: true, mat: lavaMat, timeOffset: Math.random() * 100 };
-                lava.matrixAutoUpdate = false; lava.updateMatrix(); // [NEW] 용암 평면도 위치가 고정이므로 매 프레임 행렬 재계산 불필요
+            // [MODIFIED] 용암 생성 로직도 공용 헬퍼(createChunkLavaMesh)로 분리 (화산 바이옴이거나 인접 청크일 때만 내부적으로 생성)
+            const lava = createChunkLavaMesh(chunkOriginX, chunkOriginZ, centerBiome);
+            if (lava) {
                 scene.add(lava); lavaPlanes.push(lava); objects.push(lava); structures.push(lava);
                 registerChunkObject(chunkKey, lava);
-                
                 // [수정] 용암 조명: 화산 전체에 무작위로 여러 개 생기던 것을 화산의 "정 가운데" 단 1개로 변경.
                 // ensureMainVolcanoLight()가 최초 1회만 실행되어 화산 중심 좌표를 계산하고 그 자리에만 조명을 생성함.
-                // 용암 판 자체는 emissive 발광 재질이라 조명이 없어도 스스로 빛나 보이므로, 시각적 느낌은 거의 그대로 유지됨.
                 if (centerBiome === 'volcano') {
                     ensureMainVolcanoLight();
                 }
             }
-            } // end volcano lava check
+            // [OPTIMIZATION] 청크 지형 언로드 시스템: 이 청크의 땅/용암 메시 참조를 기록해둠.
+            // 플레이어가 아주 멀리(UNLOAD_CHUNK_DISTANCE) 벗어나면 unloadChunkTerrain()이 이 참조를 이용해
+            // GPU 지오메트리를 실제로 dispose()하고, 되돌아오면 reloadChunkTerrain()이 동일하게 재생성함.
+            chunkTerrainRefs.set(chunkKey, { ground, lava });
 
             const chunkCityGrayMatrices = []; const chunkCityBrownMatrices = []; const chunkRoofMatrices = []; const chunkCityGrayProxies = []; const chunkCityBrownProxies = []; const chunkRoofProxies = [];
             // [수정] 인접한 큰 건물끼리는 맞닿은 벽을 뚫어서 하나의 공간으로 이어지도록 인접 방향을 미리 계산함
@@ -10632,7 +10845,7 @@
             });
 
             updateVehicles(delta); updateItems(delta); updateNPCs(delta); updateFlares(delta); updateDebris(delta);
-            updateEasterEggs(gameState.position); // [NEW] 이스터에그 근접 체크
+            updateEasterEggs(playerInVehicle ? playerInVehicle.position : gameState.position); // [FIX] 차량 탑승 중에는 gameState.position이 갱신되지 않아 근접 판정이 전혀 안 되던 문제 수정
             updateBosses(delta, now, gameState.position); updateHazardZones(now);
             updateBurningEntities(now); // [NEW] '화염의' 인첸트로 인한 화상 지속 피해 처리
             updateInteraction();
