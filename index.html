@@ -419,9 +419,9 @@
         <div id="accessibility-modal">
             <h2>♿ 접근성 설정</h2>
             <div class="accessibility-row">
-                <div class="accessibility-label">청크 로딩 반경 <span id="accessibility-chunk-radius-val">180m</span></div>
+                <div class="accessibility-label">청크 로딩 반경 <span id="accessibility-chunk-radius-val">100m</span></div>
                 <div style="font-size:11px; color:#888; margin-bottom:4px;">값이 클수록 더 멀리까지 보이지만 렉이 심해질 수 있습니다.</div>
-                <input type="range" id="accessibility-chunk-radius" min="80" max="400" step="20" value="180">
+                <input type="range" id="accessibility-chunk-radius" min="80" max="400" step="20" value="100">
             </div>
             <div class="accessibility-row">
                 <div class="accessibility-label">마우스 감도 <span id="accessibility-mouse-sensitivity-val">1.00x</span></div>
@@ -807,6 +807,7 @@
             { id: 'chatty', title: '수다쟁이', desc: 'NPC와 10회 대화', condition: () => gameStats.npcTalks >= 10, reward: 400, unlocked: false, claimed: false },
             { id: 'sidequester', title: '의뢰 해결사', desc: '세부 퀘스트 5회 완료', condition: () => gameStats.sideQuestsCompleted >= 5, reward: 1000, unlocked: false, claimed: false },
             { id: 'sidequester2', title: '전설의 해결사', desc: '세부 퀘스트 20회 완료', condition: () => gameStats.sideQuestsCompleted >= 20, reward: 3500, unlocked: false, claimed: false },
+            { id: 'omensensed', title: '다가오는 어둠', desc: '상인·생존자·오크·엘프·드워프 모두의 이야기를 들었다', condition: () => villageChainsAllDoneHinted, reward: 2000, unlocked: false, claimed: false },
             
             // ─── 레벨/성장 계열 ───
             { id: 'levelup5', title: '성장하는 생존자', desc: '레벨 5 달성', condition: () => gameState.level >= 5, reward: 500, unlocked: false, claimed: false },
@@ -1180,7 +1181,47 @@
             dwarf: null,      // 드워프 대장장이 연쇄 퀘스트
             merchant: null,   // 상인 의뢰 퀘스트
             wanderer: null,   // 방랑 상인 퀘스트
+            orc: null,        // [NEW] 오크 사절 연쇄 퀘스트
         };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // [NEW] "다가오는 어둠" 전조 시스템 — 상인/생존자/오크/엘프/드워프가 각자
+        // 자기만의 스토리 연쇄 퀘스트를 갖고, 5곳을 모두 완료하면 최종보스 및
+        // 울슈쎈성 방어전을 예고하는 힌트가 뜬다. (최종보스 처치 후 갑자기
+        // "방어전 하자"고 하던 것을 완화하기 위한 전조 장치)
+        // ═══════════════════════════════════════════════════════════════════
+        let villageChainsDone = { survivor: false, merchant: false, elf: false, dwarf: false, orc: false };
+        let villageChainsAllDoneHinted = false;
+        let showCastleHint = false; // 5곳 모두 완료 후 "울슈쎈성으로 가자" 퀘스트 UI 표시 플래그
+        const VILLAGE_CHAIN_LABEL = { survivor: '생존자', merchant: '상인', elf: '엘프 마을', dwarf: '드워프 마을', orc: '오크 군락' };
+        const VILLAGE_CHAIN_FLAVOR = {
+            survivor: '생존자 레이든이 낮은 목소리로 중얼거린다. "요즘 부쩍 불길한 꿈을 꿔... 뭔가 다가오고 있어."',
+            merchant: '상인 가르도가 지도를 접으며 말한다. "이 근방 상인들 사이에 흉흉한 소문이 돌더군. 조심하는 게 좋을 거야."',
+            elf: '엘프 장로 실바누스가 하늘을 올려다본다. "세계수가 떨고 있소... 무언가 커다란 힘이 꿈틀거리고 있어."',
+            dwarf: '드워프 대장장이 브롬이 망치를 내려놓는다. "땅속 깊은 곳에서... 이상한 진동이 느껴지오. 심상치 않소."',
+            orc: '오크 사절이 낮게 으르렁댄다. "크르릉... 짐승들조차 겁을 먹고 도망치고 있다. 뭔가 잘못됐어."',
+        };
+        function onVillageChainFinale(key) {
+            if (villageChainsDone[key]) return;
+            villageChainsDone[key] = true;
+            setTimeout(() => showChat('시스템', `📖 ${VILLAGE_CHAIN_FLAVOR[key]}`), 1200);
+            setTimeout(() => checkVillageChainsAndHint(), 2600);
+        }
+        function checkVillageChainsAndHint() {
+            if (villageChainsAllDoneHinted) return;
+            if (castleQuest.phase !== 'inactive') return; // 이미 최종보스를 처치해 다음 단계로 넘어간 경우 힌트 불필요
+            const remaining = Object.entries(villageChainsDone).filter(([, v]) => !v).map(([k]) => VILLAGE_CHAIN_LABEL[k]);
+            if (remaining.length === 0) {
+                villageChainsAllDoneHinted = true;
+                showCastleHint = true;
+                showChat('시스템', '🧭 상인도, 생존자도, 오크 부족도, 엘프도, 드워프도... 모두가 같은 불길한 예감을 이야기했다.');
+                setTimeout(() => showChat('생존자', '다들 비슷한 얘기를 하더군... 어딘가에서 무언가 힘을 모으고 있다고. 이젠 정말 준비해야 할 때인 것 같아. 이 근방 어딘가에 심상치 않은 기운이 느껴지는 제단이 있다던데...'), 2000);
+                checkAchievements();
+                updateQuestUI();
+            } else {
+                showChat('시스템', `🧭 아직 [${remaining.join(', ')}] 쪽에서도 심상치 않은 이야기가 남아있는 것 같다.`);
+            }
+        }
 
         // ── 생존자 반복 퀘스트 풀 ──────────────────────────────────────────
         const SURVIVOR_QUEST_POOL = [
@@ -1353,6 +1394,129 @@
             },
         ];
 
+        // ── 오크 사절 연쇄 퀘스트 (순서대로, 오크 군락에서 진행) ───────────
+        const ORC_QUEST_CHAIN = [
+            {
+                id: 'sq_orc_prove1', title: '힘의 증명 I', icon: '🪓', isChain: true,
+                desc: '주변 강도 6명을 처치해 힘을 증명하라',
+                type: 'kill_bandit', target: 6,
+                dialogue_give: ["크르릉... 인간이 우리 군락 근처를 얼쩡대는군.", "말로는 못 믿는다. 근처 강도 놈들을 6명 처치해 봐라. 그러면 조금은 들어주지."],
+                dialogue_active: (k, t) => `강도 ${t - k}명 더 처치해라. 그래야 이야기를 들어주지.`,
+                dialogue_done: "크흠... 제법이군. 생각보다 쓸모가 있어.",
+                reward: { moloch: 500, xp: 150 },
+            },
+            {
+                id: 'sq_orc_prove2', title: '힘의 증명 II', icon: '🪓', isChain: true,
+                desc: '좀비 18마리를 처치해 힘을 증명하라',
+                type: 'kill_zombie', target: 18,
+                dialogue_give: ["요즘 죽은 것들이 자꾸 우리 사냥터까지 기어들어와.", "18마리만 정리해라. 그러면 네 실력을 좀 더 믿어보지."],
+                dialogue_active: (k, t) => `좀비 ${t - k}마리 더 처치해라.`,
+                dialogue_done: "쓸만하군. 인간치고는.",
+                reward: { moloch: 650, xp: 200 },
+            },
+            {
+                id: 'sq_orc_purify', title: '오염된 형제', icon: '🩸', isChain: true,
+                desc: '오염된 오크 4마리를 처치하라',
+                type: 'kill_orc', target: 4,
+                dialogue_give: [
+                    "...말하기 부끄럽지만, 우리 형제 중 일부가 어둠에 홀렸다.",
+                    "더는 우리 부족이 아니다. 오염된 오크 4마리를 처치해 그들을 자유롭게 해줘라.",
+                ],
+                dialogue_active: (k, t) => `오염된 오크 ${t - k}마리 더 처치해야 한다.`,
+                dialogue_done: "...고맙다. 인간에게 이런 말을 하게 될 줄은 몰랐군. 부족의 원로들도 네 이름을 알게 될 것이다.",
+                reward: { moloch: 850, xp: 280 },
+            },
+            {
+                id: 'sq_orc_troll3', title: '광기의 뿌리', icon: '🪓', isChain: true,
+                desc: '트롤 3마리를 처치하라',
+                type: 'kill_troll', target: 3,
+                dialogue_give: ["트롤 무리가 우리 사냥터 깊은 곳까지 밀고 들어왔다.", "3마리만 처치해라. 놈들이 늘어나는 속도가 심상치 않아."],
+                dialogue_active: (k, t) => `트롤 ${t - k}마리 더 처치해야 한다.`,
+                dialogue_done: "크르릉... 대단하군. 부족 최고의 전사들도 쉽지 않은 일인데.",
+                reward: { moloch: 1000, xp: 350 },
+            },
+            {
+                id: 'sq_orc_finale', title: '부족의 인정', icon: '🏹', isChain: true,
+                desc: '군락 주변 위협 20마리를 처치하라 (종류 무관)',
+                type: 'kill_any', target: 20,
+                dialogue_give: [
+                    "...워치프들과 상의했다. 너는 이미 우리에게 충분히 증명했다.",
+                    "하지만 마지막으로, 군락 전체가 지켜보는 앞에서 20마리를 처치해라. 그러면 진정한 부족의 친구로 인정하마.",
+                ],
+                dialogue_active: (k, t) => `위협 ${t - k}마리 더 처치해야 한다. 부족 전체가 지켜보고 있다.`,
+                dialogue_done: "크아아아! 인정한다, 인간! 오늘부터 너는 우리 부족의 친구다.",
+                reward: { moloch: 1500, xp: 500, item: '7.62mm' },
+            },
+        ];
+
+        // ── 상인 스토리 연쇄 퀘스트 (3단계, 다가오는 위협을 암시) ──────────
+        const MERCHANT_STORY_CHAIN = [
+            {
+                id: 'sq_mer_story1', title: '수상한 소문', icon: '📜', isChain: true,
+                desc: '강도 5명을 처치해 정보원을 보호하라',
+                type: 'kill_bandit', target: 5,
+                dialogue_give: ["요즘 대상(隊商)들 사이에 이상한 소문이 돌아.", "내 정보원이 강도들 때문에 숨어 있는데, 5명만 처치해 주면 그 소문을 말해주지."],
+                dialogue_active: (k, t) => `강도 ${t - k}명 더 처치해야 해.`,
+                dialogue_done: "고마워. 자, 들어봐 — 세상 곳곳에서 이상한 힘의 파동이 느껴진다는군. 상인 길드에서도 촉각을 곤두세우고 있어.",
+                reward: { moloch: 500, xp: 150 },
+            },
+            {
+                id: 'sq_mer_story2', title: '수집된 조각들', icon: '📜', isChain: true,
+                desc: '의료키트 3개를 구해 정보를 보강하라',
+                type: 'collect_medkit', target: 3,
+                dialogue_give: ["정보를 더 캐려면 다친 정보원들부터 치료해야 해.", "의료키트 3개만 구해다 줄 수 있겠나?"],
+                dialogue_active: (k, t) => `의료키트 ${t - k}개 더 필요해.`,
+                dialogue_done: "좋아, 이제야 좀 더 명확해졌어. 그 파동은 화산 심부, 그러니까 이그니스가 있던 곳 근처에서 가장 강하게 느껴진다는군. 그 존재를 처치했다고 완전히 끝난 게 아닐지도 몰라.",
+                reward: { moloch: 600, xp: 200 },
+            },
+            {
+                id: 'sq_mer_story3', title: '상인의 확신', icon: '🗺️', isChain: true,
+                desc: '적 18마리를 처치해 무역로를 정리하라 (종류 무관)',
+                type: 'kill_any', target: 18,
+                dialogue_give: [
+                    "마지막으로 부탁 하나만 더 하지. 무역로에 위협이 너무 많아 확인하러 갈 수가 없어.",
+                    "18마리만 정리해 주면, 내가 직접 가서 확인하고 온 걸 알려줄게.",
+                ],
+                dialogue_active: (k, t) => `${t - k}마리 더 처치해야 해.`,
+                dialogue_done: "역시... 뭔가가 힘을 모으고 있어. 예전 그 어둠의 핵심과는 다른, 더 오래되고 뒤섞인 무언가야. 조심하는 게 좋을 거야. 다른 이들에게도 물어봐 — 다들 비슷한 낌새를 느끼고 있을 거야.",
+                reward: { moloch: 900, xp: 320 },
+            },
+        ];
+
+        // ── 생존자 스토리 연쇄 퀘스트 (3단계, 다가오는 위협을 암시) ────────
+        const SURVIVOR_STORY_CHAIN = [
+            {
+                id: 'sq_surv_story1', title: '뒤숭숭한 밤', icon: '🌙', isChain: true,
+                desc: '주변 좀비 12마리를 처치하라',
+                type: 'kill_zombie', target: 12,
+                dialogue_give: ["요즘 밤마다 이상한 꿈을 꿔. 뭔가... 여러 개의 눈이 나를 보는 꿈이야.", "기분 탓이겠지만... 일단 주변 좀비 12마리만 처치해 줘. 요즘 유독 사나워."],
+                dialogue_active: (k, t) => `좀비 ${t - k}마리 더 처치해야 해.`,
+                dialogue_done: "고마워. 그런데... 그 꿈이 자꾸 마음에 걸려.",
+                reward: { moloch: 450, xp: 140 },
+            },
+            {
+                id: 'sq_surv_story2', title: '흩어진 단서', icon: '🌙', isChain: true,
+                desc: '오염된 오크 3마리를 처치하고 단서를 모으라',
+                type: 'kill_orc', target: 3,
+                dialogue_give: ["오염된 오크들이 다시 나타났어. 이그니스를 처치했는데도 왜...", "3마리만 처치해 줘. 놈들 몸에서 뭔가 단서를 찾을 수 있을지도 몰라."],
+                dialogue_active: (k, t) => `오염된 오크 ${t - k}마리 더 처치해야 해.`,
+                dialogue_done: "이것 봐... 이 문양, 예전 어둠의 핵심에서 봤던 것과 비슷해. 완전히 사라진 게 아니었나 봐.",
+                reward: { moloch: 600, xp: 200 },
+            },
+            {
+                id: 'sq_surv_story3', title: '다가오는 예감', icon: '🔮', isChain: true,
+                desc: '트롤 4마리를 처치해 근방을 정찰하라',
+                type: 'kill_troll', target: 4,
+                dialogue_give: [
+                    "이 근방 트롤들도 이상하게 흥분해 있어. 뭔가에 겁을 먹은 것처럼.",
+                    "4마리만 처치하면서 주변을 살펴봐 줄래? 나도 뭔가 확인하고 싶은 게 있어.",
+                ],
+                dialogue_active: (k, t) => `트롤 ${t - k}마리 더 처치해야 해.`,
+                dialogue_done: "역시... 나만 느끼는 게 아니었어. 상인이랑 오크, 엘프, 드워프한테도 한번 물어봐 줄래? 다들 뭔가 눈치채고 있을 것 같아서.",
+                reward: { moloch: 750, xp: 250 },
+            },
+        ];
+
         // ── 상인 의뢰 퀘스트 풀 ──────────────────────────────────────────
         const MERCHANT_QUEST_POOL = [
             {
@@ -1467,6 +1631,9 @@
         };
         let elfChainIndex = 0;    // 엘프 연쇄 다음 인덱스
         let dwarfChainIndex = 0;  // 드워프 연쇄 다음 인덱스
+        let orcChainIndex = 0;      // [NEW] 오크 연쇄 다음 인덱스
+        let merchantChainIndex = 0; // [NEW] 상인 스토리 연쇄 다음 인덱스
+        let survivorChainIndex = 0; // [NEW] 생존자 스토리 연쇄 다음 인덱스
 
         // ── 세부 퀘스트 핵심 함수들 ───────────────────────────────────────
         function getSideQuestLabel(q) {
@@ -1631,6 +1798,7 @@
             if (slot === 'dwarf') return '드워프 대장장이';
             if (slot === 'merchant') return '상인';
             if (slot === 'wanderer') return '방랑 상인';
+            if (slot === 'orc') return '오크 사절';
             return 'NPC';
         }
 
@@ -2544,6 +2712,10 @@
         function gainXP(amount) {
             const xpBonus = getEquippedArmorBonuses().xpBonusPercent;
             if (xpBonus > 0) amount = Math.round(amount * (1 + xpBonus / 100));
+            // [NEW] 유령 악사 이스터에그 등에서 부여하는 일시적 경험치 획득량 배율
+            if (gameState.xpBoostMultiplier && gameState.xpBoostUntil && Date.now() < gameState.xpBoostUntil) {
+                amount = Math.round(amount * gameState.xpBoostMultiplier);
+            }
             gameState.xp += amount;
             checkLevelUp();
         }
@@ -2695,6 +2867,8 @@
                 dwarfQuestActive: dwarfQuestActive, dwarfQuestDone: dwarfQuestDone,
                 mainStory: { chapter: mainStory.chapter, phase: mainStory.phase, step: mainStory.step, kills: mainStory.kills },
                 sideQuests: sideQuests, sqKills: sqKills, elfChainIndex: elfChainIndex, dwarfChainIndex: dwarfChainIndex,
+                orcChainIndex: orcChainIndex, merchantChainIndex: merchantChainIndex, survivorChainIndex: survivorChainIndex, // [NEW]
+                villageChainsDone: villageChainsDone, villageChainsAllDoneHinted: villageChainsAllDoneHinted, showCastleHint: showCastleHint, // [NEW]
                 achievements: achievements.map(a => ({ id: a.id, unlocked: a.unlocked, claimed: a.claimed })),
                 shopArmorStock: shopArmorStock,
                 curseState: { active: curseState.active, intensity: curseState.intensity, victimNames: curseState.victimNames, curseEventCount: curseState.curseEventCount, apparitionEncountered: curseState.apparitionEncountered },
@@ -2727,6 +2901,9 @@
         function applySaveData(data) {
             try {
                 if (!data || typeof data !== 'object') throw new Error('잘못된 저장 파일입니다.');
+
+                // [FIX] UI 캐시 초기화 - 안 하면 불러온 값이 직전 값과 우연히 같을 경우 화면이 즉시 갱신 안 될 수 있음
+                _uiCache = {};
 
                 // 월드 시드 복원 (지형이 동일하게 재생성되도록) - 신선한 페이지 로드 직후이므로 청크는 아직 없음
                 if (data.worldSeed) {
@@ -2810,6 +2987,12 @@
                 if (data.sqKills) sqKills = data.sqKills;
                 elfChainIndex = data.elfChainIndex || 0;
                 dwarfChainIndex = data.dwarfChainIndex || 0;
+                orcChainIndex = data.orcChainIndex || 0; // [NEW]
+                merchantChainIndex = data.merchantChainIndex || 0; // [NEW]
+                survivorChainIndex = data.survivorChainIndex || 0; // [NEW]
+                if (data.villageChainsDone) villageChainsDone = { ...villageChainsDone, ...data.villageChainsDone }; // [NEW]
+                villageChainsAllDoneHinted = !!data.villageChainsAllDoneHinted; // [NEW]
+                showCastleHint = !!data.showCastleHint; // [NEW]
                 if (Array.isArray(data.shopArmorStock)) shopArmorStock = data.shopArmorStock;
 
                 // [NEW] 울슈쎈성 방어전 진행상황 복원 (실제 월드 오브젝트는 startGame()에서 createCastleVillage() 이후 재생성됨)
@@ -3280,13 +3463,26 @@
         let frozenChunks = new Set();
         // [NEW] 청크 언로드(완전 해제) 시스템: freeze(숨김)보다 훨씬 먼 거리까지 가면
         // 청크의 지형(땅/용암) GPU 지오메트리를 실제로 dispose()하여 메모리를 회수함.
-        // - 대상은 오직 지형(ground/lava)뿐이며, 건물/나무/좀비/아이템/퀘스트 등 "게임 요소"는 전혀 건드리지 않음
-        //   (건물/나무/돌은 이미 shared geometry/material의 InstancedMesh라 메모리 부담이 적고, freeze 시스템으로 충분히 처리됨)
-        // - 지형은 월드 시드 기반의 순수 함수(getTerrainHeight/getBiome)로 생성되므로, 플레이어가 되돌아오면
-        //   완전히 동일한 모양으로 즉시 재생성됨 (구멍 없음, 중복/리스폰 없음)
+        // - 대상은 지형(ground/lava) + 나무/바위(아래 chunkDecorationRefs 참고)이며,
+        //   건물/좀비/NPC/아이템/퀘스트 등 상태를 가진 "게임 요소"는 여전히 건드리지 않음 (freeze 시스템으로 충분히 처리됨)
+        // - 지형은 월드 시드 기반의 순수 함수(getTerrainHeight/getBiome)로, 나무/바위는 캐시된 matrices로
+        //   재생성되므로, 플레이어가 되돌아오면 완전히 동일한 모양/자리로 즉시 재생성됨 (구멍 없음, 중복/리스폰 없음)
         const UNLOAD_CHUNK_DISTANCE = FREEZE_CHUNK_DISTANCE * 3; // 약 1800m - 이 이상 멀어진 청크만 지형 데이터를 실제로 해제
         let chunkTerrainRefs = new Map(); // chunkKey -> { ground, lava } (현재 씬에 존재하는 지형 메시 참조)
         let terrainUnloadedChunks = new Set(); // 지형이 dispose되어 현재 씬에 없는 청크 키 목록
+        // [NEW] 나무/바위 언로드 시스템: 청크가 UNLOAD_CHUNK_DISTANCE보다 멀어지면 InstancedMesh(줄기/이파리/바위)와
+        // 그 충돌용 프록시들을 완전히 scene/objects/chunkStaticObjects에서 제거함. 지오메트리/메테리얼은
+        // 모든 청크가 공유(shared)하므로 dispose하지 않고, mesh 참조만 끊어 GC가 회수하도록 둠.
+        // 위치/회전/스케일 정보는 matrices(THREE.Matrix4)에 그대로 보존되므로, 되돌아오면 그 매트릭스를 그대로
+        // 재사용해 완전히 동일한 자리에 나무/바위를 재생성함 (RNG 재실행 불필요, 100% 결정론적).
+        let chunkDecorationRefs = new Map(); // chunkKey -> { trunkMesh, leafMesh, rockMesh, trunkProxies, leafProxies, rockProxies, trunkMatrices, leafMatrices, rockMatrices }
+        let decorationsUnloadedChunks = new Set(); // 나무/바위가 dispose되어 현재 씬에 없는 청크 키 목록
+        const _decoPos = new THREE.Vector3(), _decoQuat = new THREE.Quaternion(), _decoScale = new THREE.Vector3(); // decompose용 스크래치 (매 호출 새로 만들지 않음)
+        // [PERF] 화산 렉 개선: 지형/용암 높이는 좌표(x,z)에 대해 100% 결정론적(같은 좌표 = 항상 같은 결과)이므로,
+        // 한 번 계산한 청크는 높이값 배열을 캐시해두고, 언로드(dispose) 후 되돌아와 재생성할 때 노이즈 연산을
+        // 다시 하지 않고 캐시된 값을 그대로 재사용함. 화산처럼 지형 계산이 무거운 바이옴에서 특히 효과적.
+        // 메모리와 맞바꾸는 최적화(청크당 약 11KB)이며, 게임 도중 지형이 파괴/변형되는 요소가 없어 안전함.
+        let chunkHeightCache = new Map(); // chunkKey -> { groundZ: Float32Array, lavaZ: Float32Array|null, hasLava: boolean }
         const groundMaterialCache = {}; // 바이옴별 지면 재질 캐시 (청크마다 새로 만들지 않고 재사용 -> 메모리/드로우콜 절약)
         function getSharedGroundMaterial(biome) {
             if (groundMaterialCache[biome]) return groundMaterialCache[biome];
@@ -3309,13 +3505,25 @@
         function removeFromArray(arr, item) { const i = arr.indexOf(item); if (i !== -1) arr.splice(i, 1); }
         // [NEW] 지형 전용 헬퍼: 땅(ground) 메시 생성 (최초 생성/재생성 양쪽에서 공용으로 사용, 완전히 결정론적)
         function createChunkGroundMesh(chunkOriginX, chunkOriginZ, centerBiome) {
+            const cacheKey = `${chunkOriginX},${chunkOriginZ}`;
             const terrainGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 50, 50);
             const vertices = terrainGeo.attributes.position.array;
-            for (let i = 0, j = 0; i < vertices.length; i += 3, j++) {
-                const wx = vertices[i] + chunkOriginX;
-                const wz = chunkOriginZ - vertices[i + 1];
-                let wy = getTerrainHeight(wx, wz);
-                vertices[i + 2] = wy;
+            const cached = chunkHeightCache.get(cacheKey);
+            if (cached && cached.groundZ) {
+                // [PERF] 이전에 계산했던 청크(언로드 후 재로드) - 노이즈 재계산 없이 캐시된 높이값 재사용
+                for (let i = 0, j = 0; i < vertices.length; i += 3, j++) { vertices[i + 2] = cached.groundZ[j]; }
+            } else {
+                const groundZ = new Float32Array(vertices.length / 3);
+                for (let i = 0, j = 0; i < vertices.length; i += 3, j++) {
+                    const wx = vertices[i] + chunkOriginX;
+                    const wz = chunkOriginZ - vertices[i + 1];
+                    const wy = getTerrainHeight(wx, wz);
+                    vertices[i + 2] = wy;
+                    groundZ[j] = wy;
+                }
+                const entry = chunkHeightCache.get(cacheKey) || {};
+                entry.groundZ = groundZ;
+                chunkHeightCache.set(cacheKey, entry);
             }
             terrainGeo.computeVertexNormals();
             const ground = new THREE.Mesh(terrainGeo, getSharedGroundMaterial(centerBiome));
@@ -3324,33 +3532,53 @@
         }
         // [NEW] 지형 전용 헬퍼: 용암(lava) 메시 생성 (없으면 null 반환). 최초 생성/재생성 양쪽에서 공용으로 사용, 완전히 결정론적
         function createChunkLavaMesh(chunkOriginX, chunkOriginZ, centerBiome) {
-            const neighborVolcano =
-                getBiome(chunkOriginX + CHUNK_SIZE, chunkOriginZ) === 'volcano' ||
-                getBiome(chunkOriginX - CHUNK_SIZE, chunkOriginZ) === 'volcano' ||
-                getBiome(chunkOriginX, chunkOriginZ + CHUNK_SIZE) === 'volcano' ||
-                getBiome(chunkOriginX, chunkOriginZ - CHUNK_SIZE) === 'volcano';
+            const nPlusX = getBiome(chunkOriginX + CHUNK_SIZE, chunkOriginZ);
+            const nMinusX = getBiome(chunkOriginX - CHUNK_SIZE, chunkOriginZ);
+            const nPlusZ = getBiome(chunkOriginX, chunkOriginZ + CHUNK_SIZE);
+            const nMinusZ = getBiome(chunkOriginX, chunkOriginZ - CHUNK_SIZE);
+            const neighborVolcano = nPlusX === 'volcano' || nMinusX === 'volcano' || nPlusZ === 'volcano' || nMinusZ === 'volcano';
             if (centerBiome !== 'volcano' && !neighborVolcano) return null;
+            const cacheKey = `${chunkOriginX},${chunkOriginZ}`;
+            const cached = chunkHeightCache.get(cacheKey);
             const lavaGeo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 10, 10);
             const lavaVerts = lavaGeo.attributes.position.array;
             let hasLava = false;
-            for (let i = 0; i < lavaVerts.length; i += 3) {
-                const wx = lavaVerts[i] + chunkOriginX;
-                const wz = chunkOriginZ - lavaVerts[i + 1];
-                const tHeight = getTerrainHeight(wx, wz);
-                const biome = getBiome(wx, wz);
-                let lHeight = -500;
-                if (biome === 'volcano') {
-                    if (tHeight < LAVA_LEVEL) {
-                        lHeight = LAVA_LEVEL;
-                    } else {
-                        const flowNoise = simplex.noise2D(wx / 40, wz / 40);
-                        if (flowNoise > 0.3) { lHeight = tHeight + 0.2; } else { lHeight = tHeight - 3.0; }
-                    }
-                } else {
-                    lHeight = tHeight - 3.0;
+            if (cached && cached.lavaZ) {
+                // [PERF] 이전에 계산했던 청크(언로드 후 재로드) - 노이즈 재계산 없이 캐시된 높이값 재사용
+                for (let i = 0, j = 0; i < lavaVerts.length; i += 3, j++) {
+                    lavaVerts[i + 2] = cached.lavaZ[j];
+                    if (cached.lavaZ[j] > -100) hasLava = true;
                 }
-                lavaVerts[i + 2] = lHeight;
-                if (lHeight > -100) hasLava = true;
+            } else {
+                // [PERF] 화산 렉 개선: 청크 중심과 주변 4방향이 전부 화산이면(=바이옴 경계가 아닌 화산 한가운데) 정점마다
+                // getBiome()을 다시 계산할 필요 없이 전부 화산으로 간주해도 안전함 (바이옴을 가르는 노이즈는 청크 크기(100m)보다
+                // 훨씬 느리게 변함). 경계 청크(주변 중 하나라도 다른 바이옴)에서만 기존처럼 정점 단위로 정확히 계산해
+                // 자연스러운 블렌딩을 유지함.
+                const isDeepVolcano = centerBiome === 'volcano' && nPlusX === 'volcano' && nMinusX === 'volcano' && nPlusZ === 'volcano' && nMinusZ === 'volcano';
+                const lavaZ = new Float32Array(lavaVerts.length / 3);
+                for (let i = 0, j = 0; i < lavaVerts.length; i += 3, j++) {
+                    const wx = lavaVerts[i] + chunkOriginX;
+                    const wz = chunkOriginZ - lavaVerts[i + 1];
+                    const tHeight = getTerrainHeight(wx, wz);
+                    const biome = isDeepVolcano ? 'volcano' : getBiome(wx, wz);
+                    let lHeight = -500;
+                    if (biome === 'volcano') {
+                        if (tHeight < LAVA_LEVEL) {
+                            lHeight = LAVA_LEVEL;
+                        } else {
+                            const flowNoise = simplex.noise2D(wx / 40, wz / 40);
+                            if (flowNoise > 0.3) { lHeight = tHeight + 0.2; } else { lHeight = tHeight - 3.0; }
+                        }
+                    } else {
+                        lHeight = tHeight - 3.0;
+                    }
+                    lavaVerts[i + 2] = lHeight;
+                    lavaZ[j] = lHeight;
+                    if (lHeight > -100) hasLava = true;
+                }
+                const entry = chunkHeightCache.get(cacheKey) || {};
+                entry.lavaZ = lavaZ;
+                chunkHeightCache.set(cacheKey, entry);
             }
             if (!hasLava) return null;
             lavaGeo.computeVertexNormals();
@@ -3383,6 +3611,60 @@
             }
             chunkTerrainRefs.set(chunkKey, { ground: null, lava: null });
             terrainUnloadedChunks.add(chunkKey);
+            activeStructuresDirty = true;
+        }
+        // [NEW] 아주 멀리 떨어진 청크의 나무/바위 InstancedMesh와 충돌용 프록시를 완전히 해제.
+        // objects/chunkStaticObjects 배열에서 실제로 빠지므로, 플레이 시간과 탐험 범위에 비례해
+        // 이 배열들이 무한히 커지던 문제(아이템 줍기/보스 처치 시 전역 objects 필터링 렉 포함)를 근본적으로 해결함.
+        function unloadChunkDecorations(chunkKey) {
+            if (decorationsUnloadedChunks.has(chunkKey)) return;
+            const ref = chunkDecorationRefs.get(chunkKey);
+            if (!ref) { decorationsUnloadedChunks.add(chunkKey); return; } // 애초에 나무/바위가 없던 청크
+            const chunkList = chunkStaticObjects.get(chunkKey);
+            if (ref.trunkMesh) scene.remove(ref.trunkMesh);
+            if (ref.leafMesh) scene.remove(ref.leafMesh);
+            if (ref.rockMesh) scene.remove(ref.rockMesh);
+            // geometry/material은 절대 dispose하지 않음 - sharedTrunkGeo/sharedLeafGeo/sharedRockGeo는
+            // 다른 모든 청크의 나무/바위가 함께 쓰는 공유 자원이라, 여기서 dispose하면 다른 청크까지 사라짐.
+            for (const proxy of ref.trunkProxies) { removeFromArray(objects, proxy); if (chunkList) removeFromArray(chunkList, proxy); }
+            for (const proxy of ref.leafProxies) { removeFromArray(objects, proxy); if (chunkList) removeFromArray(chunkList, proxy); }
+            for (const proxy of ref.rockProxies) { removeFromArray(objects, proxy); if (chunkList) removeFromArray(chunkList, proxy); }
+            ref.trunkMesh = null; ref.leafMesh = null; ref.rockMesh = null;
+            ref.trunkProxies = []; ref.leafProxies = []; ref.rockProxies = [];
+            decorationsUnloadedChunks.add(chunkKey);
+            activeStructuresDirty = true;
+        }
+        // [NEW] 캐시된 matrix(위치/회전/스케일)로부터 나무/바위 하나의 충돌용 프록시를 재생성.
+        // 원래 collectTreeData/collectRockData가 만들던 것과 동일한 userData(health 등)로 복원함.
+        // isLeaf: true면 'decoration' 타입으로 만들어 충돌/투사체 판정에서 완전히 제외함 (나뭇잎 통과 처리와 동일하게 맞춤)
+        function createDecorationProxyFromMatrix(matrix, geometry, material, health, isRock, frozen, isLeaf) {
+            matrix.decompose(_decoPos, _decoQuat, _decoScale);
+            const proxy = new THREE.Mesh(geometry, invisibleMat);
+            proxy.position.copy(_decoPos); proxy.quaternion.copy(_decoQuat); proxy.scale.copy(_decoScale);
+            proxy.visible = true;
+            proxy.userData = { health, maxHealth: health, type: isLeaf ? 'decoration' : 'object', originalColor: material.color.clone(), isFrozen: !!frozen };
+            if (isRock) proxy.userData.isRock = true;
+            scene.add(proxy); objects.push(proxy);
+            return proxy;
+        }
+        // [NEW] 언로드했던 나무/바위를 원래와 완전히 동일한 위치에 재생성 (캐시된 matrices 기반, RNG 재실행 없음)
+        // frozen: 재생성 시점에 이미 freeze 거리 밖이라면 true로 넘겨 처음부터 숨김 상태로 맞춤
+        function reloadChunkDecorations(chunkKey, frozen) {
+            if (!decorationsUnloadedChunks.has(chunkKey)) return;
+            const ref = chunkDecorationRefs.get(chunkKey);
+            if (!ref) { decorationsUnloadedChunks.delete(chunkKey); return; }
+            const trunkProxies = ref.trunkMatrices.map(m => createDecorationProxyFromMatrix(m, sharedTrunkGeo, sharedTrunkMat, 20000, false, frozen, false));
+            const leafProxies = ref.leafMatrices.map(m => createDecorationProxyFromMatrix(m, sharedLeafGeo, sharedLeafMat, 10000, false, frozen, true));
+            const rockProxies = ref.rockMatrices.map(m => createDecorationProxyFromMatrix(m, sharedRockGeo, sharedRockMat, 30000, true, frozen, false));
+            const trunkMesh = createChunkInstancedMeshes(ref.trunkMatrices, sharedTrunkGeo, sharedTrunkMat, trunkProxies, chunkKey);
+            const leafMesh = createChunkInstancedMeshes(ref.leafMatrices, sharedLeafGeo, sharedLeafMat, leafProxies, chunkKey);
+            const rockMesh = createChunkInstancedMeshes(ref.rockMatrices, sharedRockGeo, sharedRockMat, rockProxies, chunkKey);
+            if (trunkMesh) trunkMesh.visible = !frozen;
+            if (leafMesh) leafMesh.visible = !frozen;
+            if (rockMesh) rockMesh.visible = !frozen;
+            ref.trunkMesh = trunkMesh; ref.leafMesh = leafMesh; ref.rockMesh = rockMesh;
+            ref.trunkProxies = trunkProxies; ref.leafProxies = leafProxies; ref.rockProxies = rockProxies;
+            decorationsUnloadedChunks.delete(chunkKey);
             activeStructuresDirty = true;
         }
         // [NEW] 언로드했던 청크에 플레이어가 다시 접근하면 지형을 원래와 완전히 동일하게(결정론적) 재생성
@@ -3465,9 +3747,14 @@
                 // [NEW] freeze보다 훨씬 먼 청크는 지형 GPU 메모리까지 완전히 해제 (건물/좀비/아이템/퀘스트는 그대로 유지)
                 if (dist > UNLOAD_CHUNK_DISTANCE) {
                     unloadChunkTerrain(chunkKey);
+                    unloadChunkDecorations(chunkKey); // [NEW] 나무/바위도 함께 완전히 해제 (objects 배열 무한 증가 방지)
                 } else if (terrainUnloadedChunks.has(chunkKey)) {
                     // 되돌아왔다면 원래와 완전히 동일한 지형을 즉시 재생성 (구멍 없음)
                     reloadChunkTerrain(chunkKey, cx, cz, dist > FREEZE_CHUNK_DISTANCE);
+                }
+                if (decorationsUnloadedChunks.has(chunkKey) && dist <= UNLOAD_CHUNK_DISTANCE) {
+                    // [NEW] 되돌아왔다면 나무/바위도 원래와 완전히 동일한 자리에 즉시 재생성
+                    reloadChunkDecorations(chunkKey, dist > FREEZE_CHUNK_DISTANCE);
                 }
             }
             // 새로 얼어야 할 청크: freeze 적용
@@ -3494,7 +3781,7 @@
             const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE); 
             const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE); 
             // [MODIFIED] 청크가 작아진 만큼(100m) 미리 로딩 반경도 합리적인 범위로 축소 - [NEW] 접근성 설정에서 조정 가능
-            const PRELOAD_RADIUS = accessibilitySettings.chunkPreloadRadius; // 플레이어 반경(m), 기본 180m
+            const PRELOAD_RADIUS = accessibilitySettings.chunkPreloadRadius; // 플레이어 반경(m), 기본 100m
             const chunkRadius = Math.ceil(PRELOAD_RADIUS / CHUNK_SIZE) + RENDER_DISTANCE;
             for (let x = playerChunkX - chunkRadius; x <= playerChunkX + chunkRadius; x++) { 
                 for (let z = playerChunkZ - chunkRadius; z <= playerChunkZ + chunkRadius; z++) { 
@@ -3523,6 +3810,22 @@
             if (value > -0.2) return 'plain'; 
             if (value > -0.6) return 'forest'; 
             return 'city'; 
+        }
+
+        // [NEW] 이스터에그/상호작용 구조물이 도시 바이옴에 배치되지 않도록, 주어진 좌표가 도시라면
+        // 인근(20m 간격, 최대 400m)을 나선형으로 탐색해 도시가 아닌 가장 가까운 좌표를 찾아 반환
+        function findNonCitySpawnPos(x, z) {
+            if (getBiome(x, z) !== 'city') return { x, z };
+            for (let ring = 1; ring <= 20; ring++) {
+                const dist = ring * 20;
+                for (let a = 0; a < 8; a++) {
+                    const angle = (a / 8) * Math.PI * 2 + ring * 0.7;
+                    const nx = x + Math.cos(angle) * dist;
+                    const nz = z + Math.sin(angle) * dist;
+                    if (getBiome(nx, nz) !== 'city') return { x: nx, z: nz };
+                }
+            }
+            return { x, z }; // 못 찾으면(극히 드묾) 원래 좌표 사용
         }
 
         // [NEW] 화산 정 가운데 조명 - 화산 지대 전체에 여러 개 흩어져 있던 조명을 없애고, 화산의 진짜 중심점(용암 발생 노이즈 값이 가장 높은 지점)에
@@ -3574,6 +3877,11 @@
                 if (obj.geometry) obj.geometry.dispose();
                 if (obj.material) { if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose()); else obj.material.dispose(); }
             });
+            // [FIX] 청크 정적 오브젝트 목록에서도 함께 제거 - 안 하면 사라진 메시 참조가 계속 남아
+            // 매번 청크 프리징 갱신 때마다 죽은 오브젝트를 헛되이 순회하게 됨(작지만 불필요한 누수)
+            if (egg.chunkKey && chunkStaticObjects.has(egg.chunkKey)) {
+                removeFromArray(chunkStaticObjects.get(egg.chunkKey), egg.mesh);
+            }
             const idx = easterEggs.indexOf(egg);
             if (idx !== -1) easterEggs.splice(idx, 1);
         }
@@ -4055,15 +4363,678 @@
                         }, 4400);
                     }
                 },
+                {
+                    // [NEW] 얼어붙은 병사 - 울슈쎈성이 무너지던 날의 기억을 간직한 조각상
+                    id: 'frozen_soldier', x: -850, z: 100, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x777788, roughness: 0.9 });
+                        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 1.6, 8), stoneMat); body.position.y = 0.8; group.add(body);
+                        const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), stoneMat); head.position.y = 1.75; group.add(head);
+                        const swordMat = new THREE.MeshStandardMaterial({ color: 0x99aabb, metalness: 0.6, roughness: 0.4 });
+                        const sword = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.3, 0.05), swordMat); sword.position.set(0.5, 1.0, 0); sword.rotation.z = -0.4; group.add(sword);
+                        const glow = new THREE.PointLight(0x8899ff, 0.8, 12); glow.position.y = 1.5; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🗿 오래전 돌처럼 굳어버린 병사의 조각상이다. 갑주에 울슈쎈성의 문장이 새겨져 있다.');
+                        setTimeout(() => showChat('???', '...성벽이... 무너진다... 모두... 도망쳐...'), 1800);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 잊혀진 병사의 유산 - 몰록 700 + XP 350 획득!');
+                            addMoloch(700); gainXP(350);
+                            removeEasterEgg(egg);
+                        }, 3400);
+                    }
+                },
+                {
+                    // [NEW] 그림자 균열 - 다가오는 어둠을 암시하는 균열 (메인 스토리와 연계)
+                    id: 'shadow_rift', x: 500, z: -850, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const rift = new THREE.Mesh(new THREE.TorusKnotGeometry(0.9, 0.25, 64, 8), new THREE.MeshStandardMaterial({ color: 0x110022, emissive: 0x6600aa, emissiveIntensity: 1.1, metalness: 0.7, roughness: 0.2 }));
+                        rift.position.y = 1.6; group.add(rift);
+                        const glow = new THREE.PointLight(0x8800ff, 2.2, 25); glow.position.y = 1.6; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🌀 공기가 일그러지며 검은 균열이 스스로 소리를 낸다...');
+                        setTimeout(() => showChat('???', '...너도... 느껴지나... 우리가... 다시... 하나가... 될... 시간이...'), 2000);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 균열의 잔재 - 60초간 이동속도 +20%, 몰록 400 획득!');
+                            gameState.speedBoost = (gameState.speedBoost || 1) * 1.2;
+                            setTimeout(() => { gameState.speedBoost = Math.max(1, (gameState.speedBoost || 1.2) / 1.2); showChat('시스템', '균열의 기운이 사라졌습니다.'); }, 60000);
+                            addMoloch(400);
+                            removeEasterEgg(egg);
+                        }, 3600);
+                    }
+                },
+                {
+                    // [NEW] 타임캡슐 - 멸망 전 누군가가 미래의 생존자에게 남긴 편지
+                    id: 'time_capsule', x: -100, z: 850, radius: 5,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const boxMat = new THREE.MeshStandardMaterial({ color: 0x445544, metalness: 0.4, roughness: 0.6 });
+                        const box = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.6, 12), boxMat); box.rotation.z = Math.PI / 2; box.position.y = 0.4; group.add(box);
+                        const seal = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.22, 12), new THREE.MeshStandardMaterial({ color: 0xccaa33, emissive: 0xccaa33, emissiveIntensity: 0.6 })); seal.position.set(0.31, 0.4, 0); seal.rotation.y = Math.PI / 2; group.add(seal);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '📦 땅에 묻혀 있던 낡은 타임캡슐을 발견했다. 안에 빛바랜 편지가 들어있다.');
+                        setTimeout(() => showChat('편지', '"이 편지를 읽는 그대에게. 세상이 무너지기 전, 우리는 평범한 하루를 보냈습니다. 부디 그런 하루를 되찾아 주세요."'), 2000);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 지나간 시절의 기억 - XP 500 + 몰록 300 획득!');
+                            gainXP(500); addMoloch(300);
+                            removeEasterEgg(egg);
+                        }, 4000);
+                    }
+                },
+                {
+                    // [NEW] 거리의 악사 유령 - 해질녘에만 나타난다는 소문의 유령 바이올린 연주자
+                    id: 'ghost_musician', x: 750, z: 700, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xccddee, transparent: true, opacity: 0.45, emissive: 0x88aacc, emissiveIntensity: 0.5 });
+                        const body = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.7, 10), bodyMat); body.position.y = 0.9; group.add(body);
+                        const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), bodyMat); head.position.y = 1.9; group.add(head);
+                        const glow = new THREE.PointLight(0x99bbff, 1.5, 18); glow.position.y = 1.4; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🎻 희미한 바이올린 선율이 들려온다. 아무도 없는데도, 연주는 계속된다...');
+                        setTimeout(() => showChat('???', '...이 곡을 끝까지 들어준 건, 당신이 처음이군요...'), 2000);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 유령 악사의 선율 - 45초간 경험치 획득량 +50%!');
+                            gameState.xpBoostMultiplier = 1.5; gameState.xpBoostUntil = Date.now() + 45000;
+                            removeEasterEgg(egg);
+                        }, 3600);
+                    }
+                },
+                {
+                    // [NEW] 신비한 낚시터 - 황금빛 물고기가 산다는 소문의 연못
+                    id: 'golden_pond', x: -400, z: -700, radius: 5,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const water = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.5, 0.15, 16), new THREE.MeshStandardMaterial({ color: 0x2266aa, transparent: true, opacity: 0.7, metalness: 0.3, roughness: 0.2 }));
+                        water.position.y = 0.05; group.add(water);
+                        const fish = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.6, 6), new THREE.MeshStandardMaterial({ color: 0xffcc00, emissive: 0xffaa00, emissiveIntensity: 0.7 }));
+                        fish.rotation.z = Math.PI / 2; fish.position.set(0.3, 0.2, 0.3); group.add(fish);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🐟 연못에 손을 담그자 황금빛 물고기가 손 안으로 뛰어든다!');
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 황금 물고기 - 몰록 900 획득!');
+                            addMoloch(900);
+                            removeEasterEgg(egg);
+                        }, 1800);
+                    }
+                },
+                {
+                    // [NEW] 버려진 전차 - 옛 전쟁의 잔해
+                    id: 'abandoned_tank', x: 1000, z: 100, radius: 7,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const hullMat = new THREE.MeshStandardMaterial({ color: 0x3a4a33, metalness: 0.6, roughness: 0.7 });
+                        const hull = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 1.8), hullMat); hull.position.y = 0.6; group.add(hull);
+                        const turret = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.9, 0.6, 8), hullMat); turret.position.y = 1.3; group.add(turret);
+                        const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.8, 8), hullMat); barrel.rotation.z = Math.PI / 2; barrel.position.set(1.5, 1.3, 0); group.add(barrel);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🪖 녹슨 전차 잔해 안에서 밀봉된 탄약 상자를 발견했다.');
+                        setTimeout(() => {
+                            gameState.ammoInventory['7.62mm'] = (gameState.ammoInventory['7.62mm'] || 0) + 120;
+                            showChat('시스템', '✨ [이스터에그] 옛 전쟁의 유산 - 7.62mm 탄약 120발 + 몰록 500 획득!');
+                            addMoloch(500); updateUI();
+                            removeEasterEgg(egg);
+                        }, 2200);
+                    }
+                },
+                {
+                    // [NEW] 예언자의 낙서 - 다섯 부족의 단결과 무너진 성의 재건을 예언하는 벽화 (메인 스토리와 강하게 연계)
+                    id: 'prophet_graffiti', x: -800, z: -600, radius: 5,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const wallMat = new THREE.MeshStandardMaterial({ color: 0x554433, roughness: 0.9 });
+                        const wall = new THREE.Mesh(new THREE.BoxGeometry(3, 2.4, 0.3), wallMat); wall.position.y = 1.2; group.add(wall);
+                        const paintMat = new THREE.MeshStandardMaterial({ color: 0xcc3322, emissive: 0xcc3322, emissiveIntensity: 0.4 });
+                        const paint = new THREE.Mesh(new THREE.CircleGeometry(0.9, 5), paintMat); paint.position.set(0, 1.2, 0.17); group.add(paint);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🎨 다 허물어져 가는 벽에 핏빛 물감으로 그린 낙서가 남아있다.');
+                        setTimeout(() => showChat('낙서', '"다섯 부족이 하나로 뭉칠 때, 무너진 성이 다시 설 것이다. 그리고 그 성벽 아래, 오래된 것이 다시 눈을 뜬다..."'), 2000);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 예언자의 경고 - XP 600 획득!');
+                            gainXP(600);
+                            removeEasterEgg(egg);
+                        }, 4000);
+                    }
+                },
+                {
+                    // [NEW] 오르골 - 폐허 속에서 홀로 노래하는 오르골
+                    id: 'music_box', x: 300, z: 1000, radius: 5,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const boxMat = new THREE.MeshStandardMaterial({ color: 0x664433, metalness: 0.3, roughness: 0.5 });
+                        const box = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.4, 0.6), boxMat); box.position.y = 0.3; group.add(box);
+                        const figMat = new THREE.MeshStandardMaterial({ color: 0xddccaa, emissive: 0xffeecc, emissiveIntensity: 0.5 });
+                        const fig = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.3, 6), figMat); fig.position.y = 0.65; group.add(fig);
+                        const glow = new THREE.PointLight(0xffddaa, 1.0, 10); glow.position.y = 0.6; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🎵 태엽이 저절로 돌아가며 오르골이 구슬픈 멜로디를 연주하기 시작한다...');
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 오르골의 위로 - 체력/스태미나 전부 회복 + XP 400 획득!');
+                            gameState.health = gameState.maxHealth; playerStamina = 100;
+                            gainXP(400); updateUI();
+                            removeEasterEgg(egg);
+                        }, 2600);
+                    }
+                },
+                {
+                    // [NEW] 은둔자의 오두막 - 홀로 어둠을 피해 살아온 은둔자의 흔적
+                    id: 'hermit_hut', x: 650, z: -100, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const wallMat = new THREE.MeshStandardMaterial({ color: 0x554422, roughness: 0.9 });
+                        const hut = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.4, 1.6, 6), wallMat); hut.position.y = 0.8; group.add(hut);
+                        const roofMat = new THREE.MeshStandardMaterial({ color: 0x332211, roughness: 0.95 });
+                        const roof = new THREE.Mesh(new THREE.ConeGeometry(1.6, 1.0, 6), roofMat); roof.position.y = 2.1; group.add(roof);
+                        const light = new THREE.PointLight(0xffaa44, 0.9, 10); light.position.y = 1.0; group.add(light);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🏚️ 텅 빈 오두막 안, 벽에 손톱으로 새긴 듯한 글씨가 보인다.');
+                        setTimeout(() => showChat('글씨', '"어둠은 소리 없이 다가온다. 힘을 모아라. 혼자서는 절대 버틸 수 없다."'), 1800);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 은둔자의 마지막 조언 - 자유 배분 가능한 스탯 포인트 +2 획득!');
+                            gameState.statPoints = (gameState.statPoints || 0) + 2;
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 3400);
+                    }
+                },
+                {
+                    // [NEW] 오래된 벙커 - 땅에 반쯤 파묻힌 방공호. 마지막 생존자들의 흔적이 남아있다.
+                    id: 'buried_bunker', x: -1000, z: -200, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const hatchMat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.7, roughness: 0.5 });
+                        const hatch = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.3, 12), hatchMat); hatch.position.y = 0.15; group.add(hatch);
+                        const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.08, 8, 12), hatchMat); wheel.position.y = 0.35; wheel.rotation.x = Math.PI / 2; group.add(wheel);
+                        const light = new THREE.PointLight(0xffcc66, 0.7, 8); light.position.y = 0.6; group.add(light);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🚪 녹슨 방공호 뚜껑을 힘겹게 열어젖히자, 오래된 보급품이 가득 쌓여 있다.');
+                        setTimeout(() => {
+                            const piece = generateArmorPiece(null, rollBossArmorTier());
+                            spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, egg.mesh.position.x + 1, egg.mesh.position.y, egg.mesh.position.z + 1);
+                            showChat('시스템', '✨ [이스터에그] 방공호의 보급품 - 방어구 지급 + 몰록 400 획득!');
+                            addMoloch(400);
+                            removeEasterEgg(egg);
+                        }, 2200);
+                    }
+                },
+                {
+                    // [NEW] 추락한 인공위성 - 하늘에서 떨어진 옛 문명의 잔해
+                    id: 'crashed_satellite', x: 200, z: -950, radius: 7,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const bodyMat = new THREE.MeshStandardMaterial({ color: 0xccccdd, metalness: 0.85, roughness: 0.2 });
+                        const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), bodyMat); body.position.y = 0.9; body.rotation.set(0.3, 0.5, 0.1); group.add(body);
+                        const panelMat = new THREE.MeshStandardMaterial({ color: 0x2244aa, metalness: 0.5, roughness: 0.3, emissive: 0x2244aa, emissiveIntensity: 0.3 });
+                        const panel = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.05, 0.9), panelMat); panel.position.set(1.4, 1.1, 0); panel.rotation.z = 0.2; group.add(panel);
+                        const light = new THREE.PointLight(0x66aaff, 1.2, 14); light.position.y = 1.2; group.add(light);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🛰️ 추락한 위성 잔해에서 미약한 신호음이 들려온다. 어딘가 아직 작동하는 부품이 있는 듯하다.');
+                        setTimeout(() => showChat('시스템', '삐- 삐- 신호가 점점 빨라지더니, 렌즈 부품이 튕겨져 나온다.'), 2000);
+                        setTimeout(() => {
+                            if (unlockedScopeIndex < SCOPE_LEVELS.length - 1) {
+                                unlockedScopeIndex = Math.min(SCOPE_LEVELS.length - 1, unlockedScopeIndex + 1);
+                                updateScopeUI();
+                                showChat('시스템', '✨ [이스터에그] 위성 렌즈 부품 - 스코프 배율 단계 해금!');
+                            } else {
+                                showChat('시스템', '✨ [이스터에그] 위성 잔해 분석 - XP 800 획득!');
+                                gainXP(800);
+                            }
+                            addMoloch(300);
+                            removeEasterEgg(egg);
+                        }, 3600);
+                    }
+                },
+                {
+                    // [NEW] 가라앉은 석상 - 혼돈의 군주를 형상화한 듯한 불길한 석상 (최종보스와 연계)
+                    id: 'sunken_statue', x: 950, z: 500, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x221122, roughness: 0.9, emissive: 0x440044, emissiveIntensity: 0.25 });
+                        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.4, 0.5, 8), stoneMat); base.position.y = 0.25; group.add(base);
+                        const body = new THREE.Mesh(new THREE.ConeGeometry(0.8, 2.2, 6), stoneMat); body.position.y = 1.6; group.add(body);
+                        const eyeMat = new THREE.MeshStandardMaterial({ color: 0xff0033, emissive: 0xff0033, emissiveIntensity: 1.2 });
+                        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), eyeMat); eye.position.set(0, 2.1, 0.6); group.add(eye);
+                        const glow = new THREE.PointLight(0x880033, 1.5, 16); glow.position.y = 2.0; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🗿 가라앉은 석상의 붉은 눈이 순간 번뜩인 것 같았다...');
+                        setTimeout(() => showChat('???', '...아직... 때가 아니다... 하지만... 곧... 곧이다...'), 2000);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 불길한 예감 - 자유 배분 가능한 스탯 포인트 +3 획득!');
+                            gameState.statPoints = (gameState.statPoints || 0) + 3;
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 3600);
+                    }
+                },
+                {
+                    // [NEW] 마녀의 가마솥 - 저주받은 마녀 위치가 남기고 간 것으로 보이는 낡은 가마솥
+                    id: 'witch_cauldron', x: -650, z: 600, radius: 5,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const potMat = new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.6, roughness: 0.5 });
+                        const pot = new THREE.Mesh(new THREE.SphereGeometry(0.8, 10, 8, 0, Math.PI * 2, 0, Math.PI / 1.6), potMat); pot.position.y = 0.6; group.add(pot);
+                        const brewMat = new THREE.MeshStandardMaterial({ color: 0x55ff55, emissive: 0x33cc33, emissiveIntensity: 1.0, transparent: true, opacity: 0.85 });
+                        const brew = new THREE.Mesh(new THREE.CircleGeometry(0.65, 12), brewMat); brew.rotation.x = -Math.PI / 2; brew.position.y = 0.95; group.add(brew);
+                        const glow = new THREE.PointLight(0x55ff55, 1.8, 15); glow.position.y = 1.0; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🧪 부글부글 끓고 있는 초록빛 가마솥에서 낯익은 마녀의 기운이 느껴진다.');
+                        setTimeout(() => showChat('???', '"호호호... 아직 내 솥은 식지 않았단다..."'), 1800);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 마녀의 마지막 비약 - 체력/스태미나 전부 회복 + XP 450 획득!');
+                            gameState.health = getMaxHealth(); playerStamina = getMaxStamina();
+                            gainXP(450); updateUI();
+                            removeEasterEgg(egg);
+                        }, 3200);
+                    }
+                },
+                {
+                    // [NEW] 드워프의 숨겨진 금고 - 산속 깊이 숨겨진 드워프 일족의 보물창고
+                    id: 'dwarven_vault', x: 450, z: 850, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const doorMat = new THREE.MeshStandardMaterial({ color: 0x887744, metalness: 0.8, roughness: 0.35 });
+                        const door = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.3, 8), doorMat); door.rotation.z = Math.PI / 2; door.position.y = 1.0; group.add(door);
+                        const gemMat = new THREE.MeshStandardMaterial({ color: 0xffee55, emissive: 0xffcc00, emissiveIntensity: 0.8, metalness: 0.4, roughness: 0.2 });
+                        const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.25, 0), gemMat); gem.position.set(0.2, 1.0, 0.15); group.add(gem);
+                        const glow = new THREE.PointLight(0xffcc00, 1.2, 10); glow.position.y = 1.0; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '⛏️ 산속 깊은 곳, 오래된 드워프 문양이 새겨진 금고를 발견했다.');
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 드워프의 유산 - 몰록 1100 획득!');
+                            addMoloch(1100);
+                            removeEasterEgg(egg);
+                        }, 2000);
+                    }
+                },
+                {
+                    // [NEW] 엘프의 성소 - 세계수의 가지 아래 숨겨진 고요한 성소
+                    id: 'elven_shrine', x: -950, z: 500, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const baseMat = new THREE.MeshStandardMaterial({ color: 0x336633, roughness: 0.7 });
+                        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.5, 0.4, 8), baseMat); base.position.y = 0.2; group.add(base);
+                        const crystalMat = new THREE.MeshStandardMaterial({ color: 0x66ffcc, emissive: 0x33ffaa, emissiveIntensity: 1.0, transparent: true, opacity: 0.8 });
+                        const crystal = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.4, 6), crystalMat); crystal.position.y = 1.1; group.add(crystal);
+                        const glow = new THREE.PointLight(0x66ffcc, 1.8, 18); glow.position.y = 1.2; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🌿 고요한 성소에 발을 들이자 잎사귀들이 스스로 바스락거리며 길을 비켜준다.');
+                        setTimeout(() => showChat('???', '"세계수의 뜻이 그대에게 닿았노라..."'), 1800);
+                        setTimeout(() => {
+                            if (gameState.hasCultivation) {
+                                gameState.maxMana += 20; gameState.mana = gameState.maxMana;
+                                showChat('시스템', '✨ [이스터에그] 세계수의 가호 - 최대 내공 영구 +20!');
+                            } else {
+                                showChat('시스템', '✨ [이스터에그] 세계수의 가호 - XP 500 획득!');
+                                gainXP(500);
+                            }
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 3200);
+                    }
+                },
+                {
+                    // [NEW] 결투자의 무덤 - 이름 없는 검객이 잠든 자리
+                    id: 'duelist_grave', x: 850, z: -300, radius: 5,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.85 });
+                        const grave = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.1, 0.15), stoneMat); grave.position.y = 0.55; group.add(grave);
+                        const swordMat = new THREE.MeshStandardMaterial({ color: 0xaaaacc, metalness: 0.7, roughness: 0.3 });
+                        const sword = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.2, 0.03), swordMat); sword.position.set(0, 0.9, 0.2); sword.rotation.z = 0.15; group.add(sword);
+                        const glow = new THREE.PointLight(0x8899ff, 0.6, 8); glow.position.y = 0.9; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '⚔️ 이름 모를 검객의 무덤 앞, 꽂혀 있는 검이 은은하게 떨린다.');
+                        setTimeout(() => showChat('???', '"...한 수만... 받아주게..."'), 1800);
+                        setTimeout(() => {
+                            if (gameState.hasFlashSlash) {
+                                showChat('시스템', '✨ [이스터에그] 검객의 유지 - 몰록 900 + XP 400 획득!');
+                                addMoloch(900); gainXP(400);
+                            } else {
+                                showChat('시스템', '✨ [이스터에그] 검객의 유지 - XP 600 획득! (일섬을 익히면 더 큰 공명이 있을지도...)');
+                                gainXP(600);
+                            }
+                            removeEasterEgg(egg);
+                        }, 3200);
+                    }
+                },
+                {
+                    // [NEW] 폭풍의 제단 - 번개가 끊임없이 내리치는 언덕 위 제단
+                    id: 'storm_altar', x: -500, z: 950, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x445566, roughness: 0.8, metalness: 0.3 });
+                        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.7, 0.5, 8), stoneMat); base.position.y = 0.25; group.add(base);
+                        const rodMat = new THREE.MeshStandardMaterial({ color: 0xccccdd, metalness: 0.9, roughness: 0.15 });
+                        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.2, 6), rodMat); rod.position.y = 1.6; group.add(rod);
+                        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 10), new THREE.MeshStandardMaterial({ color: 0xaaccff, emissive: 0x6699ff, emissiveIntensity: 1.3 })); orb.position.y = 2.7; group.add(orb);
+                        const glow = new THREE.PointLight(0x88aaff, 2.2, 22); glow.position.y = 2.7; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '⚡ 제단 위 뇌전구가 요동치며 팔뚝에 짜릿한 전류가 흐른다!');
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 폭풍의 축복 - 45초간 현재 무기 데미지 +25%!');
+                            const w = gameState.weapons[gameState.currentWeaponIndex];
+                            if (w) {
+                                w.damageBonus = (w.damageBonus || 1) * 1.25;
+                                setTimeout(() => { if (w) { w.damageBonus = Math.max(1, (w.damageBonus || 1.25) / 1.25); showChat('시스템', '⚡ 폭풍의 기운이 잦아들었습니다.'); } }, 45000);
+                            }
+                            addMoloch(350);
+                            removeEasterEgg(egg);
+                        }, 2400);
+                    }
+                },
+                {
+                    // [NEW] 버려진 놀이공원 - 멸망 전 아이들의 웃음소리가 남아있는 듯한 곳
+                    id: 'abandoned_carnival', x: -250, z: -950, radius: 7,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const poleMat = new THREE.MeshStandardMaterial({ color: 0xcc4444, metalness: 0.4, roughness: 0.5 });
+                        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 3.5, 8), poleMat); pole.position.y = 1.75; group.add(pole);
+                        const wheelMat = new THREE.MeshStandardMaterial({ color: 0xeecc33, metalness: 0.5, roughness: 0.4 });
+                        const wheel = new THREE.Mesh(new THREE.TorusGeometry(1.4, 0.08, 8, 16), wheelMat); wheel.position.y = 3.2; group.add(wheel);
+                        const glow = new THREE.PointLight(0xffaa66, 1.2, 16); glow.position.y = 3.2; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🎡 녹슨 대관람차가 바람에 삐걱이며 저절로 한 바퀴 돈다. 어디선가 옅은 웃음소리가 들리는 것 같기도 하다.');
+                        setTimeout(() => showChat('???', '"다음 탑승객은... 당신이에요!"'), 2000);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 그 시절의 즐거움 - 몰록 600 + XP 500 획득!');
+                            addMoloch(600); gainXP(500);
+                            removeEasterEgg(egg);
+                        }, 3600);
+                    }
+                },
+                // ═══════════════════════════════════════════════════════════
+                // [NEW] 연관 이스터에그 시리즈 — 아래 9개는 위 36개 중 특정
+                // 이스터에그들을 먼저 모두 찾아야만 반응하는 "완결편"이다.
+                // ═══════════════════════════════════════════════════════════
+                {
+                    // [NEW] 외계인 시리즈 완결편 - 거석/UFO/외계 생명체 표본/추락 위성을 모두 찾으면 반응
+                    id: 'alien_mothership', x: 1100, z: -450, radius: 8,
+                    requires: ['monolith', 'ufo', 'alien_specimen', 'crashed_satellite'],
+                    hintText: '🔒 하늘에서 희미한 빛이 깜박인다. 거석, UFO, 외계 생명체 표본, 추락한 위성... 흩어진 조각을 먼저 찾아야 응답이 올 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const hullMat = new THREE.MeshStandardMaterial({ color: 0x334455, metalness: 0.9, roughness: 0.15, emissive: 0x2266aa, emissiveIntensity: 0.4 });
+                        const disc = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.6, 0.6, 24), hullMat); disc.position.y = 3.5; group.add(disc);
+                        const dome = new THREE.Mesh(new THREE.SphereGeometry(1.1, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x88ffcc, transparent: true, opacity: 0.5, emissive: 0x44ffaa, emissiveIntensity: 0.8 })); dome.position.y = 3.8; group.add(dome);
+                        const beam = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3.2, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0x66ffcc, emissive: 0x66ffcc, emissiveIntensity: 1.2, transparent: true, opacity: 0.25, side: THREE.DoubleSide })); beam.position.y = 1.6; group.add(beam);
+                        const glow = new THREE.PointLight(0x66ffcc, 3.5, 40); glow.position.y = 3.2; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🛸 그동안 흩어져 있던 신호들이 하나로 모이더니, 거대한 모선이 하늘을 뒤덮는다!');
+                        setTimeout(() => showChat('???', '"...관측이 끝났다. 이 행성은... 아직 지켜볼 가치가 있군."'), 2200);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그 완결] 그들은 처음부터 지켜보고 있었다 - 몰록 2500 + XP 1200 + 스탯 포인트 +5 획득!');
+                            addMoloch(2500); gainXP(1200); gameState.statPoints = (gameState.statPoints || 0) + 5;
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 4200);
+                    }
+                },
+                {
+                    // [NEW] 다가오는 어둠 완결편 - 그림자 균열/예언자의 낙서/가라앉은 석상/얼어붙은 병사를 모두 찾으면 반응 (메인 스토리·최종보스 연계)
+                    id: 'darkness_convergence', x: 0, z: -600, radius: 8,
+                    requires: ['shadow_rift', 'prophet_graffiti', 'sunken_statue', 'frozen_soldier'],
+                    hintText: '🔒 이 자리의 공기가 유난히 무겁다. 균열, 낙서, 석상, 병사... 곳곳에 흩어진 어둠의 흔적을 먼저 마주해야 할 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const coreMat = new THREE.MeshStandardMaterial({ color: 0x0a0012, emissive: 0x9900ff, emissiveIntensity: 1.4, metalness: 0.6, roughness: 0.2 });
+                        const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1, 1), coreMat); core.position.y = 1.8; group.add(core);
+                        const ring1 = new THREE.Mesh(new THREE.TorusGeometry(1.6, 0.06, 8, 24), new THREE.MeshStandardMaterial({ color: 0x6600cc, emissive: 0x6600cc, emissiveIntensity: 1.0 })); ring1.position.y = 1.8; ring1.rotation.x = Math.PI / 3; group.add(ring1);
+                        const ring2 = ring1.clone(); ring2.rotation.x = -Math.PI / 3; ring2.rotation.y = Math.PI / 4; group.add(ring2);
+                        const glow = new THREE.PointLight(0x9900ff, 3.0, 30); glow.position.y = 1.8; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🌑 흩어져 있던 어둠의 흔적들이 하나로 응집하며, 눈앞에 검은 핵이 떠오른다.');
+                        setTimeout(() => showChat('???', '"...병사도, 낙서도, 석상도, 균열도... 전부 나의 파편이었다. 곧... 완전해질 것이다."'), 2400);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그 완결] 흩어진 어둠의 파편 - 몰록 2000 + XP 1000 + 격(格) +200 획득!');
+                            addMoloch(2000); gainXP(1000); gameState.merit = (gameState.merit || 0) + 200;
+                            checkMeritSkillUnlock && checkMeritSkillUnlock();
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 4400);
+                    }
+                },
+                {
+                    // [NEW] 보물 사냥꾼 완결편 - 해적 보물/방공호/황금 물고기 연못을 모두 찾으면 완성되는 보물지도
+                    id: 'treasure_map_complete', x: -700, z: 0, radius: 7,
+                    requires: ['buried_treasure', 'buried_bunker', 'golden_pond'],
+                    hintText: '🔒 품 속 낡은 지도 조각이 희미하게 빛난다. 아직 이어붙일 조각이 더 필요한 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const chestMat = new THREE.MeshStandardMaterial({ color: 0x996633, metalness: 0.3, roughness: 0.6 });
+                        const chest = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.8, 0.9), chestMat); chest.position.y = 0.4; group.add(chest);
+                        const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.65, 0.65, 0.9, 8, 1, false, 0, Math.PI), chestMat); lid.rotation.z = Math.PI / 2; lid.position.set(0, 0.8, 0); group.add(lid);
+                        const goldMat = new THREE.MeshStandardMaterial({ color: 0xffdd33, emissive: 0xffcc00, emissiveIntensity: 1.0, metalness: 0.7, roughness: 0.2 });
+                        const gold = new THREE.Mesh(new THREE.SphereGeometry(0.25, 8, 8), goldMat); gold.position.set(0, 0.9, 0); group.add(gold);
+                        const glow = new THREE.PointLight(0xffcc00, 2.0, 20); glow.position.y = 1.0; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🗺️ 세 조각의 지도가 완벽하게 이어붙으며 표시된 자리에서 거대한 보물 상자가 솟아오른다!');
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그 완결] 세 조각으로 나뉜 보물지도 - 몰록 3000 획득!');
+                            addMoloch(3000);
+                            removeEasterEgg(egg);
+                        }, 2400);
+                    }
+                },
+                {
+                    // [NEW] 오크 토템 - 오크 군락 어딘가에 세워진 부족의 상징 (신규 기본 이스터에그, 삼족 시리즈용)
+                    id: 'orc_totem', x: 700, z: 950, radius: 6,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const poleMat = new THREE.MeshStandardMaterial({ color: 0x5a3a22, roughness: 0.85 });
+                        const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 2.6, 8), poleMat); pole.position.y = 1.3; group.add(pole);
+                        const skullMat = new THREE.MeshStandardMaterial({ color: 0xddddcc, roughness: 0.6 });
+                        const skull = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), skullMat); skull.position.y = 2.6; group.add(skull);
+                        const paintMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, emissive: 0xcc2222, emissiveIntensity: 0.6 });
+                        const paint = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.05, 6, 12), paintMat); paint.position.y = 1.8; paint.rotation.x = Math.PI / 2; group.add(paint);
+                        const glow = new THREE.PointLight(0xff6633, 1.0, 12); glow.position.y = 2.0; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🪶 부족의 문양이 새겨진 오래된 토템이다. 만지자 낮은 북소리가 울려 퍼진다.');
+                        setTimeout(() => showChat('???', '두둥- 두둥- 조상들의 함성이 바람을 타고 들려오는 듯하다.'), 1800);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그] 부족의 토템 - 몰록 800 + XP 300 획득!');
+                            addMoloch(800); gainXP(300);
+                            removeEasterEgg(egg);
+                        }, 3200);
+                    }
+                },
+                {
+                    // [NEW] 삼족의 증표 완결편 - 엘프의 성소/드워프의 금고/오크 토템을 모두 찾으면 반응 (종족 영입 스토리와 연계)
+                    id: 'three_tribes_proof', x: 100, z: 650, radius: 7,
+                    requires: ['elven_shrine', 'dwarven_vault', 'orc_totem'],
+                    hintText: '🔒 이 자리엔 세 종족의 기운이 뒤섞여 있다. 엘프, 드워프, 오크... 세 곳의 증표를 모두 찾아야 반응할 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const baseMat = new THREE.MeshStandardMaterial({ color: 0x444455, roughness: 0.7, metalness: 0.3 });
+                        const base = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 0.4, 3), baseMat); base.position.y = 0.2; group.add(base);
+                        const gemColors = [0x66ffcc, 0xffcc44, 0xff6633];
+                        gemColors.forEach((c, idx) => {
+                            const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0), new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.0 }));
+                            const ang = (idx / 3) * Math.PI * 2;
+                            gem.position.set(Math.cos(ang) * 0.9, 0.9, Math.sin(ang) * 0.9);
+                            group.add(gem);
+                        });
+                        const glow = new THREE.PointLight(0xaaccff, 2.2, 22); glow.position.y = 1.0; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🤝 세 개의 보석이 하나의 빛으로 어우러지며, 세 종족의 오랜 맹세가 되살아난다.');
+                        setTimeout(() => showChat('???', '"엘프도, 드워프도, 오크도... 결국 같은 하늘 아래 산다. 그대가 그 증거를 다시 찾아냈군."'), 2200);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그 완결] 세 종족의 오랜 맹세 - 몰록 1800 + XP 900 + 스탯 포인트 +3 획득!');
+                            addMoloch(1800); gainXP(900); gameState.statPoints = (gameState.statPoints || 0) + 3;
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 4000);
+                    }
+                },
+                {
+                    // [NEW] 힘의 결집 완결편 - 마녀의 가마솥/결투자의 무덤/폭풍의 제단/전설의 검을 모두 찾으면 반응
+                    id: 'power_convergence', x: -200, z: 400, radius: 7,
+                    requires: ['witch_cauldron', 'duelist_grave', 'storm_altar', 'sword_in_stone'],
+                    hintText: '🔒 이 자리에서 오래된 힘의 파편들이 서로를 부르는 듯 진동한다. 마녀, 검객, 폭풍, 전설의 검... 아직 다 모이지 않았다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const coreMat = new THREE.MeshStandardMaterial({ color: 0x220022, emissive: 0xff3399, emissiveIntensity: 1.3, metalness: 0.5, roughness: 0.3 });
+                        const core = new THREE.Mesh(new THREE.DodecahedronGeometry(0.9, 0), coreMat); core.position.y = 1.6; group.add(core);
+                        const swordMat = new THREE.MeshStandardMaterial({ color: 0xccccee, metalness: 0.8, roughness: 0.2 });
+                        for (let i = 0; i < 4; i++) {
+                            const sw = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.3, 0.03), swordMat);
+                            const ang = (i / 4) * Math.PI * 2;
+                            sw.position.set(Math.cos(ang) * 1.3, 1.6, Math.sin(ang) * 1.3);
+                            sw.rotation.y = ang; sw.rotation.z = 0.3;
+                            group.add(sw);
+                        }
+                        const glow = new THREE.PointLight(0xff3399, 2.8, 26); glow.position.y = 1.6; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '💥 네 가지 힘의 파편이 서로 공명하며 눈부신 빛의 소용돌이를 만들어낸다!');
+                        setTimeout(() => showChat('???', '"마녀의 비약, 검객의 검, 폭풍의 뇌전, 전설의 검... 이제 그 힘은 그대의 것이다."'), 2200);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그 완결] 네 전설의 공명 - 스탯 포인트 +5 + 몰록 1500 + XP 800 획득!');
+                            gameState.statPoints = (gameState.statPoints || 0) + 5; addMoloch(1500); gainXP(800);
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 4000);
+                    }
+                },
+                {
+                    // [NEW] 기억의 등불 완결편 - 타임캡슐/오르골/버려진 놀이공원을 모두 찾으면 반응
+                    id: 'memory_lantern', x: 0, z: 1050, radius: 6,
+                    requires: ['time_capsule', 'music_box', 'abandoned_carnival'],
+                    hintText: '🔒 이 자리에 놓인 등불이 희미하게 깜박인다. 아직 다 모이지 않은 기억이 남아있는 듯하다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const frameMat = new THREE.MeshStandardMaterial({ color: 0x442211, metalness: 0.3, roughness: 0.6 });
+                        const frame = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.6, 8, 1, true), frameMat); frame.position.y = 1.0; group.add(frame);
+                        const lightMat = new THREE.MeshStandardMaterial({ color: 0xffddaa, emissive: 0xffcc88, emissiveIntensity: 1.2, transparent: true, opacity: 0.85 });
+                        const light = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 10), lightMat); light.position.y = 1.0; group.add(light);
+                        const glow = new THREE.PointLight(0xffcc88, 2.0, 20); glow.position.y = 1.0; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🏮 세 개의 그리운 기억이 등불 안에서 하나로 어우러진다.');
+                        setTimeout(() => showChat('???', '"편지도, 노래도, 웃음소리도... 결국 모두 같은 그리움이었구나."'), 2200);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그 완결] 그리움이 모여 등불이 되다 - 체력/스태미나 전부 회복 + XP 700 + 몰록 800 획득!');
+                            gameState.health = getMaxHealth(); playerStamina = getMaxStamina();
+                            gainXP(700); addMoloch(800);
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 4000);
+                    }
+                },
+                {
+                    // [NEW] 수호의 빛 완결편 - 등대/라디오 타워/천사를 모두 찾으면 반응
+                    id: 'guardian_light', x: 450, z: 100, radius: 7,
+                    requires: ['lighthouse', 'radio_tower', 'angel'],
+                    hintText: '🔒 하늘 저편에서 세 갈래의 빛이 이 자리를 향해 모여드는 듯하다. 아직 다 모이지 않았다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const pillarMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffcc, emissiveIntensity: 0.8, transparent: true, opacity: 0.5 });
+                        const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 6, 12, 1, true), pillarMat); pillar.position.y = 3; group.add(pillar);
+                        const orb = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 12), new THREE.MeshStandardMaterial({ color: 0xffffee, emissive: 0xffffaa, emissiveIntensity: 1.5 })); orb.position.y = 6.1; group.add(orb);
+                        const glow = new THREE.PointLight(0xffffcc, 3.2, 32); glow.position.y = 5; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '💡 등대, 안테나, 천사의 빛이 하나로 모여 거대한 빛의 기둥이 세워진다.');
+                        setTimeout(() => showChat('???', '"길 잃은 자들을 인도하는 빛은... 결국 하나로 이어져 있었노라."'), 2200);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그 완결] 세 개의 빛이 하나로 - 몰록 1600 + XP 900 + 스탯 포인트 +3 획득!');
+                            addMoloch(1600); gainXP(900); gameState.statPoints = (gameState.statPoints || 0) + 3;
+                            updateUI();
+                            removeEasterEgg(egg);
+                        }, 4000);
+                    }
+                },
+                {
+                    // [NEW] 크립티드의 은신처 - 거대 발자국을 먼저 찾아야 반응하는 짝 이스터에그
+                    id: 'cryptid_lair', x: -250, z: 750, radius: 7,
+                    requires: ['giant_footprint'],
+                    hintText: '🔒 수풀 속에서 무언가 부스럭거리는 기척이 느껴지지만, 아직 경계를 풀지 않는 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const furMat = new THREE.MeshStandardMaterial({ color: 0x332211, roughness: 0.95 });
+                        const body = new THREE.Mesh(new THREE.SphereGeometry(0.9, 10, 10), furMat); body.scale.set(1, 0.8, 1.3); body.position.y = 1.0; group.add(body);
+                        const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffee00, emissive: 0xffee00, emissiveIntensity: 1.4 });
+                        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 6), eyeMat); eyeL.position.set(-0.25, 1.3, 0.75); group.add(eyeL);
+                        const eyeR = eyeL.clone(); eyeR.position.x = 0.25; group.add(eyeR);
+                        const glow = new THREE.PointLight(0xffee00, 0.8, 10); glow.position.y = 1.3; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '👣 발자국을 쫓아온 끝에, 수풀 속에서 노란 눈동자 두 개가 이쪽을 지켜보고 있다.');
+                        setTimeout(() => showChat('???', '크르릉... (거대한 생물이 잠시 그대를 바라보다, 이내 조용히 숲 속으로 사라진다.)'), 2000);
+                        setTimeout(() => {
+                            showChat('시스템', '✨ [이스터에그 완결] 전설의 생물과의 조우 - 몰록 900 + XP 500 획득!');
+                            addMoloch(900); gainXP(500);
+                            removeEasterEgg(egg);
+                        }, 3600);
+                    }
+                },
             ];
 
             eggDefs.forEach(def => {
                 if (triggeredEggs.has(def.id)) return; // 이미 발견한 에그는 재생성 안 함 (세이브 로드 시)
-                const groundY = getTerrainHeight(def.x, def.z);
+                // [NEW] 지정 좌표가 도시 바이옴이면 인근의 도시가 아닌 좌표로 대체 배치 (건물 속에 파묻히는 것 방지)
+                const spawnPos = findNonCitySpawnPos(def.x, def.z);
+                const groundY = getTerrainHeight(spawnPos.x, spawnPos.z);
                 const mesh = def.build();
-                mesh.position.x += def.x; mesh.position.z += def.z; mesh.position.y += groundY;
-                scene.add(mesh);
-                easterEggs.push({ id: def.id, x: def.x, z: def.z, radius: def.radius, mesh, onTrigger: def.onTrigger });
+                mesh.position.x += spawnPos.x; mesh.position.z += spawnPos.z; mesh.position.y += groundY;
+                // [FIX] 렉 원인 수정: 이전엔 scene.add()만 하고 청크 프리징 시스템에 등록하지 않아
+                // 이스터에그(대부분 PointLight 포함)가 플레이어 위치와 상관없이 게임 내내 계속 켜져 있었음.
+                // addDecoration()으로 등록하면 건물/나무처럼 플레이어가 멀어지면(약 600m+) 자동으로 꺼지고
+                // (조명 포함 - Object3D.visible=false면 렌더러가 자식까지 순회하지 않음) 가까워지면 다시 켜짐.
+                // 충돌 판정에는 처음부터 참여하지 않으므로(userData.type='decoration') 총알/플레이어 이동에는 영향 없음.
+                const chunkKey = getChunkKeyForPos(spawnPos.x, spawnPos.z);
+                addDecoration(chunkKey, mesh);
+                easterEggs.push({ id: def.id, x: spawnPos.x, z: spawnPos.z, radius: def.radius, mesh, chunkKey, onTrigger: def.onTrigger, requires: def.requires || null, hintText: def.hintText || null, lastHintTime: 0 });
             });
         }
 
@@ -4071,8 +5042,20 @@
             for (let i = easterEggs.length - 1; i >= 0; i--) {
                 const egg = easterEggs[i];
                 if (triggeredEggs.has(egg.id)) continue;
+                // [NEW] 몹(적)과 동일한 패턴: 플레이어 로딩구역(활성 청크) 밖에 있는 이스터에그는
+                // 근접 판정/부유 애니메이션 연산을 아예 스킵 (청크가 얼려있는 동안엔 어차피 안 보임)
+                if (egg.chunkKey && !activeChunkKeys.has(egg.chunkKey)) continue;
                 const dx = playerPos.x - egg.x, dz = playerPos.z - egg.z;
                 if (dx * dx + dz * dz < egg.radius * egg.radius) {
+                    // [NEW] 연관 이스터에그 시스템: requires에 지정된 다른 이스터에그를 먼저 찾아야만 발동
+                    if (egg.requires && !egg.requires.every(id => triggeredEggs.has(id))) {
+                        const now = Date.now();
+                        if (!egg.lastHintTime || now - egg.lastHintTime > 12000) {
+                            egg.lastHintTime = now;
+                            showChat('시스템', egg.hintText || '🔒 아직은 아무 반응이 없다... 다른 곳에서 먼저 찾아야 할 것이 있는 듯하다.');
+                        }
+                        continue; // 조건 미충족 시 소멸시키지 않고 계속 남겨둠
+                    }
                     triggeredEggs.add(egg.id);
                     egg.onTrigger(egg);
                     continue; // [FIX] removeEasterEgg가 배열을 바로 수정할 수 있으므로, 이번 프레임엔 부유 애니메이션을 건너뜀
@@ -4328,7 +5311,14 @@
             if (data._cityGroundY === undefined || data._cityGroundY === null || ((frameCount + data._groundThrottleOffset) % 5 === 0)) {
                 raycaster.far = 30; // [FIX] 층고가 높은 건물에서도 아래층 바닥까지 확실히 닿도록 레이 길이 확장(20→30)
                 raycaster.set(pos.clone().add(new THREE.Vector3(0, 3, 0)), new THREE.Vector3(0, -1, 0)); // [FIX] 레이 시작점을 1→3으로 높여서, 엔티티가 순간적으로 바닥면보다 살짝 아래에 있어도(넉백/점프 착지 등) 바닥을 놓치지 않도록 함
-                const hits = raycaster.intersectObjects(structures, true);
+                // [FIX-작은집렉] 기존엔 여기서 전역 structures 배열(맵 전체에서 지금까지 생성된 모든 건물의 바닥/지붕 - 청크가 unload돼도
+                // 절대 줄어들지 않음) 전체를 레이캐스트해서, 좀비/원거리적/보스가 건물(특히 도시에 압도적으로 많이 깔리는 작은집) 근처를
+                // "한 번이라도" 지나가면 그 이후 평생 5프레임마다 이 무거운 레이캐스트를 계속 돌게 됐음. 작은집은 큰 건물(고층)보다
+                // 훨씬 자주/넓게 깔리기 때문에, 정확히 이 경로를 타는 개체 수가 작은집 위주로 훨씬 많아져서 "작은집이 있으면 렉"으로 체감됨.
+                // 이미 다른 곳(차량/플레이어 시야/아이템 낙하)에서는 얼린(frozen) 구조물을 뺀 activeStructuresCache를 쓰고 있었는데
+                // 이 함수만 빠져 있었던 것 - 여기도 동일하게 activeStructuresCache로 맞춰서 비용을 "전체 구조물 수"에서
+                // "플레이어 근처의 살아있는 구조물 수"로 바운드함.
+                const hits = raycaster.intersectObjects(activeStructuresCache, true);
                 const validHit = hits.find(hit => {
                     if (hit.point.y >= pos.y + 4.0) return false; // [FIX] 위 시작점 확장(3)에 맞춰 유효 판정 범위도 함께 넓힘
                     const isStructure = hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor';
@@ -4363,7 +5353,7 @@
                         // 머리 위에 바닥판이 있으면 그 바로 아래로 끌어올려주고, 그마저 없으면 안전하게 현재 위치를 유지함.
                         raycaster.set(pos.clone().add(new THREE.Vector3(0, -0.5, 0)), new THREE.Vector3(0, 1, 0));
                         raycaster.far = 25;
-                        const upHits = raycaster.intersectObjects(structures, true);
+                        const upHits = raycaster.intersectObjects(activeStructuresCache, true); // [FIX-작은집렉] 위와 동일한 이유로 전역 structures 대신 activeStructuresCache 사용
                         const upValidHit = upHits.find(hit => {
                             const isStructure = hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor';
                             return isStructure;
@@ -4416,6 +5406,25 @@
             else { entity.position.x = oldPos.x; entity.position.z = oldPos.z; }
         }
 
+        // [NEW] "몹들은 화산을 무서워한다"는 설정으로, 일반 몹(좀비/원거리 적)이 화산 바이옴에 발을 들이지
+        // 못하게 막음 - 화산 경계를 마치 보이지 않는 벽처럼 취급함. 이미 용암에 면역인 드워프 마을 주민과
+        // 거대 좀비는 두려워할 이유가 없으므로 예외로 자유롭게 드나들 수 있음.
+        // 이미 화산 "안"에 있던 개체(보스가 소환한 하수인 등)는 갇히지 않도록 자유로운 이동/탈출을 허용하고,
+        // 화산 "밖"에 있던 개체가 화산으로 "들어가려는" 순간만 막음.
+        // [범위] 좀비(zombies 배열: 엘프/오크/드워프/트롤 포함)와 원거리 적(rangedEnemies)에만 호출됨.
+        // 보스/용병/기타 구조물은 이 함수를 호출하는 곳이 없어 전혀 영향받지 않음.
+        // [PERF] 실제로 이동하지 않았다면(벽에 완전히 막혀 제자리인 경우 등) 바이옴 계산(getBiome) 자체가
+        // 무의미하므로 곧바로 반환해 불필요한 노이즈 연산을 하지 않음.
+        function blockVolcanoEntry(entity, oldPos) {
+            const d = entity.userData;
+            if (d && (d.isDwarfVillager || d.isGiant)) return;
+            if (entity.position.x === oldPos.x && entity.position.z === oldPos.z) return; // 이동 없음 - 계산 불필요
+            if (getBiome(oldPos.x, oldPos.z) === 'volcano') return; // 원래도 화산 안에 있었다면 제한 없음
+            if (getBiome(entity.position.x, entity.position.z) === 'volcano') {
+                entity.position.x = oldPos.x; entity.position.z = oldPos.z;
+            }
+        }
+
         // [NEW] 용암이 지형지물처럼 위아래로 오르내리는 진폭/주기 (시각 + 데미지 판정 공용)
         const LAVA_BOB_AMPLITUDE = 1.4; // 위아래로 출렁이는 높이(m)
         const LAVA_BOB_SPEED = 0.35;    // 출렁이는 속도
@@ -4443,6 +5452,20 @@
             
             // 용암이 없는 곳은 지하 깊숙한 곳으로 처리
             return -1000;
+        }
+
+        // [PERF] 화산 렉 개선: 용암은 화산 바이옴에만 존재하는데, 기존엔 맵 전체의 모든 좀비/원거리 적이
+        // (화산 근처가 아니어도) 매번 getLavaHeight()를 호출했고, 그 안에서 getTerrainHeight()(화산/산 지형에서는
+        // 노이즈 연산이 최대 7회로 평지의 2배 이상)와 getBiome()을 매번 새로 계산하고 있었음.
+        // 바이옴을 가르는 노이즈는 청크 크기(100m)보다 훨씬 느리게 변하므로, 엔티티가 "화산 근처인지" 여부를
+        // 약 2초(120프레임)에 한 번만 다시 확인해도 안전함 - 화산이 아닌 곳(맵 대부분)의 엔티티는
+        // 무거운 getLavaHeight() 호출 자체를 아예 건너뛰게 되어 화산 지역 전반의 프레임 드랍이 크게 줄어듦.
+        function isEntityNearVolcano(pos, data) {
+            if (data._volcanoCheckFrame === undefined || frameCount - data._volcanoCheckFrame > 120) {
+                data._volcanoCheckFrame = frameCount;
+                data._isNearVolcano = getBiome(pos.x, pos.z) === 'volcano';
+            }
+            return data._isNearVolcano;
         }
 
         function spawnItem(data, x, y, z) {
@@ -4594,7 +5617,10 @@
             dummy.position.set(x, yBase + 3.75 * s, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(s, s, s); dummy.updateMatrix(); trunkMatrices.push(dummy.matrix.clone());
             const trunkProxy = new THREE.Mesh(sharedTrunkGeo, invisibleMat); trunkProxy.position.copy(dummy.position); trunkProxy.scale.set(s, s, s); trunkProxy.visible = true; trunkProxy.userData = { health: 20000, maxHealth: 20000, type: 'object', originalColor: sharedTrunkMat.color.clone() }; scene.add(trunkProxy); objects.push(trunkProxy); trunkProxies.push(trunkProxy);
             dummy.position.set(x, yBase + 10 * s, z); dummy.rotation.set(0, 0, 0); dummy.scale.set(s, s, s); dummy.updateMatrix(); leafMatrices.push(dummy.matrix.clone());
-            const leafProxy = new THREE.Mesh(sharedLeafGeo, invisibleMat); leafProxy.position.copy(dummy.position); leafProxy.scale.set(s, s, s); leafProxy.visible = true; leafProxy.userData = { health: 10000, maxHealth: 10000, type: 'object', originalColor: sharedLeafMat.color.clone() }; scene.add(leafProxy); objects.push(leafProxy); leafProxies.push(leafProxy);
+            // [FIX-나뭇잎투과] 이파리는 충돌 판정에서 완전히 제외 - 플레이어/좀비/차량 이동을 막지 않고, 총알 등 모든 투사체도 그대로 통과함.
+            // 기존엔 type: 'object'라서 줄기(trunk)와 똑같이 단단한 충돌체로 취급됐음. 이미 있던 'decoration' 타입(장식용, 충돌 없음 - 화톳불/텐트 등에서 사용 중)을
+            // 그대로 재사용: 플레이어 이동 충돌, 적/차량 벽 충돌, 총알 정적 오브젝트 충돌 검사가 전부 이 타입을 명시적으로 건너뛰도록 이미 구현돼 있음.
+            const leafProxy = new THREE.Mesh(sharedLeafGeo, invisibleMat); leafProxy.position.copy(dummy.position); leafProxy.scale.set(s, s, s); leafProxy.visible = true; leafProxy.userData = { health: 10000, maxHealth: 10000, type: 'decoration', originalColor: sharedLeafMat.color.clone() }; scene.add(leafProxy); objects.push(leafProxy); leafProxies.push(leafProxy);
         }
 
         function collectRockData(x, z, yBase, rockMatrices, rockProxies) {
@@ -4623,7 +5649,7 @@
         }
 
         function createChunkInstancedMeshes(matrices, geometry, material, proxies, chunkKey) {
-            if (matrices.length === 0) return; const mesh = new THREE.InstancedMesh(geometry, material, matrices.length); 
+            if (matrices.length === 0) return null; const mesh = new THREE.InstancedMesh(geometry, material, matrices.length); 
             // [수정] 모든 인스턴스 메쉬(건물, 나무, 돌 등) 그림자 제거
             mesh.castShadow = false; 
             
@@ -4635,6 +5661,7 @@
             mesh.instanceMatrix.needsUpdate = true;
             mesh.matrixAutoUpdate = false; mesh.updateMatrix(); // [NEW] 건물/나무/돌 배치 전체가 생성 후 절대 움직이지 않으므로 컨테이너 행렬도 고정
             scene.add(mesh);
+            return mesh; // [NEW] 나무/바위 언로드 시스템이 InstancedMesh 참조를 보관해뒀다가 나중에 scene.remove()할 수 있도록 반환
         }
 
         function generateChunk(chunkX, chunkZ) {
@@ -4721,14 +5748,24 @@
             createChunkInstancedMeshes(chunkCityGrayMatrices, sharedBoxGeo, sharedCityMatGray, chunkCityGrayProxies, chunkKey); createChunkInstancedMeshes(chunkCityBrownMatrices, sharedBoxGeo, sharedCityMatBrown, chunkCityBrownProxies, chunkKey); createChunkInstancedMeshes(chunkRoofMatrices, sharedConeGeo, sharedRoofMat, chunkRoofProxies, chunkKey);
             const chunkTrunkMatrices = []; const chunkLeafMatrices = []; const chunkRockMatrices = []; const chunkTrunkProxies = []; const chunkLeafProxies = []; const chunkRockProxies = [];
             if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? treeChance + (Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) - treeChance) * 0.25 : treeChance + (0.9 - treeChance) * 0.5; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
-            createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
+            const chunkTrunkMesh = createChunkInstancedMeshes(chunkTrunkMatrices, sharedTrunkGeo, sharedTrunkMat, chunkTrunkProxies, chunkKey); const chunkLeafMesh = createChunkInstancedMeshes(chunkLeafMatrices, sharedLeafGeo, sharedLeafMat, chunkLeafProxies, chunkKey); const chunkRockMesh = createChunkInstancedMeshes(chunkRockMatrices, sharedRockGeo, sharedRockMat, chunkRockProxies, chunkKey);
+            // [NEW] 나무/바위 언로드 시스템: 이 청크의 InstancedMesh/프록시/matrices 참조를 기록해둠.
+            // 플레이어가 아주 멀리(UNLOAD_CHUNK_DISTANCE) 벗어나면 unloadChunkDecorations()가 이 참조를 이용해
+            // scene/objects/chunkStaticObjects에서 완전히 제거하고, 되돌아오면 reloadChunkDecorations()가
+            // 캐시된 matrices로부터 동일한 자리에 재생성함.
+            chunkDecorationRefs.set(chunkKey, {
+                trunkMesh: chunkTrunkMesh, leafMesh: chunkLeafMesh, rockMesh: chunkRockMesh,
+                trunkProxies: chunkTrunkProxies, leafProxies: chunkLeafProxies, rockProxies: chunkRockProxies,
+                trunkMatrices: chunkTrunkMatrices, leafMatrices: chunkLeafMatrices, rockMatrices: chunkRockMatrices
+            });
             
             // [MODIFIED] 청크 면적이 1/4가 된 만큼(청크 개수는 4배), 적/보스 스폰 확률도 1/4로 낮춰 월드 전체 밀도를 동일하게 유지
             const enemySpawnThreshold = (centerBiome === 'city') ? 0.955 : 0.92;
             if (chunkRand() > enemySpawnThreshold) { 
                 const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); 
-                if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRangedEnemy(x, z, 500 + chunkRand() * 500, yBase); }
-                const zombieCount = (centerBiome === 'city') ? Math.floor(chunkRand() * 2) + 1 : Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano' || zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
+                // [수정] 몹은 화산을 무서워해 화산 바이옴엔 아예 스폰되지 않음 (기존엔 용암 위쪽 맨땅이면 스폰됐음)
+                if (centerBiome !== 'volcano') { createRangedEnemy(x, z, 500 + chunkRand() * 500, yBase); }
+                const zombieCount = (centerBiome === 'city') ? Math.floor(chunkRand() * 2) + 1 : Math.floor(chunkRand() * 3) + 1; for (let i = 0; i < zombieCount; i++) { const zx = x + (chunkRand() - 0.5) * 10; const zz = z + (chunkRand() - 0.5) * 10; const zy = getTerrainHeight(zx, zz); if (centerBiome !== 'volcano') { createZombie(zx, zz, 500, zy); } }
             }
 
             // [MODIFIED] 밤에는 청크가 로딩될 때 10% 확률로 좀비/적이 추가로 태어남 (안전구역 밖에서만, 화산 제외)
@@ -5031,9 +6068,15 @@
         function spawnSurvivorCompanion(pos) {
             spawnSurvivorCompanionMesh(pos);
             castleQuest.phase = 'started';
+            showCastleHint = false; // 이제 예고가 아니라 현실이 되었으므로 힌트는 내림
             setTimeout(() => showChat('생존자', '...헉, 헉... 살아있다니. 정말로... 그게 쓰러졌어...'), 1000);
             setTimeout(() => showChat('생존자', '몇 년 만입니다. 저게 쓰러지는 걸 두 눈으로 본 게. 카엘이라고 합니다. 예전엔... 그냥 떠돌이 상인이었죠.'), 3800);
-            setTimeout(() => showChat('생존자', '당신 같은 사람이 있다면, 어쩌면... 여기서 다시 시작할 수 있을지도 모르겠네요.'), 6600);
+            if (villageChainsAllDoneHinted) {
+                setTimeout(() => showChat('생존자', '다들 예감하고 있었죠... 저도, 상인도, 오크 부족도, 엘프도, 드워프도. 결국 이렇게 될 줄 알았습니다.'), 5400);
+                setTimeout(() => showChat('생존자', '당신 같은 사람이 있다면, 이제는... 정말로 다시 시작할 수 있을지도 모르겠네요.'), 6600);
+            } else {
+                setTimeout(() => showChat('생존자', '당신 같은 사람이 있다면, 어쩌면... 여기서 다시 시작할 수 있을지도 모르겠네요.'), 6600);
+            }
             setTimeout(() => showChat('생존자', '이 근처에 아직 무너지지 않은 곳이 하나 있습니다. 울슈쎈성. 폐허나 다름없지만, 성벽만 다시 세울 수 있다면.'), 9400);
             setTimeout(() => showChat('생존자', '혼자서는 어림도 없어요. 이 땅에 흩어진 종족들의 힘을 빌려야 합니다.'), 12200);
             setTimeout(() => showChat('생존자', '드워프는 대장장이 기술이 뛰어나니 용병들의 무기를 벼려줄 수 있을 거고, 엘프는 하늘의 뜻을 읽는 이들이니 운석으로 성벽을 세우는 법을 알 겁니다.'), 15000);
@@ -5432,7 +6475,12 @@
                 const dist = boss.position.distanceTo(playerPos);
                 if (isSafeZone && boss.userData.health >= boss.userData.maxHealth) return;
                 if (dist < minDst) { minDst = dist; activeBoss = boss; }
-                if (dist < boss.userData.detectionRange) {
+                // [NEW] 감지 범위 판정을 10프레임에 1번만 갱신하고, 그 사이엔 마지막 판정 결과를 그대로 재사용
+                if (boss.userData._detectionCheckFrame === undefined || frameCount - boss.userData._detectionCheckFrame >= 10) {
+                    boss.userData._detectionCheckFrame = frameCount;
+                    boss.userData._inDetectionRange = dist < boss.userData.detectionRange;
+                }
+                if (boss.userData._inDetectionRange) {
                     // [NEW] 경직(스태거) 상태: 공격/이동 없이 완전히 무방비 (플레이어에게 딜링 찬스)
                     if (now < boss.userData.staggeredUntil) { return; }
                     if (!boss.userData.combatStartTime) boss.userData.combatStartTime = now; // [NEW] 리쉬 복귀 후 재조우 시 분노 타이머 재시작
@@ -6122,8 +7170,9 @@
             // 플레이어로부터 200~500m 떨어진 무작위 방향의 위치를 고름 (너무 가깝지도 너무 멀지도 않게)
             const angle = Math.random() * Math.PI * 2;
             const dist = 200 + Math.random() * 300;
-            const ax = gameState.position.x + Math.cos(angle) * dist;
-            const az = gameState.position.z + Math.sin(angle) * dist;
+            // [NEW] 도시 바이옴에는 소환되지 않도록 회피 (건물 속에 제단이 파묻히는 것 방지)
+            const spawnPos = findNonCitySpawnPos(gameState.position.x + Math.cos(angle) * dist, gameState.position.z + Math.sin(angle) * dist);
+            const ax = spawnPos.x, az = spawnPos.z;
             const ay = getTerrainHeight(ax, az);
             gameState.altarPosition = { x: ax, y: ay, z: az };
             buildFinalBossAltarMesh(ax, ay, az);
@@ -6616,6 +7665,30 @@
             labelsEl.appendChild(label);
         }
 
+        // [NEW] 강도 vs 엘프/드워프 마을주민 전투 트리거 시스템
+        // 기존엔 모든 강도가 매 이동틱마다 전체 zombies 배열을 순회하며 근처 마을주민을 찾았음
+        // (강도 수 × 좀비 수 만큼 반복 - 강도/좀비가 많은 지역에서 낭비가 컸음).
+        // 이제는 반대로 "엘프 장로"가 200프레임(약 3~4초)에 한 번씩만 "근처에 강도가 있는지" 살펴보고,
+        // 발견하면 그 강도에게 표식(villagerSignal)을 남김. 강도는 이 표식을 받은 후부터만
+        // 마을주민을 공격 대상으로 찾기 시작함 - 즉 평소엔 탐색 자체가 전혀 일어나지 않음.
+        // 드워프 장로는 별도로 감시하지 않지만(요청대로 엘프 장로만 계산), 신호를 받은 강도는
+        // 엘프/드워프 마을주민 양쪽 모두를 공격 대상으로 삼을 수 있음(기존 공격 로직 그대로).
+        function updateElfElderWatch() {
+            if (frameCount % 200 !== 0) return; // 200프레임에 1번만 계산
+            for (let i = 0; i < npcs.length; i++) {
+                const elder = npcs[i];
+                if (!elder.userData.isElfElder) continue;
+                for (let j = 0; j < rangedEnemies.length; j++) {
+                    const bandit = rangedEnemies[j];
+                    const bd = bandit.userData;
+                    if (bd.type !== 'bandit' || bd.health <= 0 || bd.villagerSignal) continue;
+                    if (elder.position.distanceToSquared(bandit.position) < 3600) { // 60m 이내
+                        bd.villagerSignal = true; // 장로가 강도를 발견 - 그때부터 이 강도가 마을주민을 인식하고 공격함
+                    }
+                }
+            }
+        }
+
         function updateNPCs(delta) {
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             const labelsEl = document.getElementById('npc-labels');
@@ -6749,16 +7822,47 @@
                     scene.remove(enemy); zombies.splice(index, 1); continue;
                 }
 
-                // 비활성 청크의 몹: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존). 거대 좀비는 예외 - 안 보이는 곳에서도 계속 다가와야 하는 존재이므로 계속 활성 상태 유지
-                if (!isEnemyInActiveChunk(enemy) && !data.isGiant) {
+                // 비활성 청크의 몹: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존).
+                // [FIX] 거대 좀비는 유일하게 "너무 멀어져도 삭제되지 않는" 몹이라, 청크가 비활성일 때도 계속 살아있어야 함.
+                // 하지만 그렇다고 매 프레임 무거운 계산(지형 높이 등)을 계속할 필요는 없으므로, 청크가 비활성인 동안엔
+                // 위치만 그대로 유지("저장")하고 다른 모든 계산은 청크가 다시 로드될 때까지 완전히 멈춤.
+                // "청크가 다시 로드됐는지" 확인 자체도 매 프레임이 아니라 140프레임에 1번만 계산해 그 비용마저 아낌.
+                if (data.isGiant) {
+                    if (data.giantChunkCheckFrame === undefined || frameCount - data.giantChunkCheckFrame >= 140) {
+                        data.giantChunkCheckFrame = frameCount;
+                        data.giantChunkActive = isEnemyInActiveChunk(enemy);
+                    }
+                    if (!data.giantChunkActive) {
+                        enemy.visible = false; // 위치만 저장(유지) - 그 외 모든 계산 스킵
+                        continue;
+                    }
+                } else if (!isEnemyInActiveChunk(enemy)) {
                     enemy.visible = false;
                     continue;
                 }
 
                 enemy.visible = true;
 
-                const isClose = distToPlayerSq < 2500; 
-                const updateRate = isClose ? 1 : 3;
+                // [NEW] 용암 데미지: 좀비/트롤/오크/엘프는 용암에 닿으면 피해를 입음. 드워프/거대좀비는 용암에 면역.
+                // [PERF] isEntityNearVolcano로 화산 근처가 아닌 좀비는 무거운 getLavaHeight() 호출을 건너뜀 (화산 렉 개선)
+                // [FIX] AI 갱신 주기(1/3/5프레임)와 무관하게 정확히 10프레임마다 독립적으로 실행되도록 여기로 이동함.
+                // 기존엔 이 체크가 AI 스로틀 안쪽에 있어서, 두 주기의 최소공배수(예: 5프레임 스로틀 좀비는 20프레임)에서만
+                // 실제로 실행되어 의도한 주기보다 훨씬 드물게 스킵되곤 했음.
+                if (!data.isDwarfVillager && !data.isGiant && data.health > 0 && (frameCount + index) % 10 === 0 && isEntityNearVolcano(enemy.position, data)) {
+                    const mobLavaHeight = getLavaHeight(enemy.position.x, enemy.position.z);
+                    if (enemy.position.y - 0.9 <= mobLavaHeight + 0.2) {
+                        data.health -= 40 * (delta * 10); // 10프레임마다 체크하므로 누락분 보정
+                        if (data.health <= 0) { handleZombieDeath(enemy, index, false); continue; }
+                    }
+                }
+
+                // [PERF] 좀비 AI 업데이트 빈도를 거리별로 3단계로 나눔 (기존엔 근접/원거리 2단계뿐이었음)
+                // - 50m 이내: 매 프레임 (전투 정확도 유지, 변경 없음)
+                // - 50~100m: 3프레임마다 (기존과 동일)
+                // - 100m+: 5프레임마다 (기존 3 -> 5, 화면에 작게 보이거나 안 보이는 먼 좀비의 연산을 더 아낌)
+                const isClose = distToPlayerSq < 2500;
+                const isMid = distToPlayerSq < 10000;
+                const updateRate = isClose ? 1 : (isMid ? 3 : 5);
                 
                 if ((frameCount + index) % updateRate !== 0) {
                      if (data.isJumping) {
@@ -6812,6 +7916,7 @@
                         const oldPos = enemy.position.clone();
                         enemy.position.add(dir.multiplyScalar(data.speed * effectiveDelta));
                         resolveEnemyWallCollision(enemy, oldPos);
+                        blockVolcanoEntry(enemy, oldPos);
                         enemy.lookAt(CASTLE_CENTER.x, enemy.position.y, CASTLE_CENTER.z);
                     }
                     continue;
@@ -6819,15 +7924,6 @@
                 
                 // [FIX] 좀비 지면(건물 바닥 포함) 높이 계산 - 공용 함수 사용으로 통일 (기존엔 레이캐스트가 실패하면 높이 갱신을 아예 건너뛰어 붕 뜨거나 어긋나는 문제가 있었음)
                 const zombieGroundY = getStructureAwareGroundY(enemy.position, data);
-
-                // [NEW] 용암 데미지: 좀비/트롤/오크/엘프는 용암에 닿으면 피해를 입음. 드워프는 용암에 면역.
-                if (!data.isDwarfVillager && !data.isGiant && data.health > 0 && (frameCount + index) % 4 === 0) {
-                    const mobLavaHeight = getLavaHeight(enemy.position.x, enemy.position.z);
-                    if (enemy.position.y - 0.9 <= mobLavaHeight + 0.2) {
-                        data.health -= 40 * (delta * 4); // 4프레임마다 체크하므로 누락분 보정
-                        if (data.health <= 0) { handleZombieDeath(enemy, index, false); continue; }
-                    }
-                }
 
                 let heightOffset = 0.9; if (data.isTroll) heightOffset = 1.35; if (data.isOrc) heightOffset = data.name.includes('워치프') ? 1.35 : 1.0; if (data.isGiant) heightOffset = data.giantScale * 0.9;
                 // [수정] 건물 밖으로 나가서 바닥 높이가 갑자기 크게 낮아지면(2m 이상), 순간이동처럼 스냅하지 않고
@@ -6851,7 +7947,8 @@
 
                 let hasLineOfSight = false; 
                 if (!isSafeZone || isProvoked) { 
-                    if (data.state === 'chase' && (frameCount + index) % 10 !== 0) {
+                    // [요청] 시야 재확인 주기를 기존보다 2배 느리게(10프레임 -> 20프레임)
+                    if (data.state === 'chase' && (frameCount + index) % 20 !== 0) {
                         hasLineOfSight = true; 
                     } else {
                         hasLineOfSight = checkLineOfSight(enemy.position, currentTargetPos); 
@@ -6874,7 +7971,7 @@
                 // [NEW] 시야가 없으면(hasLineOfSight === false) 실시간 위치가 아니라 마지막으로 목격한 위치를 추적하게 함.
                 // 도중에 다시 시야에 들어오면(hasLineOfSight === true) 곧바로 실시간 위치를 다시 추적함.
                 const chaseTargetPos = hasLineOfSight ? currentTargetPos : (data.lastKnownPlayerPosition.lengthSq() > 0 ? data.lastKnownPlayerPosition : null);
-                switch (data.state) { case 'portal': handlePortalState(enemy, data, now, effectiveDelta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': { const oldPos = enemy.position.clone(); handleChaseState(enemy, data, now, effectiveDelta, hasLineOfSight, chaseTargetPos); resolveEnemyWallCollision(enemy, oldPos); break; } case 'stuck': handleStuckState(enemy, data, effectiveDelta); break; case 'wander': { const oldPos = enemy.position.clone(); handleWanderState(enemy, data, now, effectiveDelta); resolveEnemyWallCollision(enemy, oldPos); break; } case 'knockback': handleKnockbackState(enemy, data, effectiveDelta); break; }
+                switch (data.state) { case 'portal': handlePortalState(enemy, data, now, effectiveDelta); break; case 'attack': handleAttackState(enemy, data, now, currentTargetPos, isTargetPlayer); break; case 'chase': { const oldPos = enemy.position.clone(); handleChaseState(enemy, data, now, effectiveDelta, hasLineOfSight, chaseTargetPos); resolveEnemyWallCollision(enemy, oldPos); blockVolcanoEntry(enemy, oldPos); break; } case 'stuck': handleStuckState(enemy, data, effectiveDelta); break; case 'wander': { const oldPos = enemy.position.clone(); handleWanderState(enemy, data, now, effectiveDelta); resolveEnemyWallCollision(enemy, oldPos); blockVolcanoEntry(enemy, oldPos); break; } case 'knockback': handleKnockbackState(enemy, data, effectiveDelta); break; }
             } 
         }
 
@@ -6970,6 +8067,7 @@
             const oldPos = enemy.position.clone(); // [FIX] 막혔을 때 무작위로 튀는 동작도 벽 충돌 검사 적용 (건물 벽 통과 방지)
             enemy.position.add(direction.multiplyScalar(data.speed * delta));
             resolveEnemyWallCollision(enemy, oldPos);
+            blockVolcanoEntry(enemy, oldPos);
             data.stuckTime -= delta * 2000; 
             if (data.stuckTime <= 0) data.state = 'chase';
         }
@@ -6988,6 +8086,7 @@
                 const direction = portal.entrance.clone().sub(enemy.position).normalize(); direction.y = 0;
                 enemy.position.add(direction.multiplyScalar(data.speed * delta));
                 resolveEnemyWallCollision(enemy, oldPos);
+                blockVolcanoEntry(enemy, oldPos);
                 enemy.lookAt(portal.entrance.x, enemy.position.y, portal.entrance.z);
             }
         }
@@ -7113,9 +8212,18 @@
             const fireGeo = new THREE.CylinderGeometry(0.3, 1.0, 2.0, 6);
             const fireMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
             const fire = new THREE.Mesh(fireGeo, fireMat);
+            // [FIX] 모닥불(6각기둥) 원본 지오메트리로 충돌 판정을 하면 실제 보이는 불꽃보다 넓은 AABB로 막히는
+            // 문제가 있었음. 시각 모델은 충돌 판정에서 제외하고, 아래의 별도 충돌 전용 원기둥으로 대체함.
+            fire.userData.type = 'decoration';
             fire.position.set(centerX, centerY + 1.0, centerZ); scene.add(fire); registerChunkObject(chunkKey, fire);
             const innerFire = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.5, 1.5, 6), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+            innerFire.userData.type = 'decoration'; // [FIX] 위와 동일한 이유로 충돌 판정 제외
             innerFire.position.set(centerX, centerY + 0.75, centerZ); scene.add(innerFire); registerChunkObject(chunkKey, innerFire);
+            // [FIX] 모닥불 전용 충돌 오브젝트: 눈에 보이는 불꽃(반경 1.0m 이내) 안쪽에 완전히 포함되는
+            // 반경 0.85m 원기둥만 충돌 판정에 사용해, 보이지 않는 빈 공간에서 막히지 않도록 함
+            const fireCollider = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 2.0, 8), invisibleMat);
+            fireCollider.position.set(centerX, centerY + 1.0, centerZ); fireCollider.visible = true;
+            scene.add(fireCollider); registerChunkObject(chunkKey, fireCollider);
             const fireLight = new THREE.PointLight(0xff4400, 3, 70); fireLight.position.set(centerX, centerY + 3, centerZ); scene.add(fireLight); registerChunkObject(chunkKey, fireLight); // [FIX] 조명이 등록 안 되어 있어서 절대 안 꺼지던 부분 (렉의 주 원인)
             lavaLights.push({ light: fireLight, baseIntensity: 3 });
             const tentCount = 2 + Math.floor(randFunc() * 2);
@@ -7123,7 +8231,16 @@
                 const angle = (Math.PI * 2 * i) / tentCount; const dist = 8 + randFunc() * 5;
                 const tx = centerX + Math.cos(angle) * dist; const tz = centerZ + Math.sin(angle) * dist; const ty = getTerrainHeight(tx, tz);
                 const tent = new THREE.Mesh(new THREE.ConeGeometry(3, 3.5, 4), new THREE.MeshLambertMaterial({ color: 0x4a3000 }));
-                tent.rotation.y = Math.random() * Math.PI; tent.position.set(tx, ty + 1.75, tz); scene.add(tent); registerChunkObject(chunkKey, tent);
+                tent.rotation.y = Math.random() * Math.PI;
+                // [FIX] 텐트(4각뿔=다이아몬드 모양) 원본 지오메트리로 충돌하면 AABB가 실제 모양보다 훨씬 커서
+                // (대각선 방향 모서리 쪽 빈 공간의 절반 가까이가) 눈에 안 보이는데도 막히는 문제가 있었음.
+                // 시각 모델은 충돌 판정에서 제외하고, 텐트 안쪽에 항상 완전히 포함되는(반지름 2.1m, 회전과 무관하게
+                // 다이아몬드의 내접원 반지름 약 2.12m보다 살짝 작음) 원기둥 전용 충돌 오브젝트로 대체함.
+                tent.userData.type = 'decoration';
+                tent.position.set(tx, ty + 1.75, tz); scene.add(tent); registerChunkObject(chunkKey, tent);
+                const tentCollider = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.1, 3.5, 8), invisibleMat);
+                tentCollider.position.set(tx, ty + 1.75, tz); tentCollider.visible = true;
+                scene.add(tentCollider); registerChunkObject(chunkKey, tentCollider);
             }
             const banditCount = 2 + Math.floor(randFunc() * 3);
             for (let i = 0; i < banditCount; i++) {
@@ -7233,7 +8350,7 @@
                 if (i === 0) {
                     // 장로: 메인 퀘스트 NPC
                     elf.userData = {
-                        type: 'npc', name: '엘프 장로', isElf: true,
+                        type: 'npc', name: '엘프 장로', isElf: true, isElfElder: true, // [NEW] isElfElder: 강도 감시 신호 시스템에서 장로만 식별하기 위한 플래그
                         dialogue: ['우리 숲에 온 것을 환영하오.', '세계수가 오염의 기운을 느끼고 있소.', '강도들이 숲을 위협하고 있소. 도와주시겠소?', '세계수의 뿌리는 이 대륙 전체와 이어져 있다오.', '당신 같은 인간은 오랜만에 보오.'],
                         dialogueIndex: 0, spawnPosition: elf.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 1.0,
                         questGiven: false, health: 9999, maxHealth: 9999, originalColor: elfMat.color.clone()
@@ -7662,7 +8779,7 @@
         }
 
         // ── [NEW] 접근성 설정 (청크 로딩 반경 / 마우스 감도) ──────────────────────────────
-        const DEFAULT_ACCESSIBILITY_SETTINGS = { chunkPreloadRadius: 180, mouseSensitivity: 1.0 };
+        const DEFAULT_ACCESSIBILITY_SETTINGS = { chunkPreloadRadius: 100, mouseSensitivity: 1.0 };
         let accessibilitySettings = { ...DEFAULT_ACCESSIBILITY_SETTINGS };
         function loadAccessibilitySettings() {
             try {
@@ -8602,6 +9719,7 @@
             const oldPos = target.position.clone(); // [FIX] 넉백으로 벽을 뚫고 밀려나는 것 방지용 이동 전 위치 저장
             target.position.addScaledVector(dir, force);
             resolveEnemyWallCollision(target, oldPos); // [FIX] 넉백 이동도 벽 충돌 검사 적용
+            blockVolcanoEntry(target, oldPos);
             target.userData._cityGroundY = null; // [FIX] 넉백으로 위치가 크게 바뀌었으니 다음 프레임에 건물 바닥 높이를 즉시 재계산하도록 캐시 무효화 (건물 바닥 통과 방지)
         }
 
@@ -9136,10 +10254,22 @@
                         // 챕터2 메인스토리 처리 (상인이 챕터 NPC)
                         if (!handleStoryNpcTalk(data.name)) {
                             // 세부 퀘스트: 먼저 보고 가능한지 체크
-                            if (tryReportSideQuest('merchant', '상인')) return;
+                            const preMerQ = sideQuests.merchant;
+                            if (tryReportSideQuest('merchant', '상인')) {
+                                if (preMerQ && preMerQ.isChain) {
+                                    merchantChainIndex++;
+                                    if (merchantChainIndex >= MERCHANT_STORY_CHAIN.length) onVillageChainFinale('merchant');
+                                }
+                                return;
+                            }
                             // 진행 중인 퀘스트 있으면 힌트
                             if (sideQuests.merchant && sideQuests.merchant.status === 'active') {
                                 showChat('상인', getSquidCount(sideQuests.merchant) >= 0 ? sideQuests.merchant.dialogue_active(getSquidCount(sideQuests.merchant), sideQuests.merchant.target) : '');
+                                return;
+                            }
+                            // [NEW] 스토리 연쇄 퀘스트 우선 제공 (다가오는 어둠 전조)
+                            if (!sideQuests.merchant && merchantChainIndex < MERCHANT_STORY_CHAIN.length && mainStory.chapter > 1) {
+                                giveSideQuest('merchant', MERCHANT_STORY_CHAIN[merchantChainIndex], '상인');
                                 return;
                             }
                             // 30% 확률로 새 의뢰 제공, 아니면 상점
@@ -9218,10 +10348,22 @@
                         // 메인스토리
                         if (handleStoryNpcTalk('생존자')) return;
                         // 세부 퀘스트: 보고 가능한지 체크
-                        if (tryReportSideQuest('survivor', '생존자')) return;
+                        const preSurvQ = sideQuests.survivor;
+                        if (tryReportSideQuest('survivor', '생존자')) {
+                            if (preSurvQ && preSurvQ.isChain) {
+                                survivorChainIndex++;
+                                if (survivorChainIndex >= SURVIVOR_STORY_CHAIN.length) onVillageChainFinale('survivor');
+                            }
+                            return;
+                        }
                         if (sideQuests.survivor && sideQuests.survivor.status === 'active') {
                             const q = sideQuests.survivor;
                             showChat('생존자', typeof q.dialogue_active === 'function' ? q.dialogue_active(getSquidCount(q), q.target) : q.dialogue_active);
+                            return;
+                        }
+                        // [NEW] 스토리 연쇄 퀘스트 우선 제공 (다가오는 어둠 전조)
+                        if (!sideQuests.survivor && survivorChainIndex < SURVIVOR_STORY_CHAIN.length && mainStory.chapter > 1) {
+                            giveSideQuest('survivor', SURVIVOR_STORY_CHAIN[survivorChainIndex], '생존자');
                             return;
                         }
                         // 새 퀘스트 제공 (메인스토리 완료 후에만, 60% 확률)
@@ -9239,7 +10381,7 @@
                     if (data.name === '엘프 장로') {
                         if (handleRaceRecruitTalk('elf', '엘프 장로')) return;
                         if (handleStoryNpcTalk('엘프 장로')) return;
-                        if (tryReportSideQuest('elf', '엘프 장로')) { elfChainIndex++; return; }
+                        if (tryReportSideQuest('elf', '엘프 장로')) { elfChainIndex++; if (elfChainIndex >= ELF_QUEST_CHAIN.length) onVillageChainFinale('elf'); return; }
                         if (sideQuests.elf && sideQuests.elf.status === 'active') {
                             const q = sideQuests.elf;
                             showChat('엘프 장로', typeof q.dialogue_active === 'function' ? q.dialogue_active(getSquidCount(q), q.target) : q.dialogue_active);
@@ -9283,10 +10425,26 @@
                         return;
                     }
 
-                    // ── [NEW] 오크 사절 (울슈쎈성 오크 영입 퀘스트, 선택) ──
+                    // ── [NEW] 오크 사절 (오크 군락 스토리 연쇄 + 울슈쎈성 오크 영입 퀘스트) ──
                     if (data.name === '오크 사절') {
                         if (handleRaceRecruitTalk('orc', '오크 사절')) return;
                         if (castleQuest.recruits.orc) { showChat(data.name, '크르릉... 성은 잘 있나? 우리 부족의 이름에 먹칠하지 말아라, 인간.'); return; }
+                        // [NEW] 오크 군락 스토리 연쇄 퀘스트
+                        const preOrcQ = sideQuests.orc;
+                        if (tryReportSideQuest('orc', '오크 사절')) {
+                            orcChainIndex++;
+                            if (orcChainIndex >= ORC_QUEST_CHAIN.length) onVillageChainFinale('orc');
+                            return;
+                        }
+                        if (sideQuests.orc && sideQuests.orc.status === 'active') {
+                            const q = sideQuests.orc;
+                            showChat(data.name, typeof q.dialogue_active === 'function' ? q.dialogue_active(getSquidCount(q), q.target) : q.dialogue_active);
+                            return;
+                        }
+                        if (!sideQuests.orc && orcChainIndex < ORC_QUEST_CHAIN.length) {
+                            giveSideQuest('orc', ORC_QUEST_CHAIN[orcChainIndex], '오크 사절');
+                            return;
+                        }
                         showChat(data.name, data.dialogue[data.dialogueIndex % data.dialogue.length]);
                         data.dialogueIndex = (data.dialogueIndex + 1) % data.dialogue.length;
                         return;
@@ -9304,7 +10462,7 @@
                     if (data.name === '드워프 대장장이') {
                         if (handleRaceRecruitTalk('dwarf', '드워프 대장장이')) return;
                         if (handleStoryNpcTalk('드워프 대장장이')) return;
-                        if (tryReportSideQuest('dwarf', '드워프 대장장이')) { dwarfChainIndex++; return; }
+                        if (tryReportSideQuest('dwarf', '드워프 대장장이')) { dwarfChainIndex++; if (dwarfChainIndex >= DWARF_QUEST_CHAIN.length) onVillageChainFinale('dwarf'); return; }
                         if (sideQuests.dwarf && sideQuests.dwarf.status === 'active') {
                             const q = sideQuests.dwarf;
                             showChat('드워프 대장장이', typeof q.dialogue_active === 'function' ? q.dialogue_active(getSquidCount(q), q.target) : q.dialogue_active);
@@ -9375,6 +10533,12 @@
                 } else if (mainStory.phase === 'step_report') {
                     entries.push({ label: `${ch.label} ${stepNum}`, html: `<span style="color:#aaa;font-size:12px;">${ch.npc}</span>에게 보고하세요!`, ready: true });
                 }
+            }
+
+            // ── [NEW] 다가오는 어둠 전조 — 5곳(상인/생존자/오크/엘프/드워프) 스토리를
+            // 모두 마치면, 최종보스를 소환할 제단을 찾아 나서라는 힌트를 표시
+            if (showCastleHint && castleQuest.phase === 'inactive') {
+                entries.push({ label: '🧭 다가오는 어둠', html: '다들 같은 불길한 예감을 이야기했다... 심상치 않은 기운이 느껴지는 제단을 찾아 최종보스와 맞설 준비를 하자.', ready: true });
             }
 
             // ── 마을 습격 이벤트 표시 ──
@@ -9556,9 +10720,17 @@
             };
             return _uiEl;
         }
+        // [PERF] UI 값 캐시: 지난 프레임과 비교해서 실제로 값이 바뀐 항목만 DOM에 씀.
+        // updateUI()가 매 프레임(초당 최대 수십~백여 회) 호출되는데, 화면에 보이는 수치(체력/좌표 등)는
+        // 실제로는 대부분의 프레임에서 전혀 바뀌지 않는다(가만히 서 있거나 이동 없이 조준만 할 때 등).
+        // 값이 안 바뀌었는데도 style.width나 textContent를 계속 다시 쓰면 브라우저가 매번 레이아웃/스타일을
+        // 다시 계산할 여지가 생겨 불필요한 렉으로 이어짐. 그래서 이전 값을 _uiCache에 저장해두고,
+        // 이번에 계산한 값이 캐시와 "다를 때만" 실제 DOM에 쓰도록 바꿈. 화면에 보이는 결과(수치/퍼센트/문구)는
+        // 기존과 100% 동일하고, 단지 "안 바뀐 값을 또 쓰는" 낭비만 없앤 것.
+        let _uiCache = {};
         function updateUI() {
             const el = getUiEl();
-            el.molochCount.textContent = gameState.moloch;
+            if (_uiCache.moloch !== gameState.moloch) { el.molochCount.textContent = gameState.moloch; _uiCache.moloch = gameState.moloch; }
             const maxHealth = getMaxHealth();
             const maxStamina = getMaxStamina();
             // 구사일생 추적: 체력이 5% 이하로 떨어졌다가 그 이후 회복(또는 사망하지 않고 유지)되면 1회 카운트
@@ -9569,29 +10741,89 @@
                 gameState.wasNearDeath = false;
                 gameStats.deathCount++; checkAchievements();
             }
-            const healthPercent = (gameState.health / maxHealth) * 100; el.healthFill.style.width = `${healthPercent}%`; el.healthText.textContent = `${Math.floor(gameState.health)} / ${maxHealth}`;
-            const staminaPercent = (playerStamina / maxStamina) * 100; el.staminaFill.style.width = `${staminaPercent}%`; el.staminaText.textContent = `${Math.floor(playerStamina)} / ${maxStamina}`;
+            const healthFloor = Math.floor(gameState.health);
+            if (_uiCache.healthFloor !== healthFloor || _uiCache.maxHealth !== maxHealth) {
+                const healthPercent = (gameState.health / maxHealth) * 100;
+                el.healthFill.style.width = `${healthPercent}%`; el.healthText.textContent = `${healthFloor} / ${maxHealth}`;
+                _uiCache.healthFloor = healthFloor; _uiCache.maxHealth = maxHealth;
+            }
+            const staminaFloor = Math.floor(playerStamina);
+            if (_uiCache.staminaFloor !== staminaFloor || _uiCache.maxStamina !== maxStamina) {
+                const staminaPercent = (playerStamina / maxStamina) * 100;
+                el.staminaFill.style.width = `${staminaPercent}%`; el.staminaText.textContent = `${staminaFloor} / ${maxStamina}`;
+                _uiCache.staminaFloor = staminaFloor; _uiCache.maxStamina = maxStamina;
+            }
             if (gameState.hasCultivation) {
-                const manaPercent = (gameState.mana / gameState.maxMana) * 100;
-                el.manaFill.style.width = `${manaPercent}%`;
-                el.manaText.textContent = `${Math.floor(gameState.mana)} / ${gameState.maxMana}`;
+                const manaFloor = Math.floor(gameState.mana);
+                if (_uiCache.manaFloor !== manaFloor || _uiCache.maxMana !== gameState.maxMana) {
+                    const manaPercent = (gameState.mana / gameState.maxMana) * 100;
+                    el.manaFill.style.width = `${manaPercent}%`;
+                    el.manaText.textContent = `${manaFloor} / ${gameState.maxMana}`;
+                    _uiCache.manaFloor = manaFloor; _uiCache.maxMana = gameState.maxMana;
+                }
             }
             if (gameState.hasNaegong) {
-                const naegongPercent = (gameState.naegong / gameState.maxNaegong) * 100;
-                el.naegongFill.style.width = `${naegongPercent}%`;
-                el.naegongText.textContent = `${Math.floor(gameState.naegong)} / ${gameState.maxNaegong}`;
+                const naegongFloor = Math.floor(gameState.naegong);
+                if (_uiCache.naegongFloor !== naegongFloor || _uiCache.maxNaegong !== gameState.maxNaegong) {
+                    const naegongPercent = (gameState.naegong / gameState.maxNaegong) * 100;
+                    el.naegongFill.style.width = `${naegongPercent}%`;
+                    el.naegongText.textContent = `${naegongFloor} / ${gameState.maxNaegong}`;
+                    _uiCache.naegongFloor = naegongFloor; _uiCache.maxNaegong = gameState.maxNaegong;
+                }
             }
-            el.levelBadge.textContent = gameState.level;
-            const xpPercent = (gameState.xp / gameState.xpToNextLevel) * 100;
-            el.xpFill.style.width = `${xpPercent}%`;
-            if (playerStamina < JUMP_STAMINA_COST) { el.staminaFill.style.background = '#FF4136'; } else { el.staminaFill.style.background = '#2196F3'; }
-            if (playerInVehicle) { const vh = playerInVehicle.userData; const vhPercent = (vh.health / vh.maxHealth) * 100; el.vehicleHealthFill.style.width = `${vhPercent}%`; el.vehicleHealthText.textContent = `${Math.floor(vh.health)} / ${vh.maxHealth}`; el.vehicleStatusRow.style.display = 'flex'; } else { el.vehicleStatusRow.style.display = 'none'; }
-            const weaponObj = gameState.weapons[gameState.currentWeaponIndex]; if (weaponObj) { const weaponData = WEAPON_DATABASE[weaponObj.key]; const ammoType = weaponData.ammoType; const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0; el.currentAmmo.textContent = weaponObj.magAmmo; el.ammoTotal.textContent = ammoType ? inventoryAmmo : '—'; el.weaponName.textContent = weaponData.name; el.weaponAmmoType.textContent = ammoType ? `사용 탄약: ${ammoType}` : ''; if (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) { el.reloadPrompt.style.display = 'block'; } else { el.reloadPrompt.style.display = 'none'; } } else { el.currentAmmo.textContent = '-'; el.ammoTotal.textContent = '-'; el.weaponName.textContent = '맨손'; el.weaponAmmoType.textContent = ''; el.reloadPrompt.style.display = 'none'; }
-            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const displayX = Math.round(playerPos.x); const displayY = Math.round(playerPos.z);
-            // [PERF] innerHTML로 매 프레임 재파싱하던 걸 텍스트만 갱신하도록 교체 (표시 내용은 완전히 동일)
-            el.coordDisplay.childNodes[0].nodeValue = `X: ${displayX}, Y: ${displayY} `;
-            el.biomeDisplay.textContent = `[${getBiome(playerPos.x, playerPos.z).toUpperCase()}]`;
-            el.grenadeCount.textContent = gameState.grenadeCount || 0; // [NEW] 수류탄 개수 표시
+            if (_uiCache.level !== gameState.level) { el.levelBadge.textContent = gameState.level; _uiCache.level = gameState.level; }
+            if (_uiCache.xp !== gameState.xp || _uiCache.xpToNextLevel !== gameState.xpToNextLevel) {
+                const xpPercent = (gameState.xp / gameState.xpToNextLevel) * 100;
+                el.xpFill.style.width = `${xpPercent}%`;
+                _uiCache.xp = gameState.xp; _uiCache.xpToNextLevel = gameState.xpToNextLevel;
+            }
+            const staminaLow = playerStamina < JUMP_STAMINA_COST;
+            if (_uiCache.staminaLow !== staminaLow) {
+                el.staminaFill.style.background = staminaLow ? '#FF4136' : '#2196F3';
+                _uiCache.staminaLow = staminaLow;
+            }
+            if (playerInVehicle) {
+                const vh = playerInVehicle.userData;
+                const vhFloor = Math.floor(vh.health);
+                if (_uiCache.vehicleHealthFloor !== vhFloor || _uiCache.vehicleMaxHealth !== vh.maxHealth) {
+                    const vhPercent = (vh.health / vh.maxHealth) * 100;
+                    el.vehicleHealthFill.style.width = `${vhPercent}%`; el.vehicleHealthText.textContent = `${vhFloor} / ${vh.maxHealth}`;
+                    _uiCache.vehicleHealthFloor = vhFloor; _uiCache.vehicleMaxHealth = vh.maxHealth;
+                }
+                if (_uiCache.inVehicle !== true) { el.vehicleStatusRow.style.display = 'flex'; _uiCache.inVehicle = true; }
+            } else if (_uiCache.inVehicle !== false) {
+                el.vehicleStatusRow.style.display = 'none'; _uiCache.inVehicle = false;
+            }
+            const weaponObj = gameState.weapons[gameState.currentWeaponIndex];
+            if (weaponObj) {
+                const weaponData = WEAPON_DATABASE[weaponObj.key];
+                const ammoType = weaponData.ammoType;
+                const inventoryAmmo = ammoType ? (gameState.ammoInventory[ammoType] || 0) : 0;
+                // 무기 상태를 나타내는 값들을 하나의 문자열로 묶어서 한 번에 비교 (필드가 늘어도 비교 로직이 간단하게 유지됨)
+                const weaponSig = `${weaponObj.key}|${weaponObj.magAmmo}|${inventoryAmmo}|${gameState.isReloading}`;
+                if (_uiCache.weaponSig !== weaponSig) {
+                    el.currentAmmo.textContent = weaponObj.magAmmo;
+                    el.ammoTotal.textContent = ammoType ? inventoryAmmo : '—';
+                    el.weaponName.textContent = weaponData.name;
+                    el.weaponAmmoType.textContent = ammoType ? `사용 탄약: ${ammoType}` : '';
+                    el.reloadPrompt.style.display = (ammoType && weaponObj.magAmmo === 0 && inventoryAmmo > 0 && !gameState.isReloading) ? 'block' : 'none';
+                    _uiCache.weaponSig = weaponSig;
+                }
+            } else if (_uiCache.weaponSig !== 'none') {
+                el.currentAmmo.textContent = '-'; el.ammoTotal.textContent = '-'; el.weaponName.textContent = '맨손'; el.weaponAmmoType.textContent = ''; el.reloadPrompt.style.display = 'none';
+                _uiCache.weaponSig = 'none';
+            }
+            const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const displayX = Math.round(playerPos.x); const displayY = Math.round(playerPos.z);
+            if (_uiCache.coordX !== displayX || _uiCache.coordY !== displayY) {
+                // [PERF] innerHTML로 매 프레임 재파싱하던 걸 텍스트만 갱신하도록 교체 (표시 내용은 완전히 동일)
+                el.coordDisplay.childNodes[0].nodeValue = `X: ${displayX}, Y: ${displayY} `;
+                _uiCache.coordX = displayX; _uiCache.coordY = displayY;
+            }
+            const biome = getBiome(playerPos.x, playerPos.z).toUpperCase();
+            if (_uiCache.biome !== biome) { el.biomeDisplay.textContent = `[${biome}]`; _uiCache.biome = biome; }
+            const grenadeCount = gameState.grenadeCount || 0; // [NEW] 수류탄 개수 표시
+            if (_uiCache.grenadeCount !== grenadeCount) { el.grenadeCount.textContent = grenadeCount; _uiCache.grenadeCount = grenadeCount; }
         }
         
         // [OPTIMIZATION] 청크 기반 충돌 검사
@@ -9749,8 +10981,11 @@
             
             // [OPTIMIZATION] 플레이어 발밑 근처 정적 오브젝트만 검사
             const nearbyObjects = getNearbyStaticObjects(gameState.position);
-            // 지형(Plane)은 전역 objects에서 필터링하거나, 구조(structures) 배열 사용
-            const checkList = [...nearbyObjects, ...structures]; 
+            // [FIX-작은집렉] 기존엔 여기서 전역 structures(맵 전체에서 지금까지 생성된 모든 건물의 바닥/지붕 - 청크가 unload돼도
+            // 줄어들지 않고, 특히 도시에 압도적으로 흔한 작은집 지붕이 쌓일수록 커짐)를 매 프레임(스로틀 없음) 통째로
+            // 레이캐스트해서, 탐험한 도시가 커질수록 플레이어 지면 판정 자체가 느려졌음. 다른 곳(차량/시야/아이템낙하/적 지면판정)과
+            // 동일하게, 얼린(frozen, 플레이어에게서 먼) 구조물을 뺀 activeStructuresCache로 바꿔서 비용을 바운드함.
+            const checkList = [...nearbyObjects, ...activeStructuresCache]; 
 
             const intersects = raycaster.intersectObjects(checkList, true); let objectFloor = -Infinity; let onObject = false;
             const validGroundHitPlayer = intersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object' || hit.object.userData.type === 'lava');
@@ -9760,7 +10995,8 @@
             if (!gameState.onGround) { gameState.velocityY -= gravity; }
             
             // 용암 데미지 판정 (발바닥 기준)
-            const lavaHeight = getLavaHeight(gameState.position.x, gameState.position.z);
+            // [PERF] 화산 근처가 아니면 무거운 getLavaHeight() 호출을 건너뜀 (화산 렉 개선)
+            const lavaHeight = isEntityNearVolcano(gameState.position, gameState) ? getLavaHeight(gameState.position.x, gameState.position.z) : -1000;
             const inLava = gameState.position.y - 1.8 <= lavaHeight + 0.2;
             const lavaStatusEl = document.getElementById('lava-status');
             if (inLava) { 
@@ -9911,7 +11147,8 @@
                 } else { raycaster.set(vehicleA.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const vehicleIntersects = raycaster.intersectObjects(activeStructuresCache, true); let vehicleGroundY = vehicleA.position.y; if (vehicleIntersects.length > 0) { const firstHit = vehicleIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object' || hit.object.userData.type === 'lava'); if(firstHit) vehicleGroundY = firstHit.point.y; } vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, vehicleGroundY + 0.4, 0.1); }
                 
                 // [MODIFIED] 차량 용암 데미지 로직 변경: 높이 비교 방식
-                const vLavaHeight = getLavaHeight(vehicleA.position.x, vehicleA.position.z);
+                // [PERF] 화산 근처가 아니면 무거운 getLavaHeight() 호출을 건너뜀 (화산 렉 개선)
+                const vLavaHeight = isEntityNearVolcano(vehicleA.position, vehicleA.userData) ? getLavaHeight(vehicleA.position.x, vehicleA.position.z) : -1000;
                 // 차량 바퀴 높이 등을 고려하여 +0.5 정도 여유를 둠
                 if (vehicleA.position.y < vLavaHeight + 0.5) {
                      const damage = 100 * delta; 
@@ -10665,22 +11902,41 @@
             rangedEnemies.forEach((enemy, index) => {
                 if (enemy.userData.health <= 0) return;
                 const distSq = enemy.position.distanceToSquared(gameState.position);
+                const data = enemy.userData;
 
                 // 비활성 청크의 원거리 적/강도: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존, 디스폰 아님)
                 if (!isEnemyInActiveChunk(enemy)) {
                     enemy.visible = false;
                     return;
                 }
-                
+
+                // [NEW] 용암 데미지: 일반 원거리 적과 강도는 용암에 닿으면 피해를 입음
+                // [PERF] isEntityNearVolcano로 화산 근처가 아닌 적은 무거운 getLavaHeight() 호출을 건너뜀 (화산 렉 개선)
+                // [FIX] 거리별 AI 스로틀(2/5/10/15프레임)과 무관하게 정확히 10프레임마다 독립적으로 실행되도록 여기로 이동함.
+                // 기존엔 이 체크가 스로틀 리턴들 뒤에 있어서, 먼 적일수록 두 주기의 최소공배수에서만 실제로 실행되어 스킵되곤 했음.
+                if ((frameCount + index) % 10 === 0 && isEntityNearVolcano(enemy.position, data)) {
+                    const reLavaHeight = getLavaHeight(enemy.position.x, enemy.position.z);
+                    if (enemy.position.y - 1.25 <= reLavaHeight + 0.2) {
+                        data.health -= 40 * delta * 10; // 10프레임마다 체크하므로 누락분 보정 (40/s 기준)
+                        if (data.health <= 0) {
+                            if (data.isMutant) dropMutantLoot(enemy.position);
+                            createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
+                            return;
+                        }
+                    }
+                }
+
                 // [OPTIMIZATION] AI 쓰로틀링 강화 (먼 적일수록 업데이트 덜 함)
-                if (distSq > 40000 && (frameCount + index) % 8 !== 0) return; // 200m+ 
-                if (distSq > 10000 && (frameCount + index) % 4 !== 0) return; // 100m+
-                if (distSq > 2500 && (frameCount + index) % 2 !== 0) return;  // 50m+
+                // [PERF] 50m 이내(근접전)는 그대로 유지하고, 그보다 먼 구간만 한 단계씩 더 완화함
+                if (distSq > 90000 && (frameCount + index) % 15 !== 0) return; // 300m+ (신규 최상위 구간)
+                if (distSq > 40000 && (frameCount + index) % 10 !== 0) return; // 200m+ (기존 8 -> 10)
+                if (distSq > 10000 && (frameCount + index) % 5 !== 0) return; // 100m+ (기존 4 -> 5)
+                if (distSq > 2500 && (frameCount + index) % 2 !== 0) return;  // 50m+ (근접전 정확도 유지, 변경 없음)
 
                 if (distSq > ACTIVE_RADIUS_SQ) { enemy.visible = false; return; }
                 enemy.visible = true;
 
-                const data = enemy.userData; const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
+                const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
                 
                 // [FIX] 원거리 적 스폰 보호 적용
                 // 아직 안전 구역(hasLeftSafeZone === 0)이고, 적이 화난 상태('chase')가 아니면 무시
@@ -10694,27 +11950,14 @@
                 if (!data.isJumping && (groundY + 1.25) < enemy.position.y - 2) { data.isJumping = true; data.velocityY = 0; }
                 if (data.isJumping) { enemy.position.y += data.velocityY; data.velocityY -= 0.03; if (enemy.position.y <= groundY + 1.25) { enemy.position.y = groundY + 1.25; data.isJumping = false; data.velocityY = 0; } } else { enemy.position.y = groundY + 1.25; }
 
-                // [NEW] 용암 데미지: 일반 원거리 적과 강도는 용암에 닿으면 피해를 입음
-                if ((frameCount + index) % 4 === 0) {
-                    const reLavaHeight = getLavaHeight(enemy.position.x, enemy.position.z);
-                    if (enemy.position.y - 1.25 <= reLavaHeight + 0.2) {
-                        data.health -= 10.7; // 약 4프레임(≈0.267초)분 누적 데미지 (40/s 기준)
-                        if (data.health <= 0) {
-                            if (data.isMutant) dropMutantLoot(enemy.position);
-                            createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1);
-                            return;
-                        }
-                    }
-                }
-
-
                 if (now - data.lastMoveTime > 100) {
                     const dist = Math.sqrt(distSq);
 
                     // [NEW] 시야 확인: 실제로 플레이어가 보일 때만 정확한 위치를 갱신하고, 안 보이면 마지막으로 목격한 위치로 이동
                     let hasLOS = true;
                     if (dist <= Math.max(data.detectionRange, data.attackRange) + 5) {
-                        if (data.state === 'chase' && (frameCount + index) % 10 !== 0) { hasLOS = true; }
+                        // [요청] 시야 재확인 주기를 기존보다 2배 느리게(10프레임 -> 20프레임)
+                        if (data.state === 'chase' && (frameCount + index) % 20 !== 0) { hasLOS = true; }
                         else { hasLOS = checkLineOfSight(enemy.position, playerPos); }
                     }
                     if (hasLOS) { data.lastKnownPlayerPosition.copy(playerPos); }
@@ -10772,43 +12015,48 @@
                             else if (data.tactic === 'retreat') showChat(data.name, ['물러라!', '포위해!'][Math.floor(Math.random()*2)]);
                         }
                         
-                        // 강도가 엘프/드워프 마을주민(공격 가능 개체) 근처에 있으면 실제로 공격
-                        let closestVillagerDist = Infinity, closestVillager = null;
-                        for (const z of zombies) {
-                            if (z.userData.health <= 0) continue;
-                            if (!z.userData.isElfVillager && !z.userData.isDwarfVillager) continue;
-                            const d = enemy.position.distanceTo(z.position);
-                            if (d < closestVillagerDist) { closestVillagerDist = d; closestVillager = z; }
-                        }
-                        if (closestVillager && closestVillagerDist < 35) {
-                            data.customTarget = closestVillager;
-                            // 근접 시 실제 피해 + 마을주민 반격 활성화
-                            if (closestVillagerDist < 2.5 && now - (data.lastNPCAttackTime||0) > 1200) {
-                                data.lastNPCAttackTime = now;
-                                closestVillager.userData.health -= 60;
-                                closestVillager.userData.isProvoked = true;
-                                closestVillager.userData.customTarget = enemy; // 마을주민이 강도를 반격
-                                createDebrisEffect(closestVillager.position, closestVillager.userData.originalColor, 5);
-                                if (closestVillager.userData.health <= 0) {
-                                    showChat('시스템', `💀 강도가 ${closestVillager.userData.name}을(를) 살해했습니다!`);
-                                    scene.remove(closestVillager); zombies.splice(zombies.indexOf(closestVillager), 1);
-                                } else if (Math.random() < 0.3) {
-                                    showChat(closestVillager.userData.name, '감히 이 도적놈이!');
-                                }
+                        // [FIX] 강도가 엘프/드워프 마을주민을 공격하는 건 이제 "엘프 장로의 신호"를 받은 강도만 함
+                        // (신호 발신 자체는 updateElfElderWatch()에서 엘프 장로가 200프레임에 1번만 계산함)
+                        // 신호를 못 받은 강도는 아래의 무거운 탐색(좀비 배열 전체 순회) 자체를 완전히 건너뜀
+                        if (data.villagerSignal) {
+                            // 강도가 엘프/드워프 마을주민(공격 가능 개체) 근처에 있으면 실제로 공격
+                            let closestVillagerDist = Infinity, closestVillager = null;
+                            for (const z of zombies) {
+                                if (z.userData.health <= 0) continue;
+                                if (!z.userData.isElfVillager && !z.userData.isDwarfVillager) continue;
+                                const d = enemy.position.distanceTo(z.position);
+                                if (d < closestVillagerDist) { closestVillagerDist = d; closestVillager = z; }
                             }
-                        } else {
-                            data.customTarget = null;
-                        }
-                        
-                        // 강도가 엘프/드워프 상호작용 NPC(장로/대장장이) 근처에 있을 때 경고 대사
-                        let closestNPCDist = Infinity, closestNPC = null;
-                        for (const npc of npcs) {
-                            if (!npc.userData.isElf && !npc.userData.isDwarf) continue;
-                            const d = enemy.position.distanceTo(npc.position);
-                            if (d < closestNPCDist) { closestNPCDist = d; closestNPC = npc; }
-                        }
-                        if (closestNPC && closestNPCDist < 15 && Math.random() < 0.002) {
-                            showChat(closestNPC.userData.name, '이 악당들! 우리 마을에서 나가라!');
+                            if (closestVillager && closestVillagerDist < 35) {
+                                data.customTarget = closestVillager;
+                                // 근접 시 실제 피해 + 마을주민 반격 활성화
+                                if (closestVillagerDist < 2.5 && now - (data.lastNPCAttackTime||0) > 1200) {
+                                    data.lastNPCAttackTime = now;
+                                    closestVillager.userData.health -= 60;
+                                    closestVillager.userData.isProvoked = true;
+                                    closestVillager.userData.customTarget = enemy; // 마을주민이 강도를 반격
+                                    createDebrisEffect(closestVillager.position, closestVillager.userData.originalColor, 5);
+                                    if (closestVillager.userData.health <= 0) {
+                                        showChat('시스템', `💀 강도가 ${closestVillager.userData.name}을(를) 살해했습니다!`);
+                                        scene.remove(closestVillager); zombies.splice(zombies.indexOf(closestVillager), 1);
+                                    } else if (Math.random() < 0.3) {
+                                        showChat(closestVillager.userData.name, '감히 이 도적놈이!');
+                                    }
+                                }
+                            } else {
+                                data.customTarget = null;
+                            }
+                            
+                            // 강도가 엘프/드워프 상호작용 NPC(장로/대장장이) 근처에 있을 때 경고 대사
+                            let closestNPCDist = Infinity, closestNPC = null;
+                            for (const npc of npcs) {
+                                if (!npc.userData.isElf && !npc.userData.isDwarf) continue;
+                                const d = enemy.position.distanceTo(npc.position);
+                                if (d < closestNPCDist) { closestNPCDist = d; closestNPC = npc; }
+                            }
+                            if (closestNPC && closestNPCDist < 15 && Math.random() < 0.002) {
+                                showChat(closestNPC.userData.name, '이 악당들! 우리 마을에서 나가라!');
+                            }
                         }
                         
                         // 마을주민을 공격 대상으로 삼았으면 그쪽으로 이동, 아니면 플레이어 추격
@@ -10835,16 +12083,19 @@
                             enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * speedMult));
                         }
                         resolveEnemyWallCollision(enemy, reOldPos); // [NEW] 건물 벽 통과 방지
+                        blockVolcanoEntry(enemy, reOldPos);
                     } else {
                         const reOldPos2 = enemy.position.clone(); // [NEW] 벽 충돌 처리를 위한 이동 전 위치 저장
                         if (dist <= data.attackRange) { if (hasLOS && now - data.lastShotTime > data.fireRate) { data.lastShotTime = now; rangedEnemyShoot(enemy); } else if (!hasLOS) { const dir = chaseTarget.clone().sub(enemy.position).normalize(); dir.y = 0; enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * 0.5)); } } else if (dist <= data.detectionRange && !reBlockedByHeight) { const dir = chaseTarget.clone().sub(enemy.position).normalize(); dir.y = 0; enemy.position.add(dir.multiplyScalar(data.speed * getSlowMultiplier(data) * delta * 0.5)); }
                         resolveEnemyWallCollision(enemy, reOldPos2); // [NEW] 건물 벽 통과 방지
+                        blockVolcanoEntry(enemy, reOldPos2);
                     }
                     data.lastMoveTime = now;
                 }
             });
 
             updateVehicles(delta); updateItems(delta); updateNPCs(delta); updateFlares(delta); updateDebris(delta);
+            updateElfElderWatch(); // [NEW] 엘프 장로가 200프레임마다 근처 강도를 감시해 신호를 보냄
             updateEasterEggs(playerInVehicle ? playerInVehicle.position : gameState.position); // [FIX] 차량 탑승 중에는 gameState.position이 갱신되지 않아 근접 판정이 전혀 안 되던 문제 수정
             updateBosses(delta, now, gameState.position); updateHazardZones(now);
             updateBurningEntities(now); // [NEW] '화염의' 인첸트로 인한 화상 지속 피해 처리
