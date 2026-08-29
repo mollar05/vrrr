@@ -419,9 +419,14 @@
         <div id="accessibility-modal">
             <h2>♿ 접근성 설정</h2>
             <div class="accessibility-row">
-                <div class="accessibility-label">청크 로딩 반경 <span id="accessibility-chunk-radius-val">100m</span></div>
+                <div class="accessibility-label">청크 로딩 반경 <span id="accessibility-chunk-radius-val">200m</span></div>
                 <div style="font-size:11px; color:#888; margin-bottom:4px;">값이 클수록 더 멀리까지 보이지만 렉이 심해질 수 있습니다.</div>
-                <input type="range" id="accessibility-chunk-radius" min="80" max="400" step="20" value="100">
+                <input type="range" id="accessibility-chunk-radius" min="80" max="800" step="20" value="200">
+            </div>
+            <div class="accessibility-row">
+                <div class="accessibility-label">시야 범위 <span id="accessibility-view-distance-val">200m</span></div>
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">안개가 시작되는 거리입니다. 값이 클수록 더 멀리까지 선명하게 보입니다.</div>
+                <input type="range" id="accessibility-view-distance" min="100" max="500" step="20" value="200">
             </div>
             <div class="accessibility-row">
                 <div class="accessibility-label">마우스 감도 <span id="accessibility-mouse-sensitivity-val">1.00x</span></div>
@@ -634,6 +639,13 @@
         let sharedLeafGeo, sharedLeafMat;
         let sharedRockGeo, sharedRockMat;
         let sharedBulletGeo, sharedBulletMat;
+        // [NEW] 아이템 드랍 공유 지오메트리/머티리얼 캐시 - 스폰마다 new Geometry/Material을 새로 만드는 대신 재사용
+        // (이름/색상별로 1개씩만 생성, 위치·회전 등 개별 특성은 그대로 각 메쉬 인스턴스별로 유지됨 - 시각적으로는 기존과 100% 동일)
+        let sharedItemGeoCache = new Map(); // key: "탄약" 등 아이템 이름 → THREE.BufferGeometry
+        let sharedItemMatCache = new Map(); // key: 색상(hex 문자열) → THREE.MeshStandardMaterial
+        let sharedArmorGeoCache = new Map(); // key: 부위(slot) → THREE.BufferGeometry
+        let sharedArmorMatCache = new Map(); // key: tierId → THREE.MeshStandardMaterial
+        let sharedItemBasicMatCache = new Map(); // key: 색상(hex) → THREE.MeshBasicMaterial (의료키트 십자가처럼 조명 영향 안 받는 재질용 - 기존 재질 종류 그대로 유지하기 위해 표준(Standard) 캐시와 분리)
         
         // [NEW] 오크 군락 최적화를 위한 공유 메테리얼 및 지오메트리
         let sharedOrcWallMat, sharedOrcLogMat, sharedOrcRoofMat1, sharedOrcRoofMat2, sharedOrcTuskMat, sharedOrcBannerMat;
@@ -707,6 +719,16 @@
         const CHUNK_SIZE = 100; // [MODIFIED] 200 -> 100: 더 작은 단위로 쪼개서 필요한 범위만 로딩되도록 함
         const RENDER_DISTANCE = 1; // 최적화: 기존 유지 (이미 1)
         const generatedChunks = new Set();
+        let worldChunksPending = false; // [NEW] 이번 프레임 기준으로 아직 다 못 만든 청크가 남아있는지 (프레임당 생성 개수 제한으로 인해)
+        // [FIX-숲렉] getNearbyStaticObjects()가 매번 3x3청크를 spread(...)로 새 배열에 합치는 비용이 큼(숲은 청크당 20~30개
+        // → 최대 270개, 게다가 이 함수는 좀비/적 벽 충돌 판정에서 "가까운(50m 이내) 좀비마다 매 프레임" 호출됨 - 숲에서
+        // 좀비 여러 마리와 붙어 싸우면 그만큼 배로 늘어남). 같은 3x3 청크 조합은 결과가 항상 같으므로(청크 내용이 실제로
+        // 바뀌는 건 청크 생성/언로드/리로드 때뿐), 중심 청크 키로 결과를 캐싱해서 같은 프레임 안에서(혹은 청크 내용이 안 바뀌는 한)
+        // 여러 번 다시 만들 필요가 없게 함. nearbyStaticObjectsCacheVersion은 청크 구성이 실제로 바뀌는 지점(청크 생성/
+        // 지형·나무바위 언로드·리로드)에서만 올라가고, freeze/unfreeze(가시성만 바뀜, 구성은 안 바뀜)에서는 안 올라감.
+        let nearbyStaticObjectsCache = new Map(); // key: "chunkX,chunkZ" (query 중심) -> array
+        let nearbyStaticObjectsCacheVersion = 0;
+        let nearbyStaticObjectsCacheStamp = -1; // 마지막으로 캐시를 통째로 비운 시점의 버전
         
         let currentPlayerChunkKey = "";
         let exploredChunkKeys = new Set();
@@ -1934,10 +1956,11 @@
         }
 
         // [NEW] 원거리 적/강도 처치 시 호출하는 공용 방어구 드랍 함수
-        function tryDropArmor(position, chance, useBossRoll) {
+        // despawnable: true면 300틱 후 자동 소멸 (보스를 제외한 몹 처치 전용으로 호출부에서 넘김)
+        function tryDropArmor(position, chance, useBossRoll, despawnable) {
             if (Math.random() < chance) {
                 const piece = generateArmorPiece(null, useBossRoll ? rollBossArmorTier() : null);
-                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, position.x + 0.3, position.y, position.z - 0.3);
+                spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, position.x + 0.3, position.y, position.z - 0.3, despawnable);
             }
         }
 
@@ -3290,7 +3313,10 @@
                 worldSeed = pendingSeed || ('world_' + Date.now() + '_' + Math.floor(Math.random() * 1000000));
                 simplex = new SimplexNoise(worldSeed); 
                 sharedTrunkGeo = new THREE.CylinderGeometry(0.5, 0.8, 8.5, 8); sharedTrunkMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
-                sharedLeafGeo = new THREE.SphereGeometry(4, 8, 6); sharedLeafMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+                // [FIX-숲렉] 이파리 구체 세그먼트를 8x6 → 6x4로 낮춤(삼각형 수 약 50% 감소). sharedLeafGeo는 숲의 모든 나무가
+                // 공유하는 지오메트리라, 여기 딱 한 번만 낮춰도 화면에 보이는 모든 이파리의 GPU 부하가 그만큼 줄어듦.
+                // 이파리는 크기가 작고 뭉쳐서 보이는 형태라 이 정도 단순화는 육안으로 거의 티가 안 남.
+                sharedLeafGeo = new THREE.SphereGeometry(4, 6, 4); sharedLeafMat = new THREE.MeshLambertMaterial({ color: 0x228B22 });
                 sharedRockGeo = new THREE.DodecahedronGeometry(1); sharedRockMat = new THREE.MeshLambertMaterial({ color: 0x808080 });
                 sharedBoxGeo = new THREE.BoxGeometry(1, 1, 1); sharedConeGeo = new THREE.ConeGeometry(8, 3, 4); 
                 sharedCityMatGray = new THREE.MeshLambertMaterial({ color: 0xcccccc }); sharedCityMatBrown = new THREE.MeshLambertMaterial({ color: 0x8B4513 }); sharedRoofMat = new THREE.MeshLambertMaterial({ color: 0x654321 });
@@ -3362,7 +3388,10 @@
             switchWeapon(gameState.currentWeaponIndex || 0); 
             syncStatSkillTiers(); // [NEW] 저장된(혹은 초기) 스탯 기준으로 히든 스킬 티어를 조용히 동기화
             loadKeyBindings(); // [NEW] 이전에 저장해둔 스킬 키 설정 불러오기 (없으면 기본값)
-            loadAccessibilitySettings(); // [NEW] 이전에 저장해둔 접근성 설정(청크 로딩 반경/마우스 감도) 불러오기
+            loadAccessibilitySettings(); // [NEW] 이전에 저장해둔 접근성 설정(청크 로딩 반경/시야 범위/마우스 감도) 불러오기
+            // [FIX] createScene()이 이 호출보다 먼저 실행돼서 scene.fog가 기본 시야값으로 이미 만들어진 뒤이므로,
+            // 저장된 시야 범위 설정을 여기서 다시 한번 명시적으로 적용해줌 (안 하면 저장된 커스텀 값이 게임 시작 시 무시됨)
+            if (scene && scene.fog) scene.fog.far = accessibilitySettings.viewDistance;
             createCastleVillage(); // [NEW] 울슈쎈성 마을 - 게임 시작부터 고정된 위치에 항상 존재
             // [NEW] 불러오기로 복원된 울슈쎈성 방어전 진행상황 반영 (성벽/용병/생존자 동료 재생성) - 대사는 다시 출력하지 않음
             if (castleQuest.phase !== 'inactive') {
@@ -3424,7 +3453,7 @@
             const oldCanvas = container.querySelector('canvas');
             if (oldCanvas) container.removeChild(oldCanvas);
 
-            scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0x87CEEB, 1, 200); 
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0x87CEEB); scene.fog = new THREE.Fog(0x87CEEB, 1, accessibilitySettings.viewDistance); // [FIX] 저장된 시야 범위 설정을 초기 안개 거리에 바로 반영
             camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 3000); camera.position.copy(gameState.position); scene.add(camera);
             
             // [FIX] WebGL 생성 실패 시 예외 처리 및 Fallback
@@ -3612,6 +3641,7 @@
             chunkTerrainRefs.set(chunkKey, { ground: null, lava: null });
             terrainUnloadedChunks.add(chunkKey);
             activeStructuresDirty = true;
+            nearbyStaticObjectsCacheVersion++; // [FIX-숲렉] 지형이 실제로 사라졌으니 근처-오브젝트 캐시도 무효화
         }
         // [NEW] 아주 멀리 떨어진 청크의 나무/바위 InstancedMesh와 충돌용 프록시를 완전히 해제.
         // objects/chunkStaticObjects 배열에서 실제로 빠지므로, 플레이 시간과 탐험 범위에 비례해
@@ -3633,6 +3663,7 @@
             ref.trunkProxies = []; ref.leafProxies = []; ref.rockProxies = [];
             decorationsUnloadedChunks.add(chunkKey);
             activeStructuresDirty = true;
+            nearbyStaticObjectsCacheVersion++; // [FIX-숲렉] 나무/바위가 실제로 사라졌으니 근처-오브젝트 캐시도 무효화
         }
         // [NEW] 캐시된 matrix(위치/회전/스케일)로부터 나무/바위 하나의 충돌용 프록시를 재생성.
         // 원래 collectTreeData/collectRockData가 만들던 것과 동일한 userData(health 등)로 복원함.
@@ -3666,6 +3697,7 @@
             ref.trunkProxies = trunkProxies; ref.leafProxies = leafProxies; ref.rockProxies = rockProxies;
             decorationsUnloadedChunks.delete(chunkKey);
             activeStructuresDirty = true;
+            nearbyStaticObjectsCacheVersion++; // [FIX-숲렉] 나무/바위가 재생성됐으니 근처-오브젝트 캐시도 무효화
         }
         // [NEW] 언로드했던 청크에 플레이어가 다시 접근하면 지형을 원래와 완전히 동일하게(결정론적) 재생성
         // frozen: 재생성 시점에 이미 freeze 거리(FREEZE_CHUNK_DISTANCE) 밖이라면 true로 넘겨 처음부터 숨김 상태로 맞춤
@@ -3688,6 +3720,7 @@
             chunkTerrainRefs.set(chunkKey, { ground, lava });
             terrainUnloadedChunks.delete(chunkKey);
             activeStructuresDirty = true;
+            nearbyStaticObjectsCacheVersion++; // [FIX-숲렉] 지형이 재생성됐으니 근처-오브젝트 캐시도 무효화
         }
         // [NEW] 마을/캠프/군락 등 대형 구조물이 서로 겹쳐서 생성되지 않도록 위치를 기록해두는 registry
         let landmarkRegistry = []; // { x, z, radius, type }
@@ -3783,6 +3816,13 @@
             // [MODIFIED] 청크가 작아진 만큼(100m) 미리 로딩 반경도 합리적인 범위로 축소 - [NEW] 접근성 설정에서 조정 가능
             const PRELOAD_RADIUS = accessibilitySettings.chunkPreloadRadius; // 플레이어 반경(m), 기본 100m
             const chunkRadius = Math.ceil(PRELOAD_RADIUS / CHUNK_SIZE) + RENDER_DISTANCE;
+            // [FIX-청크로딩순서] 기존엔 격자를 x,z 순서(래스터 순서)대로 훑다가 미생성 청크를 만나는 즉시 그 자리에서 생성했음 -
+            // 플레이어 바로 옆 청크든 preload 반경 끝자락의 먼 청크든 순서상 먼저 걸리면 먼저 생성됐다는 뜻이라 순서가 뒤죽박죽이었음.
+            // 이제는 이번 프레임에 미생성 상태인 청크를 전부 모아서 플레이어와의 거리순으로 정렬한 뒤, 가장 가까운 것부터
+            // 프레임당 최대 CHUNK_GEN_BUDGET개만 생성하고 나머지는 다음 프레임(들)로 미룸. 그 결과 (1) 플레이어 바로 앞
+            // 청크가 항상 가장 먼저 채워지고, (2) 게임 시작/고속 이동/미리로딩 반경 확장처럼 한꺼번에 여러 청크가 밀리는
+            // 상황에서도 한 프레임에 몰아서 생성하지 않아 순간 프리징이 줄어듦.
+            const pendingChunks = [];
             for (let x = playerChunkX - chunkRadius; x <= playerChunkX + chunkRadius; x++) { 
                 for (let z = playerChunkZ - chunkRadius; z <= playerChunkZ + chunkRadius; z++) { 
                     // 실제 청크 중심까지 거리 체크 (원형 반경)
@@ -3793,9 +3833,24 @@
                     const distToChunk = Math.sqrt(dx * dx + dz * dz);
                     if (distToChunk > PRELOAD_RADIUS + CHUNK_SIZE * 0.5) continue; // 반경 밖 청크 스킵
                     const chunkKey = `${x},${z}`; 
-                    if (!generatedChunks.has(chunkKey)) { generateChunk(x, z); generatedChunks.add(chunkKey); activeStructuresDirty = true; } 
+                    if (!generatedChunks.has(chunkKey)) pendingChunks.push({ x, z, chunkKey, distToChunk });
                 } 
             } 
+            if (pendingChunks.length > 0) {
+                pendingChunks.sort((a, b) => a.distToChunk - b.distToChunk); // 가까운 청크가 배열 앞쪽에 오도록 정렬
+                const CHUNK_GEN_BUDGET = 2; // 프레임당 최대 생성 청크 수
+                for (let i = 0; i < Math.min(CHUNK_GEN_BUDGET, pendingChunks.length); i++) {
+                    const c = pendingChunks[i];
+                    generateChunk(c.x, c.z); generatedChunks.add(c.chunkKey);
+                }
+                activeStructuresDirty = true;
+                nearbyStaticObjectsCacheVersion++; // [FIX-숲렉] 새 청크가 생성됐으니(나무/바위/건물 등 추가) 근처-오브젝트 캐시도 무효화
+                // [NEW] 이번에 예산(CHUNK_GEN_BUDGET) 때문에 다 처리 못 한 청크가 남았다면, 플레이어가 멈춰있어도
+                // 다음 프레임에 이어서 계속 생성되도록 표시 (그렇지 않으면 이동 없인 아래 호출 조건이 다시 안 걸림)
+                worldChunksPending = pendingChunks.length > CHUNK_GEN_BUDGET;
+            } else {
+                worldChunksPending = false;
+            }
             updateChunkFreezing(); 
         }
         
@@ -5380,15 +5435,32 @@
             // [수정] 기존엔 도시(city) 바이옴에서만 벽 충돌을 검사해서, 엘프 마을/드워프 광산/신전 등
             // 도시가 아닌 지역의 "큰 건물"에서는 적/좀비가 벽과 바닥을 그대로 통과하는 문제가 있었음.
             // 바이옴 제한을 없애고, 대신 주변에 등록된 정적 오브젝트가 없으면 즉시 반환하는 기존 로직으로 성능을 유지함.
-            const nearby = getNearbyStaticObjects(entity.position);
-            if (nearby.length === 0) return;
+            const data = entity.userData;
+            // [FIX-숲렉] 나무 같은 정적 장애물은 "방금까지 막혀 있던 상태"가 아니라면 매 프레임 다시 검사할 필요가 적음
+            // (트인 공간을 몇 프레임 이동한다고 갑자기 나무 안으로 파고들 가능성은 낮음). 그래서 상태를 둘로 나눔:
+            // - 막혀 있던 상태였다면: 매 프레임 그대로 검사 (슬라이딩/보정이 매끄럽게 유지되어야 하므로 여기선 생략 없음)
+            // - 뚫려 있던 상태였다면: 10프레임에 1번만 검사 (트리 밀집 지역에서 좀비 여러 마리가 붙어 있을 때 비용 절감)
+            if (data._wallOffset === undefined) data._wallOffset = Math.floor(Math.random() * 10);
+            if (data._wallClear === true && (frameCount + data._wallOffset) % 10 !== 0) return;
+            // [FIX-숲렉] radius=15를 넘겨서 애초에 15m 반경 밖에 있는 이웃 청크는 아예 가져오지도 않게 함(전체 3x3 대신
+            // 필요한 방향만). 아래 거리 필터는 그래도 유지 - 같은 청크 안에 있어도 15m보다 먼 나무가 섞여올 수 있어서.
+            const nearby = getNearbyStaticObjects(entity.position, 15);
+            if (nearby.length === 0) { data._wallClear = true; return; }
+            // [FIX-숲밀도렉] 기존엔 이 시점에 아직 거리 필터링을 하지 않은 채로 넘겨서, checkBlocked가 아래에서 최대 3번(제자리/X슬라이드/Z슬라이드)
+            // 반복될 때마다 3x3청크 전체 후보(숲에서는 150~270개)를 매번 통째로 순회하며 Box3를 계산했음 - 한 번의 벽 충돌 판정에 최대
+            // 150~270 * 3 ≈ 810번의 Box3 계산이 들어갈 수 있었던 것. checkBlocked의 테스트 박스는 엔티티 주변 반경 0.4m짜리 아주 작은
+            // 박스라서, 애초에 멀리 있는 나무/바위는 절대 부딪힐 수 없음 - 미리 거리로 한 번만 걸러두면 반복마다 다시 거를 필요가 없고,
+            // Box3 계산 대상도 (숲 기준) 150~270개 → 보통 한 자릿수로 줄어듦.
+            const WALL_CHECK_RADIUS_SQ = 15 * 15; // 넉넉하게 15m (한 프레임 이동량 + 슬라이드 재시도 범위를 충분히 커버)
+            const nearbyFiltered = nearby.filter(obj => obj.position.distanceToSquared(entity.position) <= WALL_CHECK_RADIUS_SQ);
+            if (nearbyFiltered.length === 0) { data._wallClear = true; return; }
             const r = 0.4; // 적의 대략적인 몸통 반경
             const checkBlocked = (px, pz) => {
                 const testBox = new THREE.Box3(
                     new THREE.Vector3(px - r, entity.position.y + 0.3, pz - r),
                     new THREE.Vector3(px + r, entity.position.y + 1.6, pz + r)
                 );
-                for (const obj of nearby) {
+                for (const obj of nearbyFiltered) {
                     if (!obj.geometry || !obj.parent) continue;
                     const t = obj.userData.type;
                     if (t === 'roof' || t === 'floor' || t === 'decoration' || t === 'teleporter' || t === 'lava') continue;
@@ -5398,7 +5470,8 @@
                 }
                 return false;
             };
-            if (!checkBlocked(entity.position.x, entity.position.z)) return; // 안 막혔으면 그대로 통과
+            if (!checkBlocked(entity.position.x, entity.position.z)) { data._wallClear = true; return; } // 안 막혔으면 그대로 통과
+            data._wallClear = false; // [NEW] 막혔음 - 다음 호출부턴 매 프레임 검사로 전환
             // 벽에 막혔다면: X축/Z축 이동을 각각 따로 시도해서 벽을 따라 미끄러지듯 이동시킴 (완전히 못 움직이면 원래 자리로 되돌림)
             const dx = entity.position.x - oldPos.x, dz = entity.position.z - oldPos.z;
             if (!checkBlocked(oldPos.x + dx, oldPos.z)) { entity.position.x = oldPos.x + dx; entity.position.z = oldPos.z; }
@@ -5468,7 +5541,39 @@
             return data._isNearVolcano;
         }
 
-        function spawnItem(data, x, y, z) {
+        // [FIX-아이템렉] 아이템 하나의 최종 바닥 높이(건물 바닥/지붕 포함)를 계산.
+        // 기존엔 updateItems()에서 아이템이 완전히 자리잡을 때까지(보통 수십 프레임) 매 프레임 이 레이캐스트를 반복했는데,
+        // 위치는 스폰 시점에 한 번 계산하면 절대 안 바뀌므로(정적 아이템) 그 반복이 전부 낭비였음. 이제 spawnItem에서 딱 한 번만 호출.
+        function computeItemGroundY(x, y, z) {
+            raycaster.far = 500;
+            raycaster.set(new THREE.Vector3(x, y + 1, z), new THREE.Vector3(0, -1, 0));
+            const hits = raycaster.intersectObjects(activeStructuresCache, true);
+            const firstHit = hits.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object');
+            if (firstHit) return firstHit.point.y + 0.5;
+            return getTerrainHeight(x, z) + 0.5; // 레이캐스트가 아무것도 못 찾았을 때(예: activeStructuresCache가 아직 갱신 전인 극초반)의 안전한 폴백
+        }
+
+        // [FIX-아이템렉] 아이템을 씬/전역 배열/청크 인덱스에서 완전히 제거하는 공용 헬퍼.
+        // 기존엔 pickupItem() 안에 이 로직이 그대로 박혀 있었는데, 이제 자동 만료(despawn) 쪽에서도 똑같이 써야 해서 함수로 분리함.
+        function removeItemFromWorld(item) {
+            scene.remove(item); items = items.filter(i => i !== item);
+            if (item.userData && item.userData.chunkKey && chunkItems.has(item.userData.chunkKey)) {
+                const bucket = chunkItems.get(item.userData.chunkKey);
+                const bi = bucket.indexOf(item); if (bi !== -1) bucket.splice(bi, 1);
+            }
+        }
+
+        // [NEW] 아이템 스폰용 공유 지오메트리/머티리얼 getter - 처음 요청되는 이름/색상마다 딱 한 번만 생성하고 이후엔 캐시에서 꺼내 씀.
+        // 개별 메쉬 인스턴스(위치/회전/픽업/소멸)는 기존과 완전히 동일하게 독립적으로 동작함 - 겉보기/동작 특성은 전혀 안 바뀜.
+        function getSharedItemGeo(key, factory) { if (!sharedItemGeoCache.has(key)) sharedItemGeoCache.set(key, factory()); return sharedItemGeoCache.get(key); }
+        function getSharedItemMat(color) { if (!sharedItemMatCache.has(color)) sharedItemMatCache.set(color, new THREE.MeshStandardMaterial({ color })); return sharedItemMatCache.get(color); }
+        function getSharedItemBasicMat(color) { if (!sharedItemBasicMatCache.has(color)) sharedItemBasicMatCache.set(color, new THREE.MeshBasicMaterial({ color })); return sharedItemBasicMatCache.get(color); }
+        function getSharedArmorGeo(slot, factory) { if (!sharedArmorGeoCache.has(slot)) sharedArmorGeoCache.set(slot, factory()); return sharedArmorGeoCache.get(slot); }
+        function getSharedArmorMat(tierId, color) { if (!sharedArmorMatCache.has(tierId)) sharedArmorMatCache.set(tierId, new THREE.MeshStandardMaterial({ color, metalness: 0.6, roughness: 0.35, emissive: color, emissiveIntensity: 0.15 })); return sharedArmorMatCache.get(tierId); }
+
+        // despawnable: true면 300틱(프레임) 후 자동으로 사라짐 - 보스를 제외한 몹 처치 드랍 전용으로 사용
+        // (보스 드랍/건물·상자·마을 등 월드에 배치되는 루트는 despawnable을 넘기지 않아 그대로 영구히 유지됨)
+        function spawnItem(data, x, y, z, despawnable) {
             let mesh;
             if (data.type === 'weapon') {
                 mesh = WEAPON_DATABASE[data.name].model();
@@ -5484,36 +5589,38 @@
             } else if (data.type === 'armor') {
                 // [NEW] 방어구 아이템 모델: 부위별로 다른 형태, 티어 색상으로 도색되어 한눈에 등급 구분 가능
                 const tier = ARMOR_TIERS.find(t => t.id === data.armorData.tierId);
-                const armorMat = new THREE.MeshStandardMaterial({ color: tier.color, metalness: 0.6, roughness: 0.35, emissive: tier.color, emissiveIntensity: 0.15 });
+                // [FIX-아이템렉] 지오메트리/머티리얼을 부위/티어별로 캐시 공유 (같은 부위+같은 티어는 색상·모양이 항상 동일하므로 안전)
+                const armorMat = getSharedArmorMat(tier.id, tier.color);
                 const slot = data.armorData.slot;
                 if (slot === 'helmet') {
-                    mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), armorMat);
+                    mesh = new THREE.Mesh(getSharedArmorGeo('helmet', () => new THREE.SphereGeometry(0.22, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62)), armorMat);
                 } else if (slot === 'chest') {
-                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.5, 0.25), armorMat);
+                    mesh = new THREE.Mesh(getSharedArmorGeo('chest', () => new THREE.BoxGeometry(0.45, 0.5, 0.25)), armorMat);
                 } else if (slot === 'pants') {
-                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.45, 0.22), armorMat);
+                    mesh = new THREE.Mesh(getSharedArmorGeo('pants', () => new THREE.BoxGeometry(0.4, 0.45, 0.22)), armorMat);
                 } else {
-                    mesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 0.4), armorMat);
+                    mesh = new THREE.Mesh(getSharedArmorGeo('boots', () => new THREE.BoxGeometry(0.22, 0.22, 0.4)), armorMat);
                 }
                 // [수정] 아이템 광원(포인트라이트) 제거 요청에 따라 인첸트 강조용 조명 삭제 (디자인/색상은 유지)
             } else {
+                // [FIX-아이템렉] 이름별 지오메트리/색상별 머티리얼을 캐시 공유 (탄약처럼 가장 흔하게 드랍되는 종류가 가장 큰 수혜를 봄)
                 let color = 0xffffff;
-                let geo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
-                if (data.name === '탄약') { color = 0x556B2F; geo = new THREE.BoxGeometry(0.3, 0.2, 0.4); }
-                if (data.name === '의료키트') { color = 0xffffff; geo = new THREE.BoxGeometry(0.5, 0.3, 0.4); }
-                if (data.name === '에너지드링크') { color = 0x00ffff; geo = new THREE.CylinderGeometry(0.1, 0.1, 0.3, 8); }
+                let geoKey = 'default'; let geoFactory = () => new THREE.BoxGeometry(0.4, 0.4, 0.4);
+                if (data.name === '탄약') { color = 0x556B2F; geoKey = '탄약'; geoFactory = () => new THREE.BoxGeometry(0.3, 0.2, 0.4); }
+                if (data.name === '의료키트') { color = 0xffffff; geoKey = '의료키트'; geoFactory = () => new THREE.BoxGeometry(0.5, 0.3, 0.4); }
+                if (data.name === '에너지드링크') { color = 0x00ffff; geoKey = '에너지드링크'; geoFactory = () => new THREE.CylinderGeometry(0.1, 0.1, 0.3, 8); }
                 if (data.name === '음식') { color = 0xffa500; }
-                if (data.name === '수류탄') { color = 0x3b4a2e; geo = new THREE.SphereGeometry(0.16, 10, 10); } // [NEW]
-                if (data.name === '심법책') { color = 0x2a0845; geo = new THREE.BoxGeometry(0.4, 0.55, 0.08); }
-                if (data.name === '마력 회복단') { color = 0xb388ff; geo = new THREE.SphereGeometry(0.18, 10, 10); }
-                if (data.name === '쾌검결') { color = 0x123a2e; geo = new THREE.BoxGeometry(0.4, 0.55, 0.08); }
-                if (data.name === '내공단') { color = 0x8fe3c4; geo = new THREE.SphereGeometry(0.18, 10, 10); }
+                if (data.name === '수류탄') { color = 0x3b4a2e; geoKey = '수류탄'; geoFactory = () => new THREE.SphereGeometry(0.16, 10, 10); } // [NEW]
+                if (data.name === '심법책') { color = 0x2a0845; geoKey = '심법책'; geoFactory = () => new THREE.BoxGeometry(0.4, 0.55, 0.08); }
+                if (data.name === '마력 회복단') { color = 0xb388ff; geoKey = '마력 회복단'; geoFactory = () => new THREE.SphereGeometry(0.18, 10, 10); }
+                if (data.name === '쾌검결') { color = 0x123a2e; geoKey = '쾌검결'; geoFactory = () => new THREE.BoxGeometry(0.4, 0.55, 0.08); }
+                if (data.name === '내공단') { color = 0x8fe3c4; geoKey = '내공단'; geoFactory = () => new THREE.SphereGeometry(0.18, 10, 10); }
                 // [NEW] 보스 전용 특별 전리품 - 다른 아이템보다 크고 화려하게 빛나서 눈에 띄게 함
-                if (data.isBossExclusive) { color = BOSS_EXCLUSIVE_ITEMS.find(b => b.name === data.name).color; geo = new THREE.OctahedronGeometry(0.24, 0); }
-                mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color }));
+                if (data.isBossExclusive) { color = BOSS_EXCLUSIVE_ITEMS.find(b => b.name === data.name).color; geoKey = 'boss_exclusive'; geoFactory = () => new THREE.OctahedronGeometry(0.24, 0); }
+                mesh = new THREE.Mesh(getSharedItemGeo(geoKey, geoFactory), getSharedItemMat(color));
                 if (data.name === '의료키트') {
-                    const v = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.1), new THREE.MeshBasicMaterial({color: 0xff0000}));
-                    const h = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.32), new THREE.MeshBasicMaterial({color: 0xff0000}));
+                    const v = new THREE.Mesh(getSharedItemGeo('medkit_v', () => new THREE.BoxGeometry(0.1, 0.32, 0.1)), getSharedItemBasicMat(0xff0000));
+                    const h = new THREE.Mesh(getSharedItemGeo('medkit_h', () => new THREE.BoxGeometry(0.1, 0.1, 0.32)), getSharedItemBasicMat(0xff0000));
                     mesh.add(v); v.rotation.z = Math.PI/2; mesh.add(h); h.rotation.y = Math.PI/2;
                 }
                 // [수정] 아이템 광원(포인트라이트) 제거 요청에 따라 심법책/마력회복단/쾌검결/내공단/보스전용 전리품의 조명 삭제 (모양/색상 디자인은 그대로 유지)
@@ -5523,7 +5630,15 @@
             mesh.castShadow = false; 
             mesh.visible = false; // [NEW] 처음엔 숨김 처리 - 플레이어 근처 청크로 들어와야 updateItems에서 거리 판정 후 보이게 됨 (원거리 아이템이 계속 렌더 대상에 남는 것 방지)
             
-            mesh.userData = { ...data, isGrounded: false, velocityY: 0 };
+            // [FIX-아이템렉] 바닥/건물 바닥 높이를 스폰 시점에 딱 한 번만 계산해서 바로 확정. isGrounded: true로 시작하므로
+            // updateItems()가 이후 이 아이템을 대상으로 다시는 레이캐스트하지 않음 (기존엔 자리잡을 때까지 수십 프레임 반복 계산했음).
+            mesh.position.y = computeItemGroundY(x, y, z);
+            // [FIX-아이템렉] 이제 회전 애니메이션도 없고 위치도 다시는 안 바뀌므로(완전히 정적), matrixAutoUpdate를 꺼서
+            // Three.js가 매 프레임 이 메쉬(및 자식 - 스코프 렌즈, 의료키트 십자가, 무기 부품 등)의 행렬을 재계산하는 것 자체를
+            // 건너뛰게 함. 기존엔 정적인 오브젝트라도 matrixAutoUpdate가 기본 true라서 매 프레임 계속 재계산됐었음.
+            mesh.traverse(o => { o.matrixAutoUpdate = false; o.updateMatrix(); });
+            mesh.userData = { ...data, isGrounded: true, velocityY: 0 };
+            if (despawnable) mesh.userData.expireFrame = frameCount + 300; // [NEW] 300틱 후 자동 소멸 (updateItems에서 체크)
             scene.add(mesh); items.push(mesh);
             // [NEW] 아이템을 청크 단위로도 인덱싱 (전체 items 배열을 매 프레임 순회하지 않기 위함)
             const itemChunkKey = `${Math.round(x / CHUNK_SIZE)},${Math.round(z / CHUNK_SIZE)}`;
@@ -5672,6 +5787,12 @@
             const chunkOriginX = chunkX * CHUNK_SIZE; const chunkOriginZ = chunkZ * CHUNK_SIZE; const centerBiome = getBiome(chunkOriginX, chunkOriginZ); const seed = chunkX * 31 + chunkZ * 17; let rand = (s) => () => (s = Math.sin(s) * 10000, s - Math.floor(s)); let chunkRand = rand(seed); let buildingsInChunk = [];
             // [MODIFIED] 청크 개수가 4배로 늘어난 만큼 건물 배치 확률 게이트도 1/4 수준으로 낮춰 월드 밀도 유지
             let objectDensityMultiplier = 1.0; let buildingChance = 0.025;
+            // [FIX-숲렉] 숲 밀도(기존 4.5)가 다른 바이옴(최대 1.2)보다 압도적으로 높아서 - 드로우콜, 충돌 후보 수, 청크당
+            // 나무/바위 프록시 메모리까지 전부 이 배수에 비례해 늘어남. 2.5로 낮춤: 여전히 평지(1.2)의 2배 이상으로
+            // "숲답게 빽빽한" 느낌은 유지하면서, 기존 대비 약 44% 줄여서 실질적인 부하 자체를 줄임. 시각적으로 나무가
+            // 눈에 띄게 줄어드는 트레이드오프가 있으니, 너무 휑해 보이면 이 숫자를 다시 올려도 됨.
+            // [FIX-숲밀도복원] 2.5로 낮췄더니 숲이 너무 휑하다는 피드백에 따라 원래 값(4.5)으로 되돌림 - 대신
+            // 성능은 아래 좀비 AI 스로틀링과 청크 기반 캐싱/필터링 쪽에서 확보하는 방향으로 전환.
             if (centerBiome === 'forest') objectDensityMultiplier = 4.5; else if (centerBiome === 'mountain') objectDensityMultiplier = 0.7; else if (centerBiome === 'volcano') objectDensityMultiplier = 0.1; else if (centerBiome === 'city') { objectDensityMultiplier = 0.2; } else if (centerBiome === 'plain') { buildingChance = 0.825; objectDensityMultiplier = 1.2; }
 
             // [MODIFIED] 청크 면적이 1/4로 줄었으므로(200x200 -> 100x100) 청크당 오브젝트 수도 1/4로 줄여 동일한 월드 밀도를 유지
@@ -8136,7 +8257,7 @@
         // 변이체 처치 시 무기 1개를 무조건 드랍 (수류탄 제외)
         function dropMutantLoot(position) {
             const weaponKey = MUTANT_DROP_WEAPON_KEYS[Math.floor(Math.random() * MUTANT_DROP_WEAPON_KEYS.length)];
-            spawnItem({ type: 'weapon', name: weaponKey }, position.x, position.y + 0.3, position.z);
+            spawnItem({ type: 'weapon', name: weaponKey }, position.x, position.y + 0.3, position.z, true); // [NEW] 몹 드랍 - 300틱 후 자동 소멸
             showChat('시스템', `☣️ 변이체가 <span class="weapon-name-chat">${WEAPON_DATABASE[weaponKey].name}</span>을(를) 떨어뜨렸습니다!`);
         }
 
@@ -8778,8 +8899,11 @@
             try { localStorage.setItem('gameKeyBindings', JSON.stringify(keyBindings)); } catch (e) { /* 무시 */ }
         }
 
-        // ── [NEW] 접근성 설정 (청크 로딩 반경 / 마우스 감도) ──────────────────────────────
-        const DEFAULT_ACCESSIBILITY_SETTINGS = { chunkPreloadRadius: 100, mouseSensitivity: 1.0 };
+        // ── [NEW] 접근성 설정 (청크 로딩 반경 / 시야 범위 / 마우스 감도) ──────────────────────────────
+        // [FIX-로딩반경2배] 청크 로딩 반경 기본값을 100 -> 200으로 2배 늘림 (요청 반영). 슬라이더 최대치도 그에 맞춰
+        // 400 -> 800으로 같이 늘려서 기본값 대비 여유폭(4배)을 그대로 유지함.
+        // [NEW] viewDistance: 안개(fog)가 시작되는 거리 - "시야 범위"를 청크 로딩 반경처럼 사용자가 조절 가능하게 함
+        const DEFAULT_ACCESSIBILITY_SETTINGS = { chunkPreloadRadius: 200, viewDistance: 200, mouseSensitivity: 1.0 };
         let accessibilitySettings = { ...DEFAULT_ACCESSIBILITY_SETTINGS };
         function loadAccessibilitySettings() {
             try {
@@ -8809,10 +8933,14 @@
         function renderAccessibilityModal() {
             const radiusSlider = document.getElementById('accessibility-chunk-radius');
             const radiusVal = document.getElementById('accessibility-chunk-radius-val');
+            const viewSlider = document.getElementById('accessibility-view-distance');
+            const viewVal = document.getElementById('accessibility-view-distance-val');
             const sensSlider = document.getElementById('accessibility-mouse-sensitivity');
             const sensVal = document.getElementById('accessibility-mouse-sensitivity-val');
             if (radiusSlider) radiusSlider.value = accessibilitySettings.chunkPreloadRadius;
             if (radiusVal) radiusVal.textContent = `${accessibilitySettings.chunkPreloadRadius}m`;
+            if (viewSlider) viewSlider.value = accessibilitySettings.viewDistance;
+            if (viewVal) viewVal.textContent = `${accessibilitySettings.viewDistance}m`;
             if (sensSlider) sensSlider.value = Math.round(accessibilitySettings.mouseSensitivity * 100);
             if (sensVal) sensVal.textContent = `${accessibilitySettings.mouseSensitivity.toFixed(2)}x`;
         }
@@ -8921,6 +9049,13 @@
                 document.getElementById('accessibility-chunk-radius-val').textContent = `${accessibilitySettings.chunkPreloadRadius}m`;
                 saveAccessibilitySettings();
             });
+            // [NEW] 시야 범위 슬라이더 - 안개(scene.fog.far) 거리를 실시간으로 반영
+            document.getElementById('accessibility-view-distance').addEventListener('input', (e) => {
+                accessibilitySettings.viewDistance = parseInt(e.target.value, 10);
+                document.getElementById('accessibility-view-distance-val').textContent = `${accessibilitySettings.viewDistance}m`;
+                if (scene && scene.fog) scene.fog.far = accessibilitySettings.viewDistance;
+                saveAccessibilitySettings();
+            });
             document.getElementById('accessibility-mouse-sensitivity').addEventListener('input', (e) => {
                 accessibilitySettings.mouseSensitivity = parseInt(e.target.value, 10) / 100;
                 document.getElementById('accessibility-mouse-sensitivity-val').textContent = `${accessibilitySettings.mouseSensitivity.toFixed(2)}x`;
@@ -8928,6 +9063,7 @@
             });
             document.getElementById('accessibility-reset-btn').addEventListener('click', () => {
                 accessibilitySettings = { ...DEFAULT_ACCESSIBILITY_SETTINGS };
+                if (scene && scene.fog) scene.fog.far = accessibilitySettings.viewDistance; // [NEW] 초기화 시 안개 거리도 즉시 되돌림
                 saveAccessibilitySettings();
                 renderAccessibilityModal();
             });
@@ -9596,7 +9732,7 @@
                     // 적도 맞으면 customTarget을 플레이어로 재설정 (혹시 다른 몹이랑 싸우고 있었을 수도 있으니까)
                     enemy.userData.customTarget = null;
                 } 
-                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z); } tryDropArmor(enemy.position, 0.08, false); if (enemy.userData.isMutant) dropMutantLoot(enemy.position); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
+                if (enemy.userData.health <= 0) { addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50); if (isMeleeAttack) { gameStats.meleeKills++; checkAchievements(); } if (Math.random() < 0.5) { const weaponKey = enemy.userData.weapon; const enemyWeaponData = WEAPON_DATABASE[weaponKey]; spawnItem({ type: 'weapon', name: weaponKey }, enemy.position.x, enemy.position.y, enemy.position.z, true); const multiplier = Math.floor(Math.random() * 2) + 1; const ammoData = { type: 'item', name: '탄약', subtype: enemyWeaponData.ammoType, amount: enemyWeaponData.magSize * multiplier }; spawnItem(ammoData, enemy.position.x + 0.5, enemy.position.y, enemy.position.z, true); } tryDropArmor(enemy.position, 0.08, false, true); if (enemy.userData.isMutant) dropMutantLoot(enemy.position); createDebrisEffect(enemy.position, enemy.material.color); scene.remove(enemy); rangedEnemies.splice(rangedEnemies.indexOf(enemy), 1); } 
             }
             else if (target.userData.type === 'npc') {
                 damageNpc(target, damage);
@@ -9655,7 +9791,7 @@
                     gainQi(2.5); // [NEW]
                 } else {
                     addMoloch(Math.floor(Math.random() * 6) + 5); gainXP(50);
-                    tryDropArmor(enemy.position, 0.08, false);
+                    tryDropArmor(enemy.position, 0.08, false, true); // [NEW] 몹 드랍 - 300틱 후 자동 소멸
                     createDebrisEffect(enemy.position, enemy.material.color);
                     scene.remove(enemy); const idx = rangedEnemies.indexOf(enemy); if (idx !== -1) rangedEnemies.splice(idx, 1);
                     gainQi(12); // [NEW]
@@ -10674,12 +10810,7 @@
                     updateUI();
                 }
             }
-            scene.remove(item); items = items.filter(i => i !== item);
-            // [NEW] 청크 아이템 맵에서도 제거 (안 지우면 사라진 아이템이 유령 참조로 계속 남아 나중에 순회 비용이 됨)
-            if (item.userData && item.userData.chunkKey && chunkItems.has(item.userData.chunkKey)) {
-                const bucket = chunkItems.get(item.userData.chunkKey);
-                const bi = bucket.indexOf(item); if (bi !== -1) bucket.splice(bi, 1);
-            }
+            removeItemFromWorld(item); // [FIX-아이템렉] 기존 인라인 제거 로직을 공용 헬퍼로 교체 (removeItemFromWorld - 자동 만료(despawn)와 동일 로직 재사용)
             updateUI(); 
         }
         function showChat(name, message) { const chatBox = document.getElementById('chat-box'); const messageDiv = document.createElement('div'); messageDiv.className = 'chat-message'; let nameSpan; 
@@ -10827,19 +10958,41 @@
         }
         
         // [OPTIMIZATION] 청크 기반 충돌 검사
-        function getNearbyStaticObjects(pos) {
-            const nearby = [];
+        // radius: 이 조회가 실제로 필요한 최대 반경(m). 안 넘기면 CHUNK_SIZE(=항상 3x3 전체, 기존과 100% 동일) 취급.
+        // [FIX-숲렉] "같은 청크만 보면 안 되나?"에 대한 답: 안 됨 - 청크 경계 바로 앞(예: 내 청크 끝에서 1m 앞)에 있는
+        // 나무는 옆 청크 소속으로 등록돼 있어서, 진짜 "같은 청크만" 보면 경계 바로 너머 나무를 못 잡아서 그냥 뚫고 지나가는
+        // 버그가 생김. 대신 "실제로 필요한 방향의 이웃 청크만" 골라서 가져오는 절충안: 내 위치가 청크 중심에서 얼마나
+        // 떨어져 있는지 보고, radius 안에 들어오는 방향의 이웃만 포함시킴 (청크 안쪽 깊숙히 있으면 이웃 청크 자체를 아예 안 봄).
+        function getNearbyStaticObjects(pos, radius) {
+            // [FIX-숲렉] 청크 구성이 실제로 바뀐 적이 있으면(청크 생성/지형·나무바위 언로드·리로드) 캐시 전체를 한 번에 비움 -
+            // 부분 무효화보다 훨씬 단순하고, 오래 플레이해도 캐시 맵 자체가 무한정 커지는 걸 막아줌(청크 내용이 안 바뀌는 한
+            // 계속 재사용되다가, 뭔가 바뀌는 순간 통째로 리셋되고 그 시점부터 다시 채워짐).
+            if (nearbyStaticObjectsCacheStamp !== nearbyStaticObjectsCacheVersion) {
+                nearbyStaticObjectsCache.clear();
+                nearbyStaticObjectsCacheStamp = nearbyStaticObjectsCacheVersion;
+            }
             const chunkX = Math.round(pos.x / CHUNK_SIZE);
             const chunkZ = Math.round(pos.z / CHUNK_SIZE);
-            
-            for (let dx = -1; dx <= 1; dx++) {
-                for (let dz = -1; dz <= 1; dz++) {
-                    const key = `${chunkX + dx},${chunkZ + dz}`;
-                    if (chunkStaticObjects.has(key)) {
-                        nearby.push(...chunkStaticObjects.get(key));
-                    }
+            const r = radius === undefined ? CHUNK_SIZE : radius;
+            const half = CHUNK_SIZE / 2;
+            const localX = pos.x - chunkX * CHUNK_SIZE; // 내 청크 중심 기준 -50~50 범위의 상대 좌표
+            const localZ = pos.z - chunkZ * CHUNK_SIZE;
+            // 각 방향 경계까지 남은 거리가 r보다 작으면 그 방향 이웃 청크도 필요함 (아니면 내 청크 안에서 다 해결됨)
+            const dxList = (half + localX < r) ? ((half - localX < r) ? [-1, 0, 1] : [-1, 0]) : ((half - localX < r) ? [0, 1] : [0]);
+            const dzList = (half + localZ < r) ? ((half - localZ < r) ? [-1, 0, 1] : [-1, 0]) : ((half - localZ < r) ? [0, 1] : [0]);
+            const cacheKey = `${chunkX},${chunkZ}|${dxList.join('')}|${dzList.join('')}`;
+            const cached = nearbyStaticObjectsCache.get(cacheKey);
+            if (cached) return cached; // [FIX-숲렉] 같은 중심 청크+같은 이웃 패턴을 쓰는 다른 엔티티(숲에서 근접한 좀비 여러 마리 등)는 재사용
+            const nearby = [];
+            for (const dx of dxList) {
+                for (const dz of dzList) {
+                    const bucket = chunkStaticObjects.get(`${chunkX + dx},${chunkZ + dz}`);
+                    // [FIX-숲렉] push(...bucket) 스프레드 대신 단순 for 루프 - 숲처럼 버킷이 큰(청크당 20~30개) 경우
+                    // 스프레드 호출(인자 전개) 오버헤드가 누적되는 것도 같이 줄임
+                    if (bucket) { for (let i = 0; i < bucket.length; i++) nearby.push(bucket[i]); }
                 }
             }
+            nearbyStaticObjectsCache.set(cacheKey, nearby);
             return nearby;
         }
 
@@ -11129,7 +11282,7 @@
                                         // [NEW] 울슈쎈성 오크 영입 퀘스트 진행도 (강도가 아닌 일반 적 처치)
                                         if (!isBandit && castleQuest.phase === 'recruiting' && !castleQuest.recruits.orc) castleQuest.recruitProgress.orc++;
                                         // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
-                                        tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
+                                        tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader, true); // [NEW] 몹 드랍 - 300틱 후 자동 소멸
                                     } else { enemy.userData.state = 'chase'; } 
                                 } else if (enemy.userData.type === 'boss') {
                                     enemy.userData.health -= damage;
@@ -11522,7 +11675,7 @@
                             // [NEW] 울슈쎈성 오크 영입 퀘스트 진행도 (강도가 아닌 일반 적 처치)
                             if (!isBandit && castleQuest.phase === 'recruiting' && !castleQuest.recruits.orc) castleQuest.recruitProgress.orc++;
                             // [NEW] 처치 시 방어구 드랍 (강도 두목은 보스급으로 취급, 일반 강도/적보다 확률과 등급이 높음)
-                            tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader);
+                            tryDropArmor(enemy.position, isBandit ? (enemy.userData.isBanditLeader ? 0.7 : 0.12) : 0.08, isBandit && enemy.userData.isBanditLeader, true); // [NEW] 몹 드랍 - 300틱 후 자동 소멸
                         }
                     }
                     else if (bestHit.type === 'zombie') { 
@@ -11659,7 +11812,7 @@
                     addMoloch(5000); gainXP(2000); gameState.statPoints += 15;
                     showChat('시스템', '👑 [초희귀 처치] 거대한 좀비를 쓰러뜨렸습니다! 몰록 5000 + XP 2000 + 스탯포인트 15 획득!');
                     const piece = generateArmorPiece();
-                    spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, enemy.position.x, enemy.position.y, enemy.position.z);
+                    spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, enemy.position.x, enemy.position.y, enemy.position.z, true); // [NEW] 몹 드랍 - 300틱 후 자동 소멸
                     checkAchievements();
                     return; // 아래의 일반 보상 로직은 건너뜀
                 }
@@ -11676,7 +11829,7 @@
                 
                 if (Math.random() < 0.5) { 
                     const lootOptions = [ { type: 'item', name: '탄약', subtype: '5.56mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '7.62mm', amount: 10 + Math.floor(Math.random() * 10) }, { type: 'item', name: '탄약', subtype: '.45 ACP', amount: 5 + Math.floor(Math.random() * 10) }, { type: 'item', name: '에너지드링크', amount: 1 } ]; 
-                    const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z); 
+                    const data = lootOptions[Math.floor(Math.random() * lootOptions.length)]; spawnItem(data, enemy.position.x, enemy.position.y, enemy.position.z, true); // [NEW] 몹 드랍 - 300틱 후 자동 소멸
                 } 
                 // [NEW] 몹 처치 시 낮은 확률로 방어구 드랍 (강한 개체일수록 확률이 조금 더 높음)
                 let armorDropChance = 0.08;
@@ -11684,7 +11837,7 @@
                 else if (enemy.userData.isOrc || enemy.userData.isElfVillager || enemy.userData.isDwarfVillager) armorDropChance = 0.12;
                 if (Math.random() < armorDropChance) {
                     const piece = generateArmorPiece();
-                    spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, enemy.position.x + 0.3, enemy.position.y, enemy.position.z + 0.3);
+                    spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, enemy.position.x + 0.3, enemy.position.y, enemy.position.z + 0.3, true); // [NEW] 몹 드랍 - 300틱 후 자동 소멸
                 }
             }
         }
@@ -11849,27 +12002,16 @@
         function updateItems(delta) { 
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
             const ITEM_VISIBLE_SQ = 80 * 80;   // 80m 밖: 완전 숨김
-            const ITEM_ACTIVE_SQ  = 30 * 30;   // 30m 밖: 회전·정착 계산 생략
-            // [NEW] 맵 전체에 쌓인 items 배열 전체를 매 프레임 순회하지 않고, 플레이어 주변 청크의 아이템만 처리 (원거리 아이템은 이미 숨겨진 상태 유지)
+            // [FIX-아이템렉] 회전 애니메이션 제거 요청 - 이제 이 함수는 만료 체크 + 거리 기반 가시성 토글만 함.
+            // 아이템은 스폰 시점에 위치가 확정된 뒤로 다시는 움직이지 않으므로, rotation을 더 이상 안 건드리면
+            // Three.js가 매 프레임 이 오브젝트의 행렬(matrix)을 재계산할 필요조차 없어짐(변경된 게 없으면 스킵됨) -
+            // 아이템(특히 탄약처럼 흔한 드랍)이 한곳에 몰려있을 때 특히 체감되는 절감.
             getNearbyItems(playerPos).forEach(item => {
                 if (!item.parent) return; // 이미 주웠거나 제거된 아이템(청크 버킷 정리 지연) 방어
+                // [NEW] 300틱 만료 체크 (보스를 제외한 몹 처치 드랍만 expireFrame이 붙어있음 - spawnItem의 despawnable 참고)
+                if (item.userData.expireFrame && frameCount >= item.userData.expireFrame) { removeItemFromWorld(item); return; }
                 const distSq = item.position.distanceToSquared(playerPos);
-                if (distSq > ITEM_VISIBLE_SQ) { item.visible = false; return; }
-                item.visible = true;
-                if (distSq > ITEM_ACTIVE_SQ) return; // 멀리 있으면 회전·레이캐스트 스킵
-                if (item.userData.type !== 'weapon') { item.rotation.y += 0.02; }
-                if (item.userData.isGrounded) return;
-                raycaster.far = 500;
-                raycaster.set(item.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0));
-                const itemIntersects = raycaster.intersectObjects(activeStructuresCache, true);
-                let targetY = item.position.y;
-                if (itemIntersects.length > 0) {
-                    const firstHit = itemIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object');
-                    if (firstHit) { targetY = firstHit.point.y + 0.5; }
-                }
-                if (Math.abs(item.position.y - targetY) < 0.05) { item.position.y = targetY; item.userData.isGrounded = true; }
-                else { item.position.y = THREE.MathUtils.lerp(item.position.y, targetY, 0.1); }
-                item.userData.baseY = item.position.y;
+                item.visible = distSq <= ITEM_VISIBLE_SQ;
             });
         }
         
@@ -12122,7 +12264,10 @@
             if (!updateWorldChunks._lastCheckPos) updateWorldChunks._lastCheckPos = cPos.clone();
             const movedSq = cPos.distanceToSquared(updateWorldChunks._lastCheckPos);
             const CHUNK_CHECK_INTERVAL_SQ = 30 * 30; // 30m마다 재체크
-            if (newChunkKey !== currentPlayerChunkKey || movedSq > CHUNK_CHECK_INTERVAL_SQ) { 
+            // [FIX-청크로딩순서] worldChunksPending: 예산 제한으로 아직 다 못 만든 청크가 남아있으면, 플레이어가
+            // 멈춰서 있어도(이동/청크이동 조건 둘 다 안 걸려도) 계속 이어서 생성되도록 함 - 안 넣으면 게임 시작 직후
+            // 제자리에 멈춰있을 때 초기 미리로딩 청크 대부분이 영원히 안 채워지는 문제가 생김
+            if (newChunkKey !== currentPlayerChunkKey || movedSq > CHUNK_CHECK_INTERVAL_SQ || worldChunksPending) { 
                 if (newChunkKey !== currentPlayerChunkKey) {
                     currentPlayerChunkKey = newChunkKey; 
                     // 고유 청크 탐험 통계
