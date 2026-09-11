@@ -248,6 +248,16 @@
         .accessibility-label { font-size: 14px; font-weight: bold; color: #ddd; display: flex; justify-content: space-between; }
         .accessibility-label span { color: #a0e0a0; }
         #accessibility-modal input[type="range"] { width: 100%; accent-color: #a0e0a0; cursor: pointer; }
+        /* [NEW] UI 커스터마이징(표시여부/색/투명도) 모달 */
+        .ui-custom-hidden { display: none !important; } /* 사용자가 특정 UI를 껐을 때 게임 로직의 display 조작을 덮어씀 - 로직 자체는 그대로 계속 돌아감 */
+        #ui-custom-modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(10, 10, 20, 0.95); border: 2px solid #ffcc66; padding: 25px; border-radius: 15px; color: white; z-index: 2400; width: 420px; max-height: 80vh; overflow-y: auto; display: none; flex-direction: column; gap: 10px; box-shadow: 0 0 30px rgba(255, 204, 102, 0.4); }
+        #ui-custom-modal h2 { color: #ffcc66; text-align: center; margin: 0 0 6px 0; font-size: 22px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px #ffcc66; }
+        .ui-custom-row { display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 10px; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; }
+        .ui-custom-row .ui-custom-name { font-size: 14px; }
+        .ui-custom-row input[type="color"] { width: 28px; height: 28px; border: none; border-radius: 6px; cursor: pointer; background: none; padding: 0; }
+        .ui-custom-row input[type="range"] { width: 70px; accent-color: #ffcc66; cursor: pointer; }
+        .ui-custom-row input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #ffcc66; }
+        .ui-custom-opacity-val { font-size: 11px; color: #aaa; width: 32px; text-align: right; }
         .keybind-row { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; }
         .keybind-name { font-size: 14px; }
         .keybind-key-btn { background: #333; color: #ffd700; border: 1px solid #666; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; min-width: 60px; text-align: center; }
@@ -433,7 +443,17 @@
                 <input type="range" id="accessibility-mouse-sensitivity" min="20" max="300" step="5" value="100">
             </div>
             <button id="accessibility-reset-btn" class="pause-btn" style="border-color:#ff8844;">↺ 기본값으로 초기화</button>
+            <button id="open-ui-custom-btn" class="pause-btn" style="border-color:#ffcc66;">🎨 UI 수정</button>
             <button id="close-accessibility-btn" class="pause-btn">닫기</button>
+        </div>
+
+        <!-- [NEW] UI 커스터마이징 창 (접근성 설정 -> UI 수정): 각 HUD 요소의 표시여부/색/투명도 조절 -->
+        <div id="ui-custom-modal">
+            <h2>🎨 UI 수정</h2>
+            <div style="font-size:11px; color:#888; text-align:center; margin-top:-6px;">표시를 꺼도 체력/스태미나 등 내부 계산은 그대로 계속됩니다.</div>
+            <div id="ui-custom-list"></div>
+            <button id="ui-custom-reset-btn" class="pause-btn" style="border-color:#ff8844;">↺ 기본값으로 초기화</button>
+            <button id="close-ui-custom-btn" class="pause-btn">닫기</button>
         </div>
 
         <!-- [NEW] 스킬 키 설정 창 (일시정지 메뉴 -> 스킬 키 설정) -->
@@ -514,7 +534,7 @@
 
         <div id="ui-overlay">
             <div class="ui-group" id="status-group">
-                <div class="status-row">
+                <div class="status-row" id="health-status-row">
                     <div class="status-label">체력</div>
                     <div id="health-bar" class="bar-container"><div id="health-fill"></div></div>
                     <div id="health-text" class="status-text">1000 / 1000</div>
@@ -553,7 +573,7 @@
                 <div id="weapon-ammo-type"></div>
                 <div id="weapon-name">맨손</div>
                 <div id="reload-prompt">[R] 재장전 필요</div>
-                <div id="grenade-count-display" style="font-size:13px; color:#ffcc88; margin-top:4px;">🎯 수류탄: <span id="grenade-count">0</span>개 (I키)</div>
+                <div id="grenade-count-display" style="display:none; font-size:13px; color:#ffcc88; margin-top:4px;">🎯 수류탄: <span id="grenade-count">0</span>개 (I키)</div>
             </div>
             
             <div id="interaction-prompt">
@@ -719,6 +739,14 @@
         const CHUNK_SIZE = 100; // [MODIFIED] 200 -> 100: 더 작은 단위로 쪼개서 필요한 범위만 로딩되도록 함
         const RENDER_DISTANCE = 1; // 최적화: 기존 유지 (이미 1)
         const generatedChunks = new Set();
+        // [요청] 저장/불러오기 시 몹·아이템을 정확히 복원하기 위한 것. generatedChunks는 새로고침(불러오기 포함)마다 항상
+        // 빈 상태로 시작해서(지형/건물 시각적 재생성용) 문제 없지만, 이 Set은 저장 파일에 실려서 그대로 복원됨 -
+        // "이 청크의 1회성 몹/보스/아이템 스폰이 이미 이번 플레이에서 일어난 적 있는지"를 세션을 넘어 기억해서,
+        // 불러온 뒤 그 청크를 다시 지나가도 몹/아이템이 중복으로 다시 태어나지 않게 함.
+        let everGeneratedChunks = new Set();
+        // [NEW] 지형(generateChunk)은 아직 생성 안 됐지만 addDecoration()으로 독립 배치된 오브젝트(이스터에그 등)가
+        // 있는 청크 키 목록 - updateChunkFreezing()이 generatedChunks와 별도로 이것도 같이 훑어서 freeze 처리함
+        let decorationOnlyChunkKeys = new Set();
         let worldChunksPending = false; // [NEW] 이번 프레임 기준으로 아직 다 못 만든 청크가 남아있는지 (프레임당 생성 개수 제한으로 인해)
         // [FIX-숲렉] getNearbyStaticObjects()가 매번 3x3청크를 spread(...)로 새 배열에 합치는 비용이 큼(숲은 청크당 20~30개
         // → 최대 270개, 게다가 이 함수는 좀비/적 벽 충돌 판정에서 "가까운(50m 이내) 좀비마다 매 프레임" 호출됨 - 숲에서
@@ -2753,6 +2781,7 @@
             else if (isStatsOpen) { closeStatsModal(); }
             else if (isEquipOpen) { closeEquipmentModal(); }
             else if (isKeybindOpen) { closeKeybindModal(); document.body.requestPointerLock(); }
+            else if (isUICustomOpen) { toggleUICustomModal(); } // [NEW] UI 수정 창이 열려있으면(접근성 설정 위에 겹쳐 뜬 상태) 이것부터 닫음
             else if (isAccessibilityOpen) { closeAccessibilityModal(); document.body.requestPointerLock(); }
             else if (isMeritOpen) { closeMeritModal(); }
             else { togglePauseModal(); }
@@ -2844,6 +2873,53 @@
 
         // ─── [NEW] 세이브/로드 시스템 ──────────────────────────────────────────
         const SAVE_VERSION = 1;
+
+        // [요청] 살아있는 몹(좀비/원거리 적/보스)의 위치·종류·상태를 저장하기 위한 직렬화.
+        // AI 내부 진행상황(경로, 목표 등)은 저장하지 않고 재로딩 시 자연스럽게 다시 계산되게 두며,
+        // "어떤 몹이 어디에 얼마의 체력으로 살아있었는지"처럼 눈에 보이는 상태만 정확히 복원함.
+        // 엘프/드워프 마을 주민은 마을 생성 로직에 완전히 묶여있어 개별 복원 대상에서 제외함(마을 재방문 시 마을 생성과 함께 다시 나타남).
+        function serializeMobsForSave() {
+            const zombiesOut = [];
+            for (const z of zombies) {
+                const d = z.userData; if (!d || d.health <= 0) continue;
+                if (d.isElfVillager || d.isDwarfVillager) continue;
+                zombiesOut.push({ x: z.position.x, y: z.position.y, z: z.position.z, ry: z.rotation.y,
+                    health: d.health, maxHealth: d.maxHealth, name: d.name,
+                    isOrc: !!d.isOrc, isTroll: !!d.isTroll, isGiant: !!d.isGiant, isGolem: !!d.isGolem,
+                    isProvoked: !!d.isProvoked, isDayRecognized: d.isDayRecognized, leftSafeZoneRecognized: d.leftSafeZoneRecognized });
+            }
+            const rangedOut = [];
+            for (const e of rangedEnemies) {
+                const d = e.userData; if (!d || d.health <= 0 || d.type === 'bandit') continue; // 강도는 강도 캠프(랜드마크)에 묶여있어 제외
+                rangedOut.push({ x: e.position.x, y: e.position.y, z: e.position.z, ry: e.rotation.y,
+                    health: d.health, maxHealth: d.maxHealth, name: d.name,
+                    isMutant: !!d.isMutant, mutantSkillId: d.mutantSkillId,
+                    isProvoked: !!d.isProvoked, isDayRecognized: d.isDayRecognized, leftSafeZoneRecognized: d.leftSafeZoneRecognized });
+            }
+            const bossesOut = [];
+            for (const b of bosses) {
+                const d = b.userData; if (!d || d.health <= 0) continue;
+                bossesOut.push({ x: b.position.x, y: b.position.y, z: b.position.z, ry: b.rotation.y,
+                    bossType: d.bossType, health: d.health, maxHealth: d.maxHealth, enraged: !!d.enraged,
+                    leftSafeZoneRecognized: d.leftSafeZoneRecognized });
+            }
+            return { zombies: zombiesOut, rangedEnemies: rangedOut, bosses: bossesOut };
+        }
+
+        // [요청] 바닥에 떨어진(아직 안 주운) 아이템의 위치·종류를 저장. userData를 그대로 JSON 직렬화하되
+        // 세션에 종속적인 필드(청크 키, 남은 소멸 프레임)는 제외해 불러온 뒤 재계산되게 함.
+        function serializeItemsForSave() {
+            const out = [];
+            for (const it of items) {
+                if (!it.parent || !it.userData) continue;
+                try {
+                    const safe = JSON.parse(JSON.stringify(it.userData, (k, v) => (k === 'chunkKey' || k === 'expireFrame' || k === 'isGrounded' || k === 'velocityY') ? undefined : v));
+                    out.push({ x: it.position.x, y: it.position.y, z: it.position.z, data: safe });
+                } catch (e) { /* 직렬화 불가능한 항목은 건너뜀 */ }
+            }
+            return out;
+        }
+
         function buildSaveData() {
             const playerPos = gameState.position;
             return {
@@ -2882,6 +2958,7 @@
                 },
                 exploredChunkKeys: Array.from(exploredChunkKeys), // [FIX] 탐험한 청크 기록이 저장 안 돼서 불러오면 재방문 시 통계가 중복 카운트되던 버그
                 triggeredEggs: Array.from(triggeredEggs), // [FIX] 발견한 이스터에그 기록도 저장 안 돼서 불러오면 다시 나타나 중복 획득 가능하던 버그
+                announcedLandmarkTypes: Array.from(announcedLandmarkTypes), // [요청] 지도 랜드마크 최초 발견 알림도 저장해서 재접속 후 다시 뜨지 않게 함
                 playerStamina: playerStamina,
                 unlockedScopeIndex: unlockedScopeIndex,
                 gameStats: gameStats,
@@ -2896,7 +2973,11 @@
                 shopArmorStock: shopArmorStock,
                 curseState: { active: curseState.active, intensity: curseState.intensity, victimNames: curseState.victimNames, curseEventCount: curseState.curseEventCount, apparitionEncountered: curseState.apparitionEncountered },
                 hiddenQuests: hiddenQuests,
-                castleQuest: castleQuest, mercenaryCount: mercenaries.length // [NEW] 울슈쎈성 방어전 진행상황 저장 (용병은 수량만 저장, 불러올 때 재배치)
+                castleQuest: castleQuest, mercenaryCount: mercenaries.length, // [NEW] 울슈쎈성 방어전 진행상황 저장 (용병은 수량만 저장, 불러올 때 재배치)
+                // [요청] 살아있는 몹/아이템까지 전부 저장해서 불러오기 시 그대로 복원되도록 함
+                worldMobs: serializeMobsForSave(),
+                worldItems: serializeItemsForSave(),
+                everGeneratedChunks: Array.from(everGeneratedChunks)
             };
         }
 
@@ -2918,6 +2999,57 @@
             } catch (e) {
                 console.error('저장 실패:', e);
                 document.getElementById('pause-status-msg').textContent = '❌ 저장에 실패했습니다.';
+            }
+        }
+
+        // [요청] serializeMobsForSave/serializeItemsForSave로 저장한 몹/아이템을 정확히 같은 위치·체력·종류로 복원.
+        // 해당 종류의 기존 생성 함수를 그대로 호출해 시각적 모델을 정상적으로 만든 뒤, 저장된 값으로 위치/체력 등을 덮어씀.
+        function restoreWorldMobsAndItems(worldMobs, worldItems) {
+            if (worldMobs) {
+                (worldMobs.zombies || []).forEach(s => {
+                    const before = zombies.length;
+                    if (s.isOrc) createOrc(s.x, s.z, s.y, s.name === '오크 워치프');
+                    else if (s.isTroll) createTroll(s.x, s.z, s.y);
+                    else if (s.isGiant) createGiantZombie(s.x, s.z, s.y);
+                    else if (s.isGolem) createGolem(s.x, s.z, s.y);
+                    else createZombie(s.x, s.z, s.health, s.y);
+                    if (zombies.length === before) return; // 생성 실패(예: 안전구역 등) 시 스킵
+                    const mob = zombies[zombies.length - 1];
+                    mob.position.set(s.x, s.y, s.z); mob.rotation.y = s.ry || 0;
+                    mob.userData.health = s.health; mob.userData.maxHealth = s.maxHealth;
+                    if (s.name) mob.userData.name = s.name;
+                    mob.userData.isProvoked = !!s.isProvoked;
+                    if (typeof s.isDayRecognized === 'boolean') mob.userData.isDayRecognized = s.isDayRecognized;
+                    if (typeof s.leftSafeZoneRecognized === 'boolean') mob.userData.leftSafeZoneRecognized = s.leftSafeZoneRecognized;
+                });
+                (worldMobs.rangedEnemies || []).forEach(s => {
+                    const before = rangedEnemies.length;
+                    createRangedEnemy(s.x, s.z, s.health, s.y);
+                    if (rangedEnemies.length === before) return;
+                    const mob = rangedEnemies[rangedEnemies.length - 1];
+                    mob.position.set(s.x, s.y, s.z); mob.rotation.y = s.ry || 0;
+                    mob.userData.health = s.health; mob.userData.maxHealth = s.maxHealth;
+                    if (s.name) mob.userData.name = s.name;
+                    if (s.isMutant) { mob.userData.isMutant = true; mob.userData.mutantSkillId = s.mutantSkillId; }
+                    mob.userData.isProvoked = !!s.isProvoked;
+                    if (typeof s.isDayRecognized === 'boolean') mob.userData.isDayRecognized = s.isDayRecognized;
+                    if (typeof s.leftSafeZoneRecognized === 'boolean') mob.userData.leftSafeZoneRecognized = s.leftSafeZoneRecognized;
+                });
+                (worldMobs.bosses || []).forEach(s => {
+                    if (!s.bossType) return;
+                    const before = bosses.length;
+                    createBoss(s.bossType, s.x, s.z, s.y);
+                    if (bosses.length === before) return; // 안전구역 등으로 생성이 막혔을 경우 스킵
+                    const boss = bosses[bosses.length - 1];
+                    boss.position.set(s.x, s.y, s.z); boss.rotation.y = s.ry || 0;
+                    boss.userData.health = s.health; boss.userData.maxHealth = s.maxHealth;
+                    boss.userData.enraged = !!s.enraged;
+                    if (boss.userData.homePosition) boss.userData.homePosition.set(s.x, s.y, s.z);
+                    if (typeof s.leftSafeZoneRecognized === 'boolean') boss.userData.leftSafeZoneRecognized = s.leftSafeZoneRecognized;
+                });
+            }
+            if (Array.isArray(worldItems)) {
+                worldItems.forEach(s => { try { spawnItem(s.data, s.x, s.y, s.z); } catch (e) { /* 손상된 항목은 건너뜀 */ } });
             }
         }
 
@@ -2989,6 +3121,7 @@
                 if (gs.hasVaccine) gameState.hasVaccine = true; // [FIX] 히든 백신 보유 여부 복원
                 if (Array.isArray(data.exploredChunkKeys)) exploredChunkKeys = new Set(data.exploredChunkKeys); // [FIX] 탐험한 청크 기록 복원
                 if (Array.isArray(data.triggeredEggs)) data.triggeredEggs.forEach(id => triggeredEggs.add(id)); // [FIX] 발견한 이스터에그 기록 복원
+                if (Array.isArray(data.announcedLandmarkTypes)) data.announcedLandmarkTypes.forEach(t => announcedLandmarkTypes.add(t)); // [요청] 지도 랜드마크 발견 알림 기록 복원
 
                 if (typeof data.playerStamina === 'number') playerStamina = data.playerStamina;
                 if (typeof data.unlockedScopeIndex === 'number') unlockedScopeIndex = data.unlockedScopeIndex;
@@ -3029,6 +3162,11 @@
                     });
                 }
 
+                // [요청] 청크 재생성 시 1회성 몹/보스/아이템 스폰이 중복되지 않도록, 이번 플레이(불러오기 이전 포함)에서
+                // 이미 그 스폰이 일어난 청크 목록부터 복원한 뒤, 저장돼 있던 몹/아이템을 정확히 그 자리에 되살림
+                if (Array.isArray(data.everGeneratedChunks)) everGeneratedChunks = new Set(data.everGeneratedChunks);
+                restoreWorldMobsAndItems(data.worldMobs, data.worldItems);
+
                 return true;
             } catch (e) {
                 console.error('불러오기 실패:', e);
@@ -3068,7 +3206,10 @@
         }
 
         function quitGame() {
-            location.reload();
+            // [요청] 종료 시 창을 닫기 전에 먼저 게임을 저장함 (기존 저장 로직 그대로 재사용 - 파일 다운로드로 저장됨)
+            try { saveGameToFile(); } catch (e) { console.error('종료 전 저장 실패:', e); }
+            // saveGameToFile()의 다운로드(Blob URL 클릭)가 실제로 시작될 시간을 아주 짧게 준 뒤 종료함
+            setTimeout(() => { location.reload(); }, 300);
         }
 
         // ─── [NEW] 장비창 시스템 ──────────────────────────────────────────────
@@ -3357,14 +3498,48 @@
 
         function startLoading() {
             const tips = [
+                "WASD로 이동, Shift로 달리기, Space로 점프합니다.",
+                "좌클릭으로 사격, 우클릭으로 조준합니다. 조준 중 마우스 휠을 굴려 줌 배율을 조절하세요.",
+                "R키로 재장전, F키로 상호작용(줍기/탑승/대화/거래)합니다.",
+                "숫자키 1~5로 소지한 무기를 빠르게 전환할 수 있습니다.",
                 "E키(또는 ESC)를 눌러 일시정지 메뉴를 열고 저장/불러오기/장비창 이동이 가능합니다.",
                 "일시정지 메뉴의 '스킬 키 설정'에서 각 스킬의 사용 키를 원하는 대로 바꿀 수 있습니다.",
                 "방어구는 몹이나 보스를 처치하면 드랍됩니다. 가방에 보관되며 장비창에서 장착해야 효과가 적용됩니다.",
                 "모자(Q), 흉갑(Z), 바지(X), 부츠(C)에 붙은 인첸트는 각 키를 눌러 액티브 스킬로 발동할 수 있습니다.",
+                "수류탄은 기본적으로 I키로 투척합니다 (스킬 키 설정에서 변경 가능).",
                 "엘프와 드워프 마을 주민은 평소엔 평화롭지만, 먼저 공격하면 반격합니다.",
                 "용암은 밟으면 지속 피해를 입으니 주의하세요. 부츠 인첸트로 피해를 줄일 수 있습니다.",
-                "P키를 눌러 능력치를 찍어보세요.", "T키를 눌러 스코프 배율 한계를 변경할 수 있습니다.", "우클릭 조준 중 마우스 휠을 굴려 줌을 조절하세요.", "레벨업 시 체력과 스태미나가 모두 회복됩니다.", "F 키로 차량에 탑승하거나 아이템을 주울 수 있습니다."
-            ]; 
+                "P키를 눌러 능력치를 찍어보세요.",
+                "T키를 눌러 스코프 배율 한계를 변경할 수 있습니다.",
+                "우클릭 조준 중 마우스 휠을 굴려 줌을 조절하세요.",
+                "레벨업 시 체력과 스태미나가 모두 회복됩니다.",
+                "F 키로 차량에 탑승하거나 아이템을 주울 수 있습니다.",
+                "안전구역을 벗어나면 몬스터들이 당신을 인식하기 시작합니다. 한번 벗어나면 되돌아와도 소용없습니다.",
+                "밤이 되면 좀비가 훨씬 위험해집니다. 낮 동안은 좀비가 지속 피해를 입지만 밤에는 그렇지 않습니다.",
+                "가끔 밤에 좀비 무리(호드)가 몰려올 수 있으니 대비하세요.",
+                "고층 건물 내부에는 층과 층을 잇는 엘리베이터(포탈)가 있습니다.",
+                "차량은 F키로 탑승/하차하고, 탑승 중에는 WASD로 운전합니다.",
+                "상인에게 무기, 방어구, 탄약을 사고팔 수 있습니다.",
+                "일시정지 메뉴의 접근성 설정에서 시야범위(안개가 시작되는 거리)를 조절할 수 있습니다.",
+                "M키로 미니맵을 열어 주변 지형과 건물 위치를 확인할 수 있습니다.",
+                "이 세계 곳곳에는 신비로운 것들이 숨겨져 있습니다. 눈여겨보면 특별한 것을 발견할지도 모릅니다.",
+                "보스는 여러 단계(페이즈)를 거치며, 너무 멀리 도망치면 추격을 포기하고 원래 자리로 돌아갑니다.",
+                "종료 버튼을 누르면 게임이 자동으로 저장된 뒤 종료됩니다.",
+                "업적을 달성하면 생존자에게 찾아가 보상을 수령할 수 있습니다.",
+                "몬스터는 플레이어의 시야범위 밖에서는 움직임을 멈추고, 너무 멀어지면 아예 사라지기도 합니다.",
+                "게임 속 시간은 실제 시간보다 천천히 흐릅니다. 낮과 밤 모두 여유롭게 즐길 수 있습니다.",
+                "엘프 마을, 드워프 마을, 오크 군락 등 각 종족의 정착지에는 저마다의 이야기와 상점이 있습니다.",
+                "강도 캠프 근처는 위험할 수 있으니 조심해서 접근하세요.",
+                "인벤토리가 가득 차면 필요 없는 무기나 방어구를 상인에게 파는 것도 방법입니다.",
+                "체력이 부족할 때는 의료키트를, 스태미나가 부족할 때는 에너지드링크를 사용해보세요.",
+                "저격총 계열 무기는 사거리가 길지만 연사 속도가 느립니다. 상황에 맞는 무기를 고르세요.",
+                "산탄총(샷건)은 근거리에서 강력하지만 먼 거리에서는 위력이 크게 줄어듭니다.",
+                "기관총(LMG) 계열은 탄창이 크지만 재장전 시간이 긴 편입니다.",
+                "탄약은 무기 종류마다 별도로 관리되니, 주력 무기에 맞는 탄약을 챙겨두세요.",
+                "몹을 처치하면 가끔 무기나 방어구, 탄약을 드랍합니다.",
+                "체력이 위험할 정도로 낮아지면 무리하게 싸우기보다 잠시 후퇴하는 것도 좋은 전략입니다.",
+                "일시정지 메뉴에서 언제든 게임을 저장할 수 있으니, 위험한 곳에 들어가기 전에 저장해두는 습관을 들이세요.",
+            ];
             let tipIndex = 0; const tipElement = document.getElementById('loading-tips'); tipElement.textContent = `게임 팁: ${tips[tipIndex]}`;
             const tipInterval = setInterval(() => { tipIndex = (tipIndex + 1) % tips.length; tipElement.textContent = `게임 팁: ${tips[tipIndex]}`; }, 3000);
             let progress = 0;
@@ -3389,6 +3564,7 @@
             syncStatSkillTiers(); // [NEW] 저장된(혹은 초기) 스탯 기준으로 히든 스킬 티어를 조용히 동기화
             loadKeyBindings(); // [NEW] 이전에 저장해둔 스킬 키 설정 불러오기 (없으면 기본값)
             loadAccessibilitySettings(); // [NEW] 이전에 저장해둔 접근성 설정(청크 로딩 반경/시야 범위/마우스 감도) 불러오기
+            loadUICustomization(); // [NEW] 이전에 저장해둔 UI 커스터마이징(표시여부/색/투명도) 불러와서 즉시 적용
             // [FIX] createScene()이 이 호출보다 먼저 실행돼서 scene.fog가 기본 시야값으로 이미 만들어진 뒤이므로,
             // 저장된 시야 범위 설정을 여기서 다시 한번 명시적으로 적용해줌 (안 하면 저장된 커스텀 값이 게임 시작 시 무시됨)
             if (scene && scene.fog) scene.fog.far = accessibilitySettings.viewDistance;
@@ -3488,7 +3664,14 @@
         // [OPTIMIZATION] 청크 freeze 시스템: 멀리 떨어진 청크의 정적 오브젝트(나무/건물/돌)는
         // 완전히 삭제하지 않고 visible만 끄고 충돌검사 대상에서 제외 -> 다시 가까워지면 복구.
         // (완전 삭제 후 재생성 방식보다 안전하고, instancedMesh 재구축 비용도 없음)
-        const FREEZE_CHUNK_DISTANCE = 6; // [MODIFIED] 청크 크기가 100m로 절반이 된 만큼 동일한 실거리(약 600m)를 유지하도록 6으로 조정
+        // [FIX-반경축소버그] 기존엔 6(약 600m)으로 고정된 상수라서, 사용자가 접근성 설정에서 청크 로딩 반경을
+        // 늘렸다가(예: 800m) 다시 줄여도(예: 100m) freeze/unload 기준 거리는 전혀 안 바뀌어서, 이미 로딩된 먼 청크들이
+        // 새로 줄인 반경과 무관하게 계속(최대 600m까지는 얼지도 않고, 최대 1800m까지는 메모리도 안 풀린 채) 남아있었음.
+        // 함수로 바꿔서 접근성 설정의 현재 로딩 반경을 기준으로 매번 다시 계산되게 함 - 반경을 줄이면 다음 freeze
+        // 체크 주기(플레이어가 조금만 움직여도 됨)에 바로 그만큼 더 가까운 거리부터 얼리기/해제하기 시작함.
+        // [FIX-반경축소버그 -> FIX-사각형버그] 이 함수들은 청크(격자) 단위의 정사각형 거리를 반환해서
+        // updateChunkFreezing()에서 쓰였으나, 대각선 방향으로 실제보다 최대 약 41% 더 멀리까지 얼지 않는
+        // 오차가 있어 미터 단위 원형 거리 계산으로 교체함 (updateChunkFreezing 내부 참고). 더 이상 쓰이지 않음.
         let frozenChunks = new Set();
         // [NEW] 청크 언로드(완전 해제) 시스템: freeze(숨김)보다 훨씬 먼 거리까지 가면
         // 청크의 지형(땅/용암) GPU 지오메트리를 실제로 dispose()하여 메모리를 회수함.
@@ -3496,7 +3679,6 @@
         //   건물/좀비/NPC/아이템/퀘스트 등 상태를 가진 "게임 요소"는 여전히 건드리지 않음 (freeze 시스템으로 충분히 처리됨)
         // - 지형은 월드 시드 기반의 순수 함수(getTerrainHeight/getBiome)로, 나무/바위는 캐시된 matrices로
         //   재생성되므로, 플레이어가 되돌아오면 완전히 동일한 모양/자리로 즉시 재생성됨 (구멍 없음, 중복/리스폰 없음)
-        const UNLOAD_CHUNK_DISTANCE = FREEZE_CHUNK_DISTANCE * 3; // 약 1800m - 이 이상 멀어진 청크만 지형 데이터를 실제로 해제
         let chunkTerrainRefs = new Map(); // chunkKey -> { ground, lava } (현재 씬에 존재하는 지형 메시 참조)
         let terrainUnloadedChunks = new Set(); // 지형이 dispose되어 현재 씬에 없는 청크 키 목록
         // [NEW] 나무/바위 언로드 시스템: 청크가 UNLOAD_CHUNK_DISTANCE보다 멀어지면 InstancedMesh(줄기/이파리/바위)와
@@ -3724,6 +3906,31 @@
         }
         // [NEW] 마을/캠프/군락 등 대형 구조물이 서로 겹쳐서 생성되지 않도록 위치를 기록해두는 registry
         let landmarkRegistry = []; // { x, z, radius, type }
+        // [요청] "청크가 로딩될 때마다 무조건 알려주는" 대신, 지도를 열었을 때 그 지도에 표시되는 범위 안에
+        // 마을/캠프/군락이 있으면 그 종류당 딱 한 번만 알려주도록 함 (세이브에 포함되어 재접속해도 다시 안 뜸).
+        let announcedLandmarkTypes = new Set();
+        const LANDMARK_MAP_MESSAGES = {
+            elf_village: '🌿 지도에 엘프 마을이 나타났다! 근처라면 [E]키로 장로/전사/상인에게 대화해보자.',
+            dwarf_mine: '⛏️ 지도에 드워프 광산이 나타났다! 근처라면 [E]키로 장로/광부/상인에게 대화해보자.',
+            bandit_camp: '⚠️ 지도에 강도 캠프가 나타났다! 조심해서 접근하자.',
+            troll_colony: '🌲 지도에 거대한 세계수와 트롤 군락이 나타났다...',
+            orc_colony: '🏕️ 지도에 오크 군락이 나타났다!',
+        };
+        // [요청] 지도(미니맵)를 열었을 때, 표시 범위(MINIMAP_WORLD_RADIUS) 안에 아직 알려주지 않은 종류의
+        // 랜드마크가 있으면 그 종류에 대해 딱 한 번만 알려줌. landmarkRegistry엔 실제로 생성된(=청크가 로딩된)
+        // 랜드마크만 들어있으므로, 자연스럽게 "지도에서 로딩된 부분에 있는" 것만 대상이 됨.
+        function checkMapLandmarkDiscoveries() {
+            const px = gameState.position.x, pz = gameState.position.z;
+            const radiusSq = MINIMAP_WORLD_RADIUS * MINIMAP_WORLD_RADIUS;
+            for (const lm of landmarkRegistry) {
+                if (announcedLandmarkTypes.has(lm.type)) continue;
+                const dx = lm.x - px, dz = lm.z - pz;
+                if (dx * dx + dz * dz > radiusSq) continue;
+                announcedLandmarkTypes.add(lm.type);
+                const msg = LANDMARK_MAP_MESSAGES[lm.type];
+                if (msg) showChat('시스템', msg);
+            }
+        }
         const LANDMARK_MIN_GAP = 25; // 서로 다른 랜드마크 사이에 두는 최소 여유 간격(m)
         function isLandmarkAreaClear(x, z, radius) {
             // 도시 바이옴과 겹치는지 확인 (중심 + 반경 방향 4점 샘플링으로 대략적으로 체크)
@@ -3766,34 +3973,76 @@
             activeStructuresDirty = true; // 구조물 활성 상태가 바뀜 -> 캐시 갱신 필요
         }
 
+        // [요청] 최초 생성 시(generateChunk)에만 적용되던 "밤에 10% 확률로 좀비/적 추가 스폰"을,
+        // 플레이어가 떠났다가 밤에 다시 돌아와 청크가 재로딩(freeze -> active)될 때도 동일하게 적용하기 위한 공용 함수.
+        // 최초 생성 때는 청크별 결정론적 seed(chunkRand)를 쓰지만, 재로딩은 같은 청크에서 여러 번 반복될 수 있는
+        // 순수 게임플레이 이벤트라 결정론이 필요 없어 Math.random()을 그대로 사용함.
+        function trySpawnNightMobsOnChunkReload(chunkKey) {
+            if (!isNight) return; // 밤에만 적용
+            if (!generatedChunks.has(chunkKey)) return; // 실제 지형이 있는 청크에서만 (이스터에그 전용 더미 청크 등은 제외)
+            const [cx, cz] = chunkKey.split(',').map(Number);
+            // 울슈쎈성 근처(성 중심 기준 1청크 이내)는 generateChunk와 동일하게 완전히 제외
+            const castleChunkX = Math.round(CASTLE_CENTER.x / CHUNK_SIZE), castleChunkZ = Math.round(CASTLE_CENTER.z / CHUNK_SIZE);
+            if (Math.max(Math.abs(cx - castleChunkX), Math.abs(cz - castleChunkZ)) <= 1) return;
+            const chunkOriginX = cx * CHUNK_SIZE, chunkOriginZ = cz * CHUNK_SIZE;
+            const centerBiome = getBiome(chunkOriginX, chunkOriginZ);
+            if (centerBiome === 'volcano') return; // 몹은 화산엔 스폰되지 않음
+            const distFromOrigin = Math.sqrt(chunkOriginX * chunkOriginX + chunkOriginZ * chunkOriginZ);
+            if (distFromOrigin <= SAFE_ZONE_RADIUS) return; // 안전구역 밖에서만
+            if (Math.random() > 0.90) { // 10% 확률 (generateChunk의 chunkRand() > 0.90과 동일한 임계값)
+                const nx = chunkOriginX + (Math.random() - 0.5) * CHUNK_SIZE; const nz = chunkOriginZ + (Math.random() - 0.5) * CHUNK_SIZE; const ny = getTerrainHeight(nx, nz);
+                if (ny > LAVA_LEVEL) {
+                    const nightZombieCount = Math.floor(Math.random() * 4) + 1;
+                    for (let i = 0; i < nightZombieCount; i++) { const zx = nx + (Math.random() - 0.5) * 12; const zz = nz + (Math.random() - 0.5) * 12; const zy = getTerrainHeight(zx, zz); if (zy > LAVA_LEVEL) { createZombie(zx, zz, 500, zy); } }
+                    if (Math.random() > 0.7) { createRangedEnemy(nx, nz, 500 + Math.random() * 500, ny); }
+                }
+            }
+        }
+
         function updateChunkFreezing() {
             const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
-            const playerChunkX = Math.round(playerPos.x / CHUNK_SIZE);
-            const playerChunkZ = Math.round(playerPos.z / CHUNK_SIZE);
+            // [FIX-사각형버그] 기존엔 청크 격자 좌표의 체비셰프(정사각형) 거리로 비교했음 - 대각선 방향 청크는
+            // 실제로는 반경 밖(원형 기준)인데도 사각형 기준으로는 "안" 판정을 받아 반경을 아무리 줄여도 대각선
+            // 방향으로는 계속 훨씬 멀리까지(최대 약 41% 더 멀리) 로딩된 상태로 남아있던 원인이었음.
+            // (반경이 작을수록 이 오차의 "체감 비중"이 커져서, 최소값 근처에서 특히 "안 줄어드는 것처럼" 느껴졌음)
+            // updateWorldChunks의 신규 생성 판정과 동일하게, 플레이어로부터의 실제 미터 단위 원형 거리로 통일함.
+            const freezeDistM = accessibilitySettings.chunkPreloadRadius + CHUNK_SIZE * RENDER_DISTANCE;
+            const unloadDistM = freezeDistM * 3;
             const newFrozen = new Set();
             const newActive = new Set();
             for (const chunkKey of generatedChunks) {
                 const [cx, cz] = chunkKey.split(',').map(Number);
-                const dist = Math.max(Math.abs(cx - playerChunkX), Math.abs(cz - playerChunkZ));
-                if (dist > FREEZE_CHUNK_DISTANCE) newFrozen.add(chunkKey);
+                const dx = cx * CHUNK_SIZE - playerPos.x, dz = cz * CHUNK_SIZE - playerPos.z;
+                const dist = Math.sqrt(dx * dx + dz * dz); // 청크 중심까지의 실제 원형 거리(미터)
+                if (dist > freezeDistM) newFrozen.add(chunkKey);
                 else newActive.add(chunkKey);
                 // [NEW] freeze보다 훨씬 먼 청크는 지형 GPU 메모리까지 완전히 해제 (건물/좀비/아이템/퀘스트는 그대로 유지)
-                if (dist > UNLOAD_CHUNK_DISTANCE) {
+                if (dist > unloadDistM) {
                     unloadChunkTerrain(chunkKey);
                     unloadChunkDecorations(chunkKey); // [NEW] 나무/바위도 함께 완전히 해제 (objects 배열 무한 증가 방지)
                 } else if (terrainUnloadedChunks.has(chunkKey)) {
                     // 되돌아왔다면 원래와 완전히 동일한 지형을 즉시 재생성 (구멍 없음)
-                    reloadChunkTerrain(chunkKey, cx, cz, dist > FREEZE_CHUNK_DISTANCE);
+                    reloadChunkTerrain(chunkKey, cx, cz, dist > freezeDistM);
                 }
-                if (decorationsUnloadedChunks.has(chunkKey) && dist <= UNLOAD_CHUNK_DISTANCE) {
+                if (decorationsUnloadedChunks.has(chunkKey) && dist <= unloadDistM) {
                     // [NEW] 되돌아왔다면 나무/바위도 원래와 완전히 동일한 자리에 즉시 재생성
-                    reloadChunkDecorations(chunkKey, dist > FREEZE_CHUNK_DISTANCE);
+                    reloadChunkDecorations(chunkKey, dist > freezeDistM);
                 }
+            }
+            // [FIX-이스터에그렉] 지형은 생성 안 됐지만(플레이어가 근처를 밟은 적 없어서) 이스터에그처럼 addDecoration()으로
+            // 독립 배치된 오브젝트가 있는 청크 - 기존엔 이 루프가 generatedChunks만 훑어서, 이런 청크는 freeze 대상에
+            // 아예 들지도 못해 플레이어가 아무리 멀리 있어도(지구 반대편이라도) 영원히 안 꺼지고 계속 렌더링/조명이 켜져 있었음.
+            for (const chunkKey of decorationOnlyChunkKeys) {
+                if (generatedChunks.has(chunkKey)) { decorationOnlyChunkKeys.delete(chunkKey); continue; } // 나중에 실제 지형까지 생성됐다면 위 루프가 이미 처리하므로 중복 방지
+                const [cx, cz] = chunkKey.split(',').map(Number);
+                const dx = cx * CHUNK_SIZE - playerPos.x, dz = cz * CHUNK_SIZE - playerPos.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist > freezeDistM) newFrozen.add(chunkKey); else newActive.add(chunkKey);
             }
             // 새로 얼어야 할 청크: freeze 적용
             for (const key of newFrozen) { if (!frozenChunks.has(key)) setChunkFrozen(key, true); }
             // 더 이상 멀지 않은 청크: unfreeze (복구)
-            for (const key of frozenChunks) { if (!newFrozen.has(key)) setChunkFrozen(key, false); }
+            for (const key of frozenChunks) { if (!newFrozen.has(key)) { setChunkFrozen(key, false); trySpawnNightMobsOnChunkReload(key); } }
             frozenChunks = newFrozen;
             activeChunkKeys = newActive;
         }
@@ -3803,10 +4052,22 @@
             return `${Math.round(x / CHUNK_SIZE)},${Math.round(z / CHUNK_SIZE)}`;
         }
 
-        // 몹이 활성 청크에 있는지 여부 반환
+        // 몹이 활성 청크에 있는지 여부 반환 (건물/지형 등 청크 로딩 시스템 자체는 그대로 유지 - 이 함수는 건드리지 않음)
         function isEnemyInActiveChunk(enemy) {
             const key = getChunkKeyForPos(enemy.position.x, enemy.position.z);
             return activeChunkKeys.has(key);
+        }
+
+        // [요청] 몹/오브젝트(보스, 차량, 공격적/친화적/중립적 몹, 이스터에그)의 로딩(AI 활성화/가시성) 기준을
+        // "청크 범위"가 아니라 "시야범위"(접근성 설정의 viewDistance, 안개 시작 거리와 동일 개념)로 통일함.
+        // 건물/지형 청크 생성·언로드 시스템(updateWorldChunks, generateChunk, activeChunkKeys 등)은 별개이며 이 변경의 영향을 받지 않음.
+        // 청크는 100m 격자 단위라 경계에서 몹이 갑자기 사라지거나("청크 팝인") 대각선 방향은 실제보다 더 멀리서 꺼지는 등
+        // 들쭉날쭉했는데, 플레이어 중심의 원형 거리 기준으로 바꿔서 어느 방향이든 동일한 거리에서 일관되게 켜지고/꺼지게 됨.
+        function isInViewRange(pos) {
+            const vp = playerInVehicle ? playerInVehicle.position : gameState.position;
+            const vr = accessibilitySettings.viewDistance;
+            const dx = pos.x - vp.x, dz = pos.z - vp.z;
+            return (dx * dx + dz * dz) <= vr * vr;
         }
 
         function updateWorldChunks() { 
@@ -3923,10 +4184,14 @@
         // ==================== [NEW] 이스터에그 ====================
         let easterEggs = [];
         const triggeredEggs = new Set();
+        // [요청] 특정 이스터에그가 사라지면 그 자리에 이어서 등장하는 "연계 이스터에그" 시스템에서,
+        // 이미 찾은 부모 에그의 원래 좌표를 다시 찾아 자식 에그를 스폰하기 위한 좌표 조회용 (spawnEasterEggs에서 채워짐)
+        let eggPosById = {};
 
         // [NEW] 완료된 이스터에그를 씬에서 완전히 제거 (지오메트리/재질까지 해제, 다시는 보이지 않음)
         function removeEasterEgg(egg) {
             if (!egg || !egg.mesh) return;
+            const finishedId = egg.id, finishedX = egg.x, finishedZ = egg.z; // splice로 egg가 배열에서 빠지기 전에 미리 챙겨둠
             if (egg.mesh.parent) scene.remove(egg.mesh);
             egg.mesh.traverse(obj => {
                 if (obj.geometry) obj.geometry.dispose();
@@ -3939,10 +4204,19 @@
             }
             const idx = easterEggs.indexOf(egg);
             if (idx !== -1) easterEggs.splice(idx, 1);
+            // [요청] 특정 이스터에그가 사라지면 이어서 연계된 이스터에그가 그 자리에 등장하는 시스템
+            if (EGG_CHAIN_NEXT[finishedId]) trySpawnChainEgg(finishedId, finishedX, finishedZ);
         }
 
         function spawnEasterEggs() {
             if (easterEggs.length > 0) return; // 이미 배치됨 (재시작/로드 시 중복 방지)
+            // [요청] 스핑크스 수수께끼처럼 여러 개의 트리거 지점이 서로 얽혀 하나의 퍼즐을 이루는
+            // 상호작용형 이스터에그를 위한 공유 상태. spawnEasterEggs는 세션당 한 번만 호출되므로
+            // 아래 onTrigger 클로저들이 이 지역 변수들을 안전하게 계속 공유해서 참조/갱신할 수 있음.
+            let sphinxRiddleRevealed = false;
+            let colorTotemProgress = 0; // 0=빨강 기다림, 1=검정 기다림, 2=파랑 기다림, 3=완료
+            let colorTotemsSolved = false;
+            let twinBellPrimedUntil = 0;
             const eggDefs = [
                 {
                     id: 'monolith', x: 250, z: 250, radius: 6,
@@ -3959,7 +4233,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 모노리스의 축복 - 몰록 500 + XP 300 획득!'); addMoloch(500); gainXP(300);
                             showChat('시스템', '🗿 모노리스가 임무를 다했다는 듯 빛을 잃고 스러진다...');
-                            removeEasterEgg(egg); // [NEW] 완료 후 완전히 삭제
+                            animateEggDespawn(egg); // [NEW] 완료 후 완전히 삭제
                         }, 2800);
                     }
                 },
@@ -4012,7 +4286,7 @@
                         setTimeout(() => {
                             showChat('시스템', '📜 [이스터에그] 개발자의 선물 - 몰록 300 + XP 200 획득!'); addMoloch(300); gainXP(200);
                             showChat('시스템', '🔥 쪽지가 불씨에 타 재가 되어 흩어진다...');
-                            removeEasterEgg(egg); // [NEW] 완료 후 완전히 삭제
+                            animateEggDespawn(egg); // [NEW] 완료 후 완전히 삭제
                         }, 3000);
                     }
                 },
@@ -4028,7 +4302,7 @@
                     },
                     onTrigger: (egg) => {
                         showChat('시스템', '🌀 발밑의 초록빛 서클이 강렬하게 빛나며 몸이 붕 떠오른다!');
-                        removeEasterEgg(egg); // [NEW] 크롭서클은 발동 즉시 임무를 마치고 사라짐
+                        animateEggDespawn(egg); // [NEW] 크롭서클은 발동 즉시 임무를 마치고 사라짐
                         // [FIX] 차량에 탑승 중이면 먼저 하차시킴 - 안 그러면 gameState.position만 순간이동하고
                         // 실제 표시 위치인 vehicle.position은 그대로 남아있어 새 위치의 청크가 로딩되지 않던 문제가 있었음
                         if (playerInVehicle) { toggleVehicle(playerInVehicle); }
@@ -4068,7 +4342,7 @@
                         setTimeout(() => {
                             showChat('시스템', '💰 [이스터에그] 해적의 보물 - 몰록 1000 획득!'); addMoloch(1000);
                             showChat('시스템', '⛏️ 상자가 텅 비고 모래바람에 서서히 뒤덮인다...');
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 2800);
                     }
                 },
@@ -4095,7 +4369,7 @@
                             gameState.health = getMaxHealth(); playerStamina = getMaxStamina();
                             showChat('시스템', '✨ [이스터에그] 우물의 축복 - 스탯 포인트 +1, 체력/스태미나 전부 회복!');
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3000);
                     }
                 },
@@ -4124,7 +4398,7 @@
                             gameState.speedBoost = (gameState.speedBoost || 1) * 1.3;
                             setTimeout(() => { gameState.speedBoost = Math.max(1, (gameState.speedBoost || 1.3) / 1.3); showChat('시스템', '👣 다리의 이상한 활력이 사라졌습니다.'); }, 45000);
                             showChat('시스템', '✨ [이스터에그] 미지의 존재의 가호 - 45초간 이동속도 +30%!');
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3200);
                     }
                 },
@@ -4158,7 +4432,7 @@
                                 gainXP(600);
                                 showChat('시스템', '✨ [이스터에그] 운석의 파편 - XP 600 획득!');
                             }
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3000);
                     }
                 },
@@ -4186,7 +4460,7 @@
                             gameState.health = getMaxHealth(); playerStamina = getMaxStamina();
                             showChat('시스템', `✨ [이스터에그] 제단의 축복 - <span style="color:#ffcc00">${STAT_LABELS[chosen]}</span> 영구 +3!`);
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 2800);
                     }
                 },
@@ -4214,7 +4488,7 @@
                             gameState.health = getMaxHealth();
                             showChat('시스템', '✨ [이스터에그] 등대지기의 축복 - 최대 체력 영구 +150!');
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3000);
                     }
                 },
@@ -4240,7 +4514,7 @@
                             gameState.statPoints = (gameState.statPoints || 0) + 5;
                             showChat('시스템', '✨ [이스터에그] 전설의 검 - 자유 배분 가능한 스탯 포인트 +5 획득! (스탯 창에서 원하는 대로 분배하세요)');
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3000);
                     }
                 },
@@ -4266,7 +4540,7 @@
                         setTimeout(() => {
                             gainXP(1000);
                             showChat('시스템', '✨ [이스터에그] 숨겨진 방송 신호 해독 - XP 1000 획득!');
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3000);
                     }
                 },
@@ -4322,7 +4596,7 @@
                     onTrigger: (egg) => {
                         showChat('시스템', '🛸 [외계인 시리즈 1/5] 추락한 비행체의 잔해를 발견했습니다...');
                         setTimeout(() => showChat('시스템', '아직 온기가 남은 엔진 코어를 회수했습니다. 몰록 600 + XP 300!'), 1800);
-                        setTimeout(() => { addMoloch(600); gainXP(300); removeEasterEgg(egg); }, 2400);
+                        setTimeout(() => { addMoloch(600); gainXP(300); animateEggDespawn(egg); }, 2400);
                     }
                 },
                 {
@@ -4339,7 +4613,7 @@
                     onTrigger: (egg) => {
                         showChat('시스템', '🛸 [외계인 시리즈 2/5] 검은 돌기둥에 새겨진 문양이 스스로 빛나기 시작한다...');
                         setTimeout(() => showChat('???', '...우리는... 오래전... 이곳에... 있었다...'), 2000);
-                        setTimeout(() => { showChat('시스템', '📜 고대 외계 지식이 머릿속에 흘러들어온다 - XP 800 획득!'); gainXP(800); removeEasterEgg(egg); }, 4200);
+                        setTimeout(() => { showChat('시스템', '📜 고대 외계 지식이 머릿속에 흘러들어온다 - XP 800 획득!'); gainXP(800); animateEggDespawn(egg); }, 4200);
                     }
                 },
                 {
@@ -4365,7 +4639,7 @@
                                 gainXP(700);
                                 showChat('시스템', '👽 [이스터에그] 외계 포자의 지식 - XP 700 획득!');
                             }
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3000);
                     }
                 },
@@ -4389,7 +4663,7 @@
                             const wKey = weaponKeys[Math.floor(Math.random() * weaponKeys.length)];
                             spawnItem({ type: 'weapon', name: wKey }, dropPos.x, dropPos.y, dropPos.z);
                             showChat('시스템', `📦 [이스터에그] 외계의 보급 상자가 떨어졌다! ${WEAPON_DATABASE[wKey].name} 획득 가능!`);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4200);
                     }
                 },
@@ -4414,7 +4688,7 @@
                             showChat('시스템', '👽 [이스터에그] 외계 생명체의 마지막 선물 - 자유 배분 가능한 스탯 포인트 +5 + 몰록 1200!');
                             gameState.statPoints = (gameState.statPoints || 0) + 5; addMoloch(1200);
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4400);
                     }
                 },
@@ -4437,7 +4711,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 잊혀진 병사의 유산 - 몰록 700 + XP 350 획득!');
                             addMoloch(700); gainXP(350);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3400);
                     }
                 },
@@ -4459,7 +4733,7 @@
                             gameState.speedBoost = (gameState.speedBoost || 1) * 1.2;
                             setTimeout(() => { gameState.speedBoost = Math.max(1, (gameState.speedBoost || 1.2) / 1.2); showChat('시스템', '균열의 기운이 사라졌습니다.'); }, 60000);
                             addMoloch(400);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3600);
                     }
                 },
@@ -4479,7 +4753,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 지나간 시절의 기억 - XP 500 + 몰록 300 획득!');
                             gainXP(500); addMoloch(300);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4000);
                     }
                 },
@@ -4500,7 +4774,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 유령 악사의 선율 - 45초간 경험치 획득량 +50%!');
                             gameState.xpBoostMultiplier = 1.5; gameState.xpBoostUntil = Date.now() + 45000;
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3600);
                     }
                 },
@@ -4520,7 +4794,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 황금 물고기 - 몰록 900 획득!');
                             addMoloch(900);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 1800);
                     }
                 },
@@ -4541,7 +4815,7 @@
                             gameState.ammoInventory['7.62mm'] = (gameState.ammoInventory['7.62mm'] || 0) + 120;
                             showChat('시스템', '✨ [이스터에그] 옛 전쟁의 유산 - 7.62mm 탄약 120발 + 몰록 500 획득!');
                             addMoloch(500); updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 2200);
                     }
                 },
@@ -4562,7 +4836,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 예언자의 경고 - XP 600 획득!');
                             gainXP(600);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4000);
                     }
                 },
@@ -4584,7 +4858,7 @@
                             showChat('시스템', '✨ [이스터에그] 오르골의 위로 - 체력/스태미나 전부 회복 + XP 400 획득!');
                             gameState.health = gameState.maxHealth; playerStamina = 100;
                             gainXP(400); updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 2600);
                     }
                 },
@@ -4607,7 +4881,7 @@
                             showChat('시스템', '✨ [이스터에그] 은둔자의 마지막 조언 - 자유 배분 가능한 스탯 포인트 +2 획득!');
                             gameState.statPoints = (gameState.statPoints || 0) + 2;
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3400);
                     }
                 },
@@ -4629,7 +4903,7 @@
                             spawnItem({ type: 'armor', armorData: piece, name: getArmorPieceLabel(piece) }, egg.mesh.position.x + 1, egg.mesh.position.y, egg.mesh.position.z + 1);
                             showChat('시스템', '✨ [이스터에그] 방공호의 보급품 - 방어구 지급 + 몰록 400 획득!');
                             addMoloch(400);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 2200);
                     }
                 },
@@ -4658,7 +4932,7 @@
                                 gainXP(800);
                             }
                             addMoloch(300);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3600);
                     }
                 },
@@ -4682,7 +4956,7 @@
                             showChat('시스템', '✨ [이스터에그] 불길한 예감 - 자유 배분 가능한 스탯 포인트 +3 획득!');
                             gameState.statPoints = (gameState.statPoints || 0) + 3;
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3600);
                     }
                 },
@@ -4705,7 +4979,7 @@
                             showChat('시스템', '✨ [이스터에그] 마녀의 마지막 비약 - 체력/스태미나 전부 회복 + XP 450 획득!');
                             gameState.health = getMaxHealth(); playerStamina = getMaxStamina();
                             gainXP(450); updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3200);
                     }
                 },
@@ -4726,7 +5000,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 드워프의 유산 - 몰록 1100 획득!');
                             addMoloch(1100);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 2000);
                     }
                 },
@@ -4754,7 +5028,7 @@
                                 gainXP(500);
                             }
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3200);
                     }
                 },
@@ -4781,7 +5055,7 @@
                                 showChat('시스템', '✨ [이스터에그] 검객의 유지 - XP 600 획득! (일섬을 익히면 더 큰 공명이 있을지도...)');
                                 gainXP(600);
                             }
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3200);
                     }
                 },
@@ -4808,7 +5082,7 @@
                                 setTimeout(() => { if (w) { w.damageBonus = Math.max(1, (w.damageBonus || 1.25) / 1.25); showChat('시스템', '⚡ 폭풍의 기운이 잦아들었습니다.'); } }, 45000);
                             }
                             addMoloch(350);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 2400);
                     }
                 },
@@ -4830,7 +5104,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 그 시절의 즐거움 - 몰록 600 + XP 500 획득!');
                             addMoloch(600); gainXP(500);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3600);
                     }
                 },
@@ -4859,7 +5133,7 @@
                             showChat('시스템', '✨ [이스터에그 완결] 그들은 처음부터 지켜보고 있었다 - 몰록 2500 + XP 1200 + 스탯 포인트 +5 획득!');
                             addMoloch(2500); gainXP(1200); gameState.statPoints = (gameState.statPoints || 0) + 5;
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4200);
                     }
                 },
@@ -4885,7 +5159,7 @@
                             addMoloch(2000); gainXP(1000); gameState.merit = (gameState.merit || 0) + 200;
                             checkMeritSkillUnlock && checkMeritSkillUnlock();
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4400);
                     }
                 },
@@ -4909,7 +5183,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그 완결] 세 조각으로 나뉜 보물지도 - 몰록 3000 획득!');
                             addMoloch(3000);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 2400);
                     }
                 },
@@ -4933,7 +5207,7 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그] 부족의 토템 - 몰록 800 + XP 300 획득!');
                             addMoloch(800); gainXP(300);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3200);
                     }
                 },
@@ -4963,7 +5237,7 @@
                             showChat('시스템', '✨ [이스터에그 완결] 세 종족의 오랜 맹세 - 몰록 1800 + XP 900 + 스탯 포인트 +3 획득!');
                             addMoloch(1800); gainXP(900); gameState.statPoints = (gameState.statPoints || 0) + 3;
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4000);
                     }
                 },
@@ -4994,7 +5268,7 @@
                             showChat('시스템', '✨ [이스터에그 완결] 네 전설의 공명 - 스탯 포인트 +5 + 몰록 1500 + XP 800 획득!');
                             gameState.statPoints = (gameState.statPoints || 0) + 5; addMoloch(1500); gainXP(800);
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4000);
                     }
                 },
@@ -5020,7 +5294,7 @@
                             gameState.health = getMaxHealth(); playerStamina = getMaxStamina();
                             gainXP(700); addMoloch(800);
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4000);
                     }
                 },
@@ -5044,7 +5318,7 @@
                             showChat('시스템', '✨ [이스터에그 완결] 세 개의 빛이 하나로 - 몰록 1600 + XP 900 + 스탯 포인트 +3 획득!');
                             addMoloch(1600); gainXP(900); gameState.statPoints = (gameState.statPoints || 0) + 3;
                             updateUI();
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 4000);
                     }
                 },
@@ -5069,13 +5343,329 @@
                         setTimeout(() => {
                             showChat('시스템', '✨ [이스터에그 완결] 전설의 생물과의 조우 - 몰록 900 + XP 500 획득!');
                             addMoloch(900); gainXP(500);
-                            removeEasterEgg(egg);
+                            animateEggDespawn(egg);
                         }, 3600);
+                    }
+                },
+                // ==================== [요청] 상호작용형 이스터에그 10종 추가 ====================
+                // 1) 스핑크스의 수수께끼: 3개의 좌대 중 수수께끼의 답에 맞는 것을 직접 찾아가야 함
+                {
+                    id: 'sphinx_wrong_animal', x: 696, z: -703, radius: 2.2, repeatable: true,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0xc2a173, roughness: 0.8 });
+                        const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 0.5, 8), mat); pedestal.position.y = 0.25; group.add(pedestal);
+                        const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.35), mat); body.position.y = 0.75; group.add(body);
+                        for (let i = 0; i < 4; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 6), mat); leg.position.set((i % 2 === 0 ? -0.25 : 0.25), 0.6, (i < 2 ? -0.13 : 0.13)); group.add(leg); }
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        if (!sphinxRiddleRevealed) { sphinxRiddleRevealed = true; showChat('스핑크스', '"아침에는 네 발로, 낮에는 두 발로, 저녁에는 세 발로 걷는 것은 무엇인가?"'); return; }
+                        showChat('스핑크스', '"...틀렸다. 다시 생각해 보아라."');
+                    }
+                },
+                {
+                    id: 'sphinx_correct_human', x: 700, z: -699.5, radius: 2.2,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0xd8b78a, roughness: 0.7 });
+                        const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 0.5, 8), mat); pedestal.position.y = 0.25; group.add(pedestal);
+                        const bodyMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.28, 0.9, 8), mat); bodyMesh.position.y = 0.95; group.add(bodyMesh);
+                        const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), mat); head.position.y = 1.55; group.add(head);
+                        const glow = new THREE.PointLight(0xffddaa, 0.8, 8); glow.position.y = 1.3; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        if (!sphinxRiddleRevealed) { sphinxRiddleRevealed = true; showChat('스핑크스', '"아침에는 네 발로, 낮에는 두 발로, 저녁에는 세 발로 걷는 것은 무엇인가?"'); return; }
+                        showChat('스핑크스', '"...정답이다. 인간이여, 그대는 삶의 세 단계를 아는구나."');
+                        setTimeout(() => {
+                            gainXP(700);
+                            showChat('시스템', '🗿 [이스터에그] 스핑크스의 수수께끼 - 경험치 700 획득!');
+                            animateEggDespawn(egg);
+                        }, 2200);
+                    }
+                },
+                {
+                    id: 'sphinx_wrong_bird', x: 704, z: -703, radius: 2.2, repeatable: true,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0xa8a8a8, roughness: 0.7 });
+                        const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.7, 0.5, 8), mat); pedestal.position.y = 0.25; group.add(pedestal);
+                        const bird = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), mat); bird.position.y = 0.9; group.add(bird);
+                        const beak = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.25, 6), mat); beak.rotation.x = Math.PI / 2; beak.position.set(0, 0.9, 0.3); group.add(beak);
+                        const wingL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.2), mat); wingL.position.set(-0.3, 0.95, 0); wingL.rotation.z = 0.3; group.add(wingL);
+                        const wingR = wingL.clone(); wingR.position.x = 0.3; wingR.rotation.z = -0.3; group.add(wingR);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        if (!sphinxRiddleRevealed) { sphinxRiddleRevealed = true; showChat('스핑크스', '"아침에는 네 발로, 낮에는 두 발로, 저녁에는 세 발로 걷는 것은 무엇인가?"'); return; }
+                        showChat('스핑크스', '"...틀렸다. 다시 생각해 보아라."');
+                    }
+                },
+                // 2) 색채의 제단: 세 개의 토템을 정해진 순서(빨강 → 검정 → 파랑)로 방문해야 함
+                {
+                    id: 'totem_red', x: -800, z: 96, radius: 2.5, repeatable: true,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0xdd2222, emissive: 0xaa0000, emissiveIntensity: 0.7 });
+                        const totem = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 1.6, 8), mat); totem.position.y = 0.8; group.add(totem);
+                        const glow = new THREE.PointLight(0xff3333, 1.2, 10); glow.position.y = 1.3; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: () => {
+                        if (colorTotemsSolved) return;
+                        if (colorTotemProgress === 0) {
+                            showChat('시스템', '🔥 붉은 토템이 뜨겁게 빛난다... (1/3)');
+                            colorTotemProgress = 1;
+                        } else {
+                            showChat('시스템', '❌ 순서가 어긋났다... 처음부터 다시.');
+                            colorTotemProgress = 0;
+                        }
+                    }
+                },
+                {
+                    id: 'totem_dark', x: -796, z: 101, radius: 2.5, repeatable: true,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, emissive: 0x330033, emissiveIntensity: 0.6 });
+                        const totem = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 1.6, 8), mat); totem.position.y = 0.8; group.add(totem);
+                        const glow = new THREE.PointLight(0x552266, 1.0, 10); glow.position.y = 1.3; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: () => {
+                        if (colorTotemsSolved) return;
+                        if (colorTotemProgress === 1) {
+                            showChat('시스템', '🌑 어두운 토템이 조용히 진동한다... (2/3)');
+                            colorTotemProgress = 2;
+                        } else {
+                            showChat('시스템', '❌ 순서가 어긋났다... 처음부터 다시.');
+                            colorTotemProgress = 0;
+                        }
+                    }
+                },
+                {
+                    id: 'totem_blue', x: -804, z: 101, radius: 2.5, repeatable: true,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x2266ff, emissive: 0x1144cc, emissiveIntensity: 0.7 });
+                        const totem = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 1.6, 8), mat); totem.position.y = 0.8; group.add(totem);
+                        const glow = new THREE.PointLight(0x3388ff, 1.2, 10); glow.position.y = 1.3; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        if (colorTotemsSolved) return;
+                        if (colorTotemProgress === 2) {
+                            colorTotemsSolved = true;
+                            showChat('시스템', '💠 세 토템이 동시에 밝게 빛난다! 순서를 맞췄다!');
+                            setTimeout(() => {
+                                addMoloch(1000); gainXP(400);
+                                showChat('시스템', '🎨 [이스터에그] 색채의 제단 - 몰록 1000 + 경험치 400 획득!');
+                                animateEggDespawn(egg);
+                            }, 1800);
+                        } else {
+                            showChat('시스템', '❌ 순서가 어긋났다... 처음부터 다시. (힌트: 붉은 해가 뜨고, 어둠이 내리고, 마지막에 푸른 하늘이 열린다)');
+                            colorTotemProgress = 0;
+                        }
+                    }
+                },
+                // 3) 쌍둥이 종: 새벽종을 먼저 울린 뒤 8초 안에 황혼종을 울려야 함
+                {
+                    id: 'bell_dawn', x: 300, z: -950, radius: 3, repeatable: true,
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0xddaa33, metalness: 0.7, roughness: 0.3 });
+                        const bell = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.7, 10, 1, true), mat); bell.position.y = 1.4; group.add(bell);
+                        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.8, 0.1), new THREE.MeshStandardMaterial({ color: 0x553311 }));
+                        frame.position.set(-0.5, 0.9, 0); group.add(frame);
+                        const frame2 = frame.clone(); frame2.position.x = 0.5; group.add(frame2);
+                        const glow = new THREE.PointLight(0xffcc66, 1.0, 8); glow.position.y = 1.4; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: () => {
+                        twinBellPrimedUntil = Date.now() + 8000;
+                        showChat('시스템', '🔔 새벽종이 맑게 울려 퍼진다... 8초 안에 황혼종을 울려야 한다!');
+                    }
+                },
+                {
+                    id: 'bell_dusk', x: 312, z: -950, radius: 3,
+                    condition: () => Date.now() < twinBellPrimedUntil,
+                    hintText: '🔔 이 종은 아직 반응이 없다... 먼저 다른 종을 울려야 할 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x6644aa, metalness: 0.7, roughness: 0.3 });
+                        const bell = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.7, 10, 1, true), mat); bell.position.y = 1.4; group.add(bell);
+                        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.8, 0.1), new THREE.MeshStandardMaterial({ color: 0x553311 }));
+                        frame.position.set(-0.5, 0.9, 0); group.add(frame);
+                        const frame2 = frame.clone(); frame2.position.x = 0.5; group.add(frame2);
+                        const glow = new THREE.PointLight(0x9966ff, 1.0, 8); glow.position.y = 1.4; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🔔🔔 두 종이 화음을 이루며 울려 퍼진다!');
+                        setTimeout(() => {
+                            gainXP(450); addMoloch(600);
+                            showChat('시스템', '🎐 [이스터에그] 쌍둥이 종의 화음 - 경험치 450 + 몰록 600 획득!');
+                            animateEggDespawn(egg);
+                        }, 1800);
+                    }
+                },
+                // 4) 달의 우물: 밤에만 반응함
+                {
+                    id: 'moonwell', x: -950, z: -200, radius: 5,
+                    condition: () => isNight,
+                    hintText: '🌙 우물 수면이 잔잔하다... 달이 떠야만 무언가 비칠 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const rim = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.15, 8, 20), new THREE.MeshStandardMaterial({ color: 0x666677, roughness: 0.7 })); rim.rotation.x = Math.PI / 2; rim.position.y = 0.5; group.add(rim);
+                        const water = new THREE.Mesh(new THREE.CircleGeometry(0.75, 20), new THREE.MeshStandardMaterial({ color: 0x4466aa, emissive: 0x223355, emissiveIntensity: 0.8, transparent: true, opacity: 0.85 })); water.rotation.x = -Math.PI / 2; water.position.y = 0.51; group.add(water);
+                        const glow = new THREE.PointLight(0x6688ff, 1.3, 10); glow.position.y = 0.8; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🌙 우물 속에 달이 비치자, 수면이 은빛으로 일렁인다...');
+                        setTimeout(() => {
+                            addMoloch(700); gainXP(200);
+                            showChat('시스템', '🌕 [이스터에그] 달의 우물 - 몰록 700 + 경험치 200 획득!');
+                            animateEggDespawn(egg);
+                        }, 1800);
+                    }
+                },
+                // 5) 태양석: 낮에만 반응함 (달의 우물과 대비되는 짝)
+                {
+                    id: 'sunstone', x: 950, z: 300, radius: 5,
+                    condition: () => !isNight,
+                    hintText: '☀️ 돌이 차갑게 식어있다... 태양이 떠야만 반응할 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.6, 0), new THREE.MeshStandardMaterial({ color: 0xffaa33, emissive: 0xff8800, emissiveIntensity: 0.9, roughness: 0.4 })); stone.position.y = 0.7; group.add(stone);
+                        const glow = new THREE.PointLight(0xffaa33, 1.5, 12); glow.position.y = 0.7; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '☀️ 태양석이 강렬한 빛을 내뿜는다...');
+                        setTimeout(() => {
+                            gameState.health = getMaxHealth(); gainXP(400);
+                            showChat('시스템', '🔆 [이스터에그] 태양석의 축복 - 완전 회복 + 경험치 400 획득!');
+                            updateUI();
+                            animateEggDespawn(egg);
+                        }, 1800);
+                    }
+                },
+                // 6) 힘의 문: 힘 스탯이 충분해야만 열림
+                {
+                    id: 'strength_gate', x: 600, z: 600, radius: 4,
+                    condition: () => gameState.stats.strength >= 15,
+                    hintText: '💪 거대한 문이 꿈쩍도 하지 않는다... 충분한 힘이 필요해 보인다. (힘 스탯 부족)',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.6, roughness: 0.5 });
+                        const door = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2.4, 0.3), mat); door.position.y = 1.2; group.add(door);
+                        const rune = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.05, 6, 16), new THREE.MeshStandardMaterial({ color: 0xff6622, emissive: 0xff4400, emissiveIntensity: 0.9 })); rune.position.set(0, 1.4, 0.18); group.add(rune);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '💪 거대한 문이 굉음을 내며 활짝 열린다!');
+                        setTimeout(() => {
+                            gameState.stats.strength += 3; checkStatSkillUnlock('strength');
+                            showChat('시스템', '🚪 [이스터에그] 힘의 문 - 힘 스탯 영구 +3!');
+                            updateUI();
+                            animateEggDespawn(egg);
+                        }, 1800);
+                    }
+                },
+                // 7) 질풍의 사당: 질주하면서 다가가야만 반응함
+                {
+                    id: 'speed_shrine', x: -500, z: -800, radius: 5,
+                    condition: () => controls.sprint,
+                    hintText: '💨 가만히 서 있어서는 아무 반응이 없다... 전력으로 달려와야 할 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x33ccaa, emissive: 0x119977, emissiveIntensity: 0.8, transparent: true, opacity: 0.8 });
+                        const ring1 = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.08, 8, 20), mat); ring1.position.y = 1.0; group.add(ring1);
+                        const ring2 = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.06, 8, 20), mat); ring2.position.y = 1.0; ring2.position.z = 0.4; group.add(ring2);
+                        const glow = new THREE.PointLight(0x33ccaa, 1.3, 10); glow.position.y = 1.0; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '💨 바람의 고리를 질주하며 통과했다!');
+                        setTimeout(() => {
+                            gameState.stats.agility += 3; checkStatSkillUnlock('agility');
+                            showChat('시스템', '🌀 [이스터에그] 질풍의 사당 - 민첩 스탯 영구 +3!');
+                            updateUI();
+                            animateEggDespawn(egg);
+                        }, 1500);
+                    }
+                },
+                // 8) 추억의 텔레비전: 레트로 모드(코나미 커맨드)일 때만 반응하는 이스터에그 속 이스터에그
+                {
+                    id: 'retro_shrine', x: -300, z: 300, radius: 4,
+                    condition: () => retroModeActive,
+                    hintText: '📺 낡은 텔레비전이 지지직거리기만 할 뿐 아무것도 나오지 않는다... 뭔가 특별한 게 필요해 보인다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.6 });
+                        const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.7), mat); body.position.y = 0.5; group.add(body);
+                        const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.4), new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x00ff00, emissiveIntensity: 0.9 })); screen.position.set(0, 0.55, 0.36); group.add(screen);
+                        const glow = new THREE.PointLight(0x00ff00, 1.0, 8); glow.position.y = 0.6; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '📺 텔레비전에서 익숙한 8비트 멜로디가 흘러나온다!');
+                        setTimeout(() => {
+                            addMoloch(2000); gainXP(300);
+                            showChat('시스템', '🕹️ [이스터에그] 추억의 텔레비전 - 몰록 2000 + 경험치 300 획득!');
+                            animateEggDespawn(egg);
+                        }, 1800);
+                    }
+                },
+                // 9) 사경의 제단: 체력이 30% 미만인 위험한 순간에만 응답하는 하이리스크 이스터에그
+                {
+                    id: 'desperate_altar', x: 800, z: -300, radius: 4,
+                    condition: () => gameState.health < getMaxHealth() * 0.3,
+                    hintText: '💀 제단이 싸늘하게 식어있다... 죽음을 눈앞에 둔 자에게만 반응할 것 같다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x330000, roughness: 0.8 });
+                        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 0.4, 8), mat); base.position.y = 0.2; group.add(base);
+                        const skull = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 8), new THREE.MeshStandardMaterial({ color: 0xdddddd })); skull.position.y = 0.65; group.add(skull);
+                        const glow = new THREE.PointLight(0xff0000, 1.2, 10); glow.position.y = 0.7; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '💀 제단이 붉게 빛나며 그대의 생명력에 반응한다...');
+                        setTimeout(() => {
+                            gameState.bonusMaxHealth = (gameState.bonusMaxHealth || 0) + 50;
+                            gameState.health = getMaxHealth();
+                            showChat('시스템', '☠️ [이스터에그] 사경의 제단 - 죽음을 이겨낸 대가로 최대 체력 영구 +50!');
+                            updateUI();
+                            animateEggDespawn(egg);
+                        }, 1800);
+                    }
+                },
+                // 10) 인내의 돌: 8초간 자리를 떠나지 않고 가만히 있어야만 반응함
+                {
+                    id: 'patience_stone', x: -700, z: -600, radius: 3, stayRequired: 8,
+                    hintText: '🧘 이 돌은 성급한 자에게는 응답하지 않는다... 가만히 머물러야 한다.',
+                    build: () => {
+                        const group = new THREE.Group();
+                        const mat = new THREE.MeshStandardMaterial({ color: 0x888899, roughness: 0.9 });
+                        const stone = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6, 0), mat); stone.position.y = 0.6; group.add(stone);
+                        const glow = new THREE.PointLight(0xaaaaee, 0.8, 8); glow.position.y = 0.7; group.add(glow);
+                        return group;
+                    },
+                    onTrigger: (egg) => {
+                        showChat('시스템', '🧘 오랜 기다림 끝에 돌이 은은하게 빛나기 시작한다...');
+                        setTimeout(() => {
+                            gainXP(350); addMoloch(500);
+                            showChat('시스템', '🕰️ [이스터에그] 인내의 돌 - 경험치 350 + 몰록 500 획득!');
+                            animateEggDespawn(egg);
+                        }, 1500);
                     }
                 },
             ];
 
             eggDefs.forEach(def => {
+                eggPosById[def.id] = { x: def.x, z: def.z };
                 if (triggeredEggs.has(def.id)) return; // 이미 발견한 에그는 재생성 안 함 (세이브 로드 시)
                 // [NEW] 지정 좌표가 도시 바이옴이면 인근의 도시가 아닌 좌표로 대체 배치 (건물 속에 파묻히는 것 방지)
                 const spawnPos = findNonCitySpawnPos(def.x, def.z);
@@ -5091,17 +5681,342 @@
                 addDecoration(chunkKey, mesh);
                 easterEggs.push({ id: def.id, x: spawnPos.x, z: spawnPos.z, radius: def.radius, mesh, chunkKey, onTrigger: def.onTrigger, requires: def.requires || null, hintText: def.hintText || null, lastHintTime: 0 });
             });
+
+            // [요청] 연계 이스터에그 시스템: 이전 플레이에서 이미 부모 에그를 찾았지만 아직 자식 에그는 못 찾은 경우,
+            // 불러오기 직후에도 자식 에그가 부모의 원래 자리에 조용히(대사 없이) 다시 나타나도록 복원함
+            Object.keys(EGG_CHAIN_NEXT).forEach(parentId => {
+                const childId = EGG_CHAIN_NEXT[parentId];
+                if (triggeredEggs.has(parentId) && !triggeredEggs.has(childId)) {
+                    const pos = eggPosById[parentId];
+                    if (pos) trySpawnChainEgg(parentId, pos.x, pos.z, true);
+                }
+            });
+        }
+
+        // [요청] 43개 이스터에그 전부가 "각각" 서로 다른, 테마에 어울리는 소멸 애니메이션을 갖도록 함.
+        // 방식: 하나의 공용 엔진(runEggFX)이 이동/회전(최대 2축)/스케일 변화를 재생하되, 각 에그마다 완전히 다른
+        // 수치(방향·속도·회전축·회전량·스케일 곡선·재생시간)를 지정한 전용 설정을 테이블(EGG_DESPAWN_FX)로 가짐.
+        // 예: 묻힌 것들은 아래로 가라앉고, 신성한/영적인 것들은 하늘로 흩어지고, 마법/기술 계열은 회전하며 응축되는 등
+        // 같은 "부류"라도 방향·속도·회전량·재생시간을 전부 다르게 줘서 43개가 서로 겹치지 않는 고유한 움직임을 갖게 함.
+        const EGG_DESPAWN_FX = {
+            monolith:              { dy: -2.2, rotAxis: 'y', rotAmt: 0.6,  scaleMode: 'linear',  duration: 1500 }, // 위엄있게 가라앉음
+            campfire:              { dy: 0.3,  scaleMode: 'flicker',        duration: 1300 }, // 불씨처럼 깜빡이며 재가 됨
+            crop_circle:           { rotAxis: 'y', rotAmt: Math.PI * 8,     scaleMode: 'linear',  duration: 700  }, // 링이 빠르게 회전하며 축소
+            buried_treasure:       { dy: -1.8, rotAxis: 'y', rotAmt: 0.3,  scaleMode: 'linear',  duration: 1300 }, // 모래 속으로 가라앉음
+            wishing_well:          { dy: -0.8, scaleMode: 'pulse',          duration: 1200 }, // 빛이 우물 속으로 스며듬
+            giant_footprint:       { dy: 1.8,  scaleMode: 'linear',         duration: 1000 }, // 안개처럼 걷힘
+            meteor_crater:         { rotAxis: 'y', rotAmt: Math.PI * 10,    scaleMode: 'pulse',   duration: 900  }, // 파편이 진동하다 붕괴
+            ancient_altar:         { dy: -1.0, rotAxis: 'y', rotAmt: 1.0,  scaleMode: 'linear',  duration: 1500 }, // 빛을 뿜은 뒤 가라앉음
+            lighthouse:            { dy: 0.2,  scaleMode: 'linear',         duration: 1700 }, // 불빛이 서서히 꺼짐
+            sword_in_stone:        { dy: 3.4,  rotAxis: 'y', rotAmt: Math.PI * 2, scaleMode: 'linear', duration: 1400 }, // 검이 빛나며 떠올라 사라짐
+            radio_tower:           { rotAxis: 'z', rotAmt: 0.4,  scaleMode: 'flicker', duration: 1100 }, // 지지직 흔들리다 사라짐
+            alien_wreckage:        { dy: -1.0, rotAxis: 'x', rotAmt: 0.8,  scaleMode: 'linear',  duration: 1200 }, // 잔해가 무너져 내림
+            alien_obelisk:         { dy: 4.0,  rotAxis: 'y', rotAmt: 1.5,  scaleMode: 'linear',  duration: 1300 }, // 문양이 빛나며 솟구침
+            alien_pod:             { scaleMode: 'pulse',                    duration: 800  }, // 포자가 부풀었다 터짐
+            alien_beacon:          { dy: 6.0,  scaleMode: 'linear',         duration: 1200 }, // 빛줄기와 함께 승천
+            alien_specimen:        { dy: 0.5,  scaleMode: 'flicker',        duration: 1300 }, // 캡슐이 스르르 녹듯 사라짐
+            frozen_soldier:        { dy: -1.5, rotAxis: 'x', rotAmt: 0.5,  scaleMode: 'linear',  duration: 1300 }, // 돌처럼 부서져 내림
+            shadow_rift:           { rotAxis: 'y', rotAmt: Math.PI * 12, rotAxis2: 'x', rotAmt2: Math.PI * 4, scaleMode: 'linear', duration: 1000 }, // 소용돌이치며 스스로 닫힘
+            time_capsule:          { dy: -1.4, scaleMode: 'linear',         duration: 1100 }, // 다시 땅속으로
+            ghost_musician:        { dy: 2.5,  scaleMode: 'flicker',        duration: 1600 }, // 선율과 함께 흐릿해지며 사라짐
+            golden_pond:           { dy: 1.0,  scaleMode: 'pulse',          duration: 1000 }, // 첨벙 뛰어오른 뒤 잔물결처럼 사라짐
+            abandoned_tank:        { dy: -0.6, rotAxis: 'z', rotAmt: 0.3,  scaleMode: 'linear',  duration: 1000 }, // 녹슨 잔해가 폭삭 무너짐
+            prophet_graffiti:      { scaleMode: 'linear',                   duration: 1800 }, // 벽화가 빛바래며 사라짐
+            music_box:             { rotAxis: 'y', rotAmt: Math.PI * 3,    scaleMode: 'linear',  duration: 1300 }, // 태엽처럼 돌며 작아짐
+            hermit_hut:            { dy: -1.2, rotAxis: 'x', rotAmt: 0.4,  scaleMode: 'linear',  duration: 1200 }, // 오두막이 무너져 내림
+            buried_bunker:         { dy: -1.6, scaleMode: 'linear',         duration: 1100 }, // 뚜껑이 닫히듯 가라앉음
+            crashed_satellite:     { rotAxis: 'x', rotAmt: Math.PI * 6, rotAxis2: 'y', rotAmt2: Math.PI * 4, scaleMode: 'linear', duration: 1000 }, // 부품이 회전하며 사라짐
+            sunken_statue:         { dy: -2.0, scaleMode: 'linear',         duration: 1500 }, // 다시 가라앉음
+            witch_cauldron:        { dy: 0.3,  scaleMode: 'flicker',        duration: 1200 }, // 거품과 함께 사그라듦
+            dwarven_vault:         { dy: -1.5, rotAxis: 'y', rotAmt: 0.5,  scaleMode: 'linear',  duration: 1200 }, // 금고문 닫히듯 가라앉음
+            elven_shrine:          { dy: 3.5,  scaleMode: 'linear',         duration: 1600 }, // 빛과 함께 하늘로 흩어짐
+            duelist_grave:         { dy: -1.3, scaleMode: 'linear',         duration: 1200 }, // 검이 다시 땅에 잠김
+            storm_altar:           { rotAxis: 'y', rotAmt: Math.PI * 2,    scaleMode: 'flicker', duration: 700  }, // 번개처럼 번쩍이다 사라짐
+            abandoned_carnival:    { scaleMode: 'flicker',                  duration: 1700 }, // 불빛이 하나씩 꺼짐
+            alien_mothership:      { dy: 8.0,  scaleMode: 'linear',         duration: 1300 }, // 가속하며 하늘로 사라짐
+            darkness_convergence:  { rotAxis: 'y', rotAmt: Math.PI * 14,    scaleMode: 'linear',  duration: 800  }, // 스스로 빨려들어가듯 붕괴
+            treasure_map_complete: { dy: 0.4,  scaleMode: 'pulse',          duration: 1000 }, // 반짝이며 사라짐
+            orc_totem:             { dy: -1.8, rotAxis: 'y', rotAmt: 0.3,  scaleMode: 'linear',  duration: 1200 }, // 땅속으로 박히듯
+            three_tribes_proof:    { dy: 2.8,  scaleMode: 'linear',         duration: 1200 }, // 증표가 빛나며 하늘로
+            power_convergence:     { rotAxis: 'y', rotAmt: Math.PI * 10,    scaleMode: 'pulse',   duration: 900  }, // 에너지가 응축되어 사라짐
+            memory_lantern:        { dy: 5.0,  rotAxis: 'z', rotAmt: 0.3,  scaleMode: 'linear',  duration: 1800 }, // 등불이 두둥실 흔들리며 떠오름
+            guardian_light:        { dy: 4.5,  scaleMode: 'linear',         duration: 1500 }, // 빛이 흩어지며 하늘로
+            cryptid_lair:          { dy: 0.2,  scaleMode: 'linear',         duration: 1500 }, // 조용히 사라짐
+        };
+        function animateEggDespawn(egg) {
+            if (!egg || !egg.mesh || !egg.mesh.parent) { removeEasterEgg(egg); return; }
+            const cfg = EGG_DESPAWN_FX[egg.id] || { dy: -1.0, scaleMode: 'linear', duration: 1100 }; // [FIX] 목록에 없는 경우를 위한 안전한 기본값
+            const mesh = egg.mesh;
+            const startY = mesh.position.y;
+            const startScale = mesh.scale.x || 1;
+            const startRot = { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z };
+            const duration = cfg.duration || 1100;
+            const start = Date.now();
+            (function step() {
+                if (!mesh.parent) return; // 다른 경로로 이미 제거됐다면 안전하게 중단
+                const t = Math.min(1, (Date.now() - start) / duration);
+                const ease = t * t; // 가속 커브 (이동/1차 회전에 사용)
+                if (cfg.dy) mesh.position.y = startY + cfg.dy * ease;
+                if (cfg.rotAxis) mesh.rotation[cfg.rotAxis] = startRot[cfg.rotAxis] + cfg.rotAmt * t;
+                if (cfg.rotAxis2) mesh.rotation[cfg.rotAxis2] = startRot[cfg.rotAxis2] + cfg.rotAmt2 * t;
+                let scale;
+                if (cfg.scaleMode === 'flicker') { scale = startScale * (1 - ease) * (0.7 + Math.sin(t * 40) * 0.3); }
+                else if (cfg.scaleMode === 'pulse') { scale = t < 0.3 ? startScale * (1 + (t / 0.3) * 0.3) : startScale * 1.3 * (1 - (t - 0.3) / 0.7); }
+                else { scale = startScale * (1 - ease); } // linear(기본값)
+                mesh.scale.setScalar(Math.max(0.02, scale));
+                if (t < 1) { requestAnimationFrame(step); } else { removeEasterEgg(egg); }
+            })();
+        }
+
+        // ==================== [요청] 연계(체이닝) 이스터에그 시스템 ====================
+        // 특정 이스터에그가 사라지면(획득되면), 바로 그 자리에 이어서 등장하는 후속 이스터에그.
+        // 기존의 requires(여러 에그를 모아야 열리는 수렴형) 시스템과는 별개로, "이 에그 → 저 에그" 1:1 직결 체인임.
+        const EGG_CHAIN_NEXT = {
+            alien_mothership: 'alien_signal_reply',
+            darkness_convergence: 'cursed_seal',
+            treasure_map_complete: 'pirate_ghost',
+            three_tribes_proof: 'tribal_bonfire',
+            power_convergence: 'champion_relic',
+            memory_lantern: 'forgotten_photo',
+            guardian_light: 'eternal_flame',
+            cryptid_lair: 'cryptid_nest',
+        };
+
+        const CHAIN_EGG_DEFS = {
+            alien_signal_reply: {
+                id: 'alien_signal_reply', radius: 6,
+                build: () => {
+                    const group = new THREE.Group();
+                    const orbMat = new THREE.MeshStandardMaterial({ color: 0x66ffcc, emissive: 0x33ffaa, emissiveIntensity: 1.2, metalness: 0.2, roughness: 0.1, transparent: true, opacity: 0.85 });
+                    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), orbMat); orb.position.y = 1.3; group.add(orb);
+                    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.06, 8, 24), new THREE.MeshStandardMaterial({ color: 0x88ffee, emissive: 0x55ffcc, emissiveIntensity: 0.8 }));
+                    ring.rotation.x = Math.PI / 2; ring.position.y = 1.3; group.add(ring);
+                    const glow = new THREE.PointLight(0x66ffcc, 2.5, 18); glow.position.y = 1.3; group.add(glow);
+                    return group;
+                },
+                onTrigger: (egg) => {
+                    showChat('시스템', '📡 모선이 사라진 자리에 남은 결정체가 진동하기 시작한다...');
+                    setTimeout(() => showChat('???', '"...우리는 계속 지켜보고 있었다... 그대는 자격이 있다..."'), 1600);
+                    setTimeout(() => {
+                        gainXP(500);
+                        showChat('시스템', '👽 [이스터에그] 별의 응답 - 경험치 500 획득!');
+                        animateEggDespawn(egg);
+                    }, 3000);
+                }
+            },
+            cursed_seal: {
+                id: 'cursed_seal', radius: 6,
+                build: () => {
+                    const group = new THREE.Group();
+                    const stoneMat = new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.9 });
+                    const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.2, 0.8), stoneMat); pillar.position.y = 1.1; group.add(pillar);
+                    const chainMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7, roughness: 0.4 });
+                    for (let i = 0; i < 5; i++) { const link = new THREE.Mesh(new THREE.TorusGeometry(0.25, 0.06, 6, 12), chainMat); link.position.set(0, 0.4 + i * 0.4, 0.42); link.rotation.y = i % 2 === 0 ? 0 : Math.PI / 2; group.add(link); }
+                    const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0), new THREE.MeshStandardMaterial({ color: 0x9900ff, emissive: 0x6600cc, emissiveIntensity: 1.3 })); gem.position.y = 2.3; group.add(gem);
+                    const glow = new THREE.PointLight(0x9900ff, 2, 16); glow.position.y = 2.3; group.add(glow);
+                    return group;
+                },
+                onTrigger: (egg) => {
+                    showChat('시스템', '🗿 어둠이 응축됐던 자리에 사슬로 봉인된 돌기둥이 남아있다...');
+                    setTimeout(() => showChat('???', '"...봉인을 풀 것인가, 그대로 둘 것인가..."'), 1600);
+                    setTimeout(() => {
+                        gameState.stats.strength += 2; gameState.stats.endurance += 2;
+                        checkStatSkillUnlock('strength'); checkStatSkillUnlock('endurance');
+                        gameState.health = getMaxHealth();
+                        showChat('시스템', '⛓️ [이스터에그] 봉인된 힘 - 힘/인내 영구 +2!');
+                        updateUI();
+                        animateEggDespawn(egg);
+                    }, 3000);
+                }
+            },
+            pirate_ghost: {
+                id: 'pirate_ghost', radius: 6,
+                build: () => {
+                    const group = new THREE.Group();
+                    const ghostMat = new THREE.MeshStandardMaterial({ color: 0x88aabb, transparent: true, opacity: 0.5, emissive: 0x334455, emissiveIntensity: 0.6 });
+                    const body = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.8, 8), ghostMat); body.position.y = 1.0; group.add(body);
+                    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 8), ghostMat); head.position.y = 2.0; group.add(head);
+                    const hat = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.3, 8), new THREE.MeshStandardMaterial({ color: 0x1a1a1a, transparent: true, opacity: 0.6 })); hat.position.y = 2.3; group.add(hat);
+                    const glow = new THREE.PointLight(0x6688aa, 1.5, 14); glow.position.y = 1.5; group.add(glow);
+                    return group;
+                },
+                onTrigger: (egg) => {
+                    showChat('시스템', '👻 보물 지도가 완성된 곳에 반투명한 선장의 형상이 나타난다...');
+                    setTimeout(() => showChat('선장', '"내 보물을... 잘 써주게... 크르륵..."'), 1600);
+                    setTimeout(() => {
+                        addMoloch(1500);
+                        showChat('시스템', '💀 [이스터에그] 선장의 마지막 선물 - 몰록 1500 획득!');
+                        animateEggDespawn(egg);
+                    }, 3000);
+                }
+            },
+            tribal_bonfire: {
+                id: 'tribal_bonfire', radius: 6,
+                build: () => {
+                    const group = new THREE.Group();
+                    const logMat = new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 0.9 });
+                    for (let i = 0; i < 4; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 1.6, 6), logMat); log.rotation.z = Math.PI / 2; log.rotation.y = i * Math.PI / 4; log.position.y = 0.15; group.add(log); }
+                    const fireMat = new THREE.MeshStandardMaterial({ color: 0xff6611, emissive: 0xff4400, emissiveIntensity: 1.5, transparent: true, opacity: 0.85 });
+                    const fire = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 8), fireMat); fire.position.y = 0.9; group.add(fire);
+                    const glow = new THREE.PointLight(0xff6611, 2.5, 18); glow.position.y = 0.8; group.add(glow);
+                    return group;
+                },
+                onTrigger: (egg) => {
+                    showChat('시스템', '🔥 세 종족의 증표가 모이자 화합의 불이 저절로 피어오른다...');
+                    setTimeout(() => showChat('???', '"...오랜 반목이 끝나고, 새로운 동맹이 시작된다..."'), 1600);
+                    setTimeout(() => {
+                        gameState.health = getMaxHealth(); playerStamina = getMaxStamina();
+                        gainXP(600);
+                        showChat('시스템', '🕊️ [이스터에그] 화합의 불 - 완전 회복 + 경험치 600 획득!');
+                        updateUI();
+                        animateEggDespawn(egg);
+                    }, 3000);
+                }
+            },
+            champion_relic: {
+                id: 'champion_relic', radius: 6,
+                build: () => {
+                    const group = new THREE.Group();
+                    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.8, 8), new THREE.MeshStandardMaterial({ color: 0x666666, roughness: 0.8 })); pedestal.position.y = 0.4; group.add(pedestal);
+                    const crownMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.9, roughness: 0.2, emissive: 0xaa8800, emissiveIntensity: 0.6 });
+                    const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.35, 8), crownMat); crown.position.y = 1.1; group.add(crown);
+                    for (let i = 0; i < 5; i++) { const spike = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.2, 4), crownMat); const ang = i / 5 * Math.PI * 2; spike.position.set(Math.cos(ang) * 0.35, 1.35, Math.sin(ang) * 0.35); group.add(spike); }
+                    const glow = new THREE.PointLight(0xffd700, 2, 16); glow.position.y = 1.2; group.add(glow);
+                    return group;
+                },
+                onTrigger: (egg) => {
+                    showChat('시스템', '👑 에너지가 응축됐던 자리에 챔피언의 유물이 놓여있다...');
+                    setTimeout(() => showChat('???', '"...힘을 응축한 자, 그 힘의 계승자가 되리라..."'), 1600);
+                    setTimeout(() => {
+                        const statKeys = ['vitality', 'strength', 'agility', 'endurance', 'perception'];
+                        statKeys.forEach(k => { gameState.stats[k] += 1; checkStatSkillUnlock(k); });
+                        gameState.health = getMaxHealth(); playerStamina = getMaxStamina();
+                        showChat('시스템', '👑 [이스터에그] 챔피언의 유물 - 모든 스탯 영구 +1!');
+                        updateUI();
+                        animateEggDespawn(egg);
+                    }, 3000);
+                }
+            },
+            forgotten_photo: {
+                id: 'forgotten_photo', radius: 5,
+                build: () => {
+                    const group = new THREE.Group();
+                    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.05), new THREE.MeshStandardMaterial({ color: 0x8a6a3a, roughness: 0.7 })); frame.position.y = 1.0; group.add(frame);
+                    const photo = new THREE.Mesh(new THREE.PlaneGeometry(0.45, 0.65), new THREE.MeshStandardMaterial({ color: 0xd8c8a0, emissive: 0xd8c8a0, emissiveIntensity: 0.3 })); photo.position.set(0, 1.0, 0.03); group.add(photo);
+                    const glow = new THREE.PointLight(0xffeecc, 1.2, 12); glow.position.y = 1.2; group.add(glow);
+                    return group;
+                },
+                onTrigger: (egg) => {
+                    showChat('시스템', '📷 등불이 사라진 자리에 빛바랜 사진 한 장이 남아있다...');
+                    setTimeout(() => showChat('???', '"...누군가 이 순간을 기억하고 싶었나 보다..."'), 1600);
+                    setTimeout(() => {
+                        gainXP(400);
+                        showChat('시스템', '🖼️ [이스터에그] 잊혀진 기억 - 경험치 400 획득!');
+                        animateEggDespawn(egg);
+                    }, 3000);
+                }
+            },
+            eternal_flame: {
+                id: 'eternal_flame', radius: 6,
+                build: () => {
+                    const group = new THREE.Group();
+                    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.5, 8), new THREE.MeshStandardMaterial({ color: 0x445566, roughness: 0.6, metalness: 0.4 })); base.position.y = 0.25; group.add(base);
+                    const flameMat = new THREE.MeshStandardMaterial({ color: 0x88ccff, emissive: 0x55aaff, emissiveIntensity: 1.6, transparent: true, opacity: 0.8 });
+                    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.0, 8), flameMat); flame.position.y = 1.0; group.add(flame);
+                    const glow = new THREE.PointLight(0x88ccff, 2.5, 18); glow.position.y = 1.0; group.add(glow);
+                    return group;
+                },
+                onTrigger: (egg) => {
+                    showChat('시스템', '🔵 수호자의 빛이 남긴 자리에 꺼지지 않는 푸른 불꽃이 타오른다...');
+                    setTimeout(() => showChat('???', '"...이 불꽃이 남아있는 한, 수호자는 계속 지켜볼 것이다..."'), 1600);
+                    setTimeout(() => {
+                        gameState.bonusMaxHealth = (gameState.bonusMaxHealth || 0) + 100;
+                        gameState.health = getMaxHealth();
+                        showChat('시스템', '🔵 [이스터에그] 영원한 불꽃 - 최대 체력 영구 +100!');
+                        updateUI();
+                        animateEggDespawn(egg);
+                    }, 3000);
+                }
+            },
+            cryptid_nest: {
+                id: 'cryptid_nest', radius: 5,
+                build: () => {
+                    const group = new THREE.Group();
+                    const nest = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.25, 8, 16), new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 })); nest.rotation.x = Math.PI / 2; nest.position.y = 0.25; group.add(nest);
+                    const eggMat = new THREE.MeshStandardMaterial({ color: 0x88ff99, emissive: 0x33aa44, emissiveIntensity: 0.8 });
+                    for (let i = 0; i < 3; i++) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 8), eggMat); const ang = i / 3 * Math.PI * 2; e.position.set(Math.cos(ang) * 0.3, 0.4, Math.sin(ang) * 0.3); e.scale.y = 1.3; group.add(e); }
+                    const glow = new THREE.PointLight(0x66ff88, 1.5, 12); glow.position.y = 0.5; group.add(glow);
+                    return group;
+                },
+                onTrigger: (egg) => {
+                    showChat('시스템', '🥚 은신처 안쪽에서 낯선 둥지를 발견했다... 알이 은은하게 빛난다.');
+                    setTimeout(() => showChat('???', '"...아직 세상에 알려지지 않은 것들이 있다..."'), 1600);
+                    setTimeout(() => {
+                        gainXP(450);
+                        showChat('시스템', '🥚 [이스터에그] 미확인 생물의 둥지 - 경험치 450 획득!');
+                        animateEggDespawn(egg);
+                    }, 3000);
+                }
+            },
+        };
+
+        // 8개 연계 에그도 각자 고유한 소멸 애니메이션을 갖도록 EGG_DESPAWN_FX 테이블에 함께 등록
+        Object.assign(EGG_DESPAWN_FX, {
+            alien_signal_reply: { dy: 5.5, rotAxis: 'y', rotAmt: Math.PI * 2, scaleMode: 'linear', duration: 1300 },
+            cursed_seal:        { dy: -1.7, rotAxis: 'y', rotAmt: 0.4, scaleMode: 'linear', duration: 1400 },
+            pirate_ghost:       { dy: 2.2, scaleMode: 'flicker', duration: 1500 },
+            tribal_bonfire:     { dy: 0.4, scaleMode: 'flicker', duration: 1200 },
+            champion_relic:     { rotAxis: 'y', rotAmt: Math.PI * 4, scaleMode: 'pulse', duration: 1000 },
+            forgotten_photo:    { dy: 1.2, rotAxis: 'z', rotAmt: 0.3, scaleMode: 'linear', duration: 1300 },
+            eternal_flame:      { dy: 3.0, scaleMode: 'flicker', duration: 1500 },
+            cryptid_nest:       { dy: -1.0, scaleMode: 'linear', duration: 1100 },
+            // [요청] 상호작용형 이스터에그 10종의 (보상이 지급되는) 종결 지점에도 각자 어울리는 소멸 애니메이션을 부여
+            sphinx_correct_human: { dy: 2.0, rotAxis: 'y', rotAmt: Math.PI, scaleMode: 'linear', duration: 1400 },
+            totem_blue:           { rotAxis: 'y', rotAmt: Math.PI * 6, scaleMode: 'pulse', duration: 1100 },
+            bell_dusk:            { dy: 1.5, scaleMode: 'flicker', duration: 1300 },
+            moonwell:             { dy: -0.6, scaleMode: 'linear', duration: 1300 },
+            sunstone:             { rotAxis: 'y', rotAmt: Math.PI * 3, scaleMode: 'pulse', duration: 1000 },
+            strength_gate:        { dy: -1.4, rotAxis: 'x', rotAmt: 0.5, scaleMode: 'linear', duration: 1300 },
+            speed_shrine:         { rotAxis: 'y', rotAmt: Math.PI * 8, scaleMode: 'linear', duration: 800 },
+            retro_shrine:         { scaleMode: 'flicker', duration: 900 },
+            desperate_altar:      { dy: -1.2, scaleMode: 'flicker', duration: 1400 },
+            patience_stone:       { dy: 1.0, rotAxis: 'y', rotAmt: 1.0, scaleMode: 'linear', duration: 1500 },
+        });
+
+        // [요청] 부모 에그가 사라진 위치에 자식 에그를 실제로 만들어 배치함 (spawnEasterEggs의 일반 배치 로직과 동일한 방식)
+        function spawnChainEgg(def, x, z) {
+            const groundY = getTerrainHeight(x, z);
+            const mesh = def.build();
+            mesh.position.set(x, groundY, z);
+            const chunkKey = getChunkKeyForPos(x, z);
+            addDecoration(chunkKey, mesh);
+            easterEggs.push({ id: def.id, x, z, radius: def.radius, mesh, chunkKey, onTrigger: def.onTrigger, requires: null, hintText: null, lastHintTime: 0 });
+        }
+
+        // silent=true면 안내 대사 없이 조용히 복원(불러오기 직후 사용), 그 외엔 "낯선 기운이 느껴진다" 안내를 띄움
+        function trySpawnChainEgg(parentId, x, z, silent) {
+            const childId = EGG_CHAIN_NEXT[parentId];
+            if (!childId || triggeredEggs.has(childId)) return;
+            if (easterEggs.some(e => e.id === childId)) return; // 이미 스폰되어 있음
+            const def = CHAIN_EGG_DEFS[childId];
+            if (!def) return;
+            spawnChainEgg(def, x, z);
+            if (!silent) showChat('시스템', '❓ 방금 그 자리에서 낯선 기운이 느껴진다... 다시 살펴보자.');
         }
 
         function updateEasterEggs(playerPos) {
             for (let i = easterEggs.length - 1; i >= 0; i--) {
                 const egg = easterEggs[i];
                 if (triggeredEggs.has(egg.id)) continue;
-                // [NEW] 몹(적)과 동일한 패턴: 플레이어 로딩구역(활성 청크) 밖에 있는 이스터에그는
-                // 근접 판정/부유 애니메이션 연산을 아예 스킵 (청크가 얼려있는 동안엔 어차피 안 보임)
-                if (egg.chunkKey && !activeChunkKeys.has(egg.chunkKey)) continue;
+                // [FIX-유령인식버그] 이전엔 순수 시야범위(원형 거리)만으로 판정했음 - 이스터에그 메시는 청크 freeze
+                // 시스템(setChunkFrozen)으로 보이기/숨기기가 결정되는데, 시야범위 설정이 청크 로딩 반경보다 크면
+                // "청크가 얼어서 안 보이는(visible=false) 이스터에그"가 시야범위 판정만으로는 계속 "인식"되어
+                // 화면엔 안 보이는데 근접 판정/보상이 발동하는 유령 같은 현상이 있었음. 시야범위 안 + 청크가 실제로
+                // 로딩(활성)된 상태 둘 다 만족해야만 인식되도록 함 - 이러면 항상 "보이는 것만" 인식됨.
+                if (!isInViewRange({ x: egg.x, z: egg.z }) || !activeChunkKeys.has(egg.chunkKey)) continue;
                 const dx = playerPos.x - egg.x, dz = playerPos.z - egg.z;
-                if (dx * dx + dz * dz < egg.radius * egg.radius) {
+                const inside = dx * dx + dz * dz < egg.radius * egg.radius;
+                if (inside) {
                     // [NEW] 연관 이스터에그 시스템: requires에 지정된 다른 이스터에그를 먼저 찾아야만 발동
                     if (egg.requires && !egg.requires.every(id => triggeredEggs.has(id))) {
                         const now = Date.now();
@@ -5111,9 +6026,43 @@
                         }
                         continue; // 조건 미충족 시 소멸시키지 않고 계속 남겨둠
                     }
+                    // [요청] 상호작용형 이스터에그 시스템: 특정 조건(낮/밤, 스탯, 질주 여부, 레트로모드, 체력 등)을
+                    // 만족해야만 발동하는 egg.condition. requires와 동일한 힌트/쿨다운 패턴을 재사용함.
+                    if (egg.condition && !egg.condition()) {
+                        const now = Date.now();
+                        if (!egg.lastHintTime || now - egg.lastHintTime > 12000) {
+                            egg.lastHintTime = now;
+                            showChat('시스템', egg.hintText || '🔒 지금은 아무 반응이 없다...');
+                        }
+                        continue;
+                    }
+                    // [요청] 인내심 시험형: 범위 안에서 일정 시간 이상 "계속" 머물러야만 발동. 벗어나면 진행도 초기화.
+                    if (egg.stayRequired) {
+                        if (!egg._stayStart) egg._stayStart = Date.now();
+                        const elapsed = Date.now() - egg._stayStart;
+                        if (elapsed < egg.stayRequired * 1000) {
+                            const now = Date.now();
+                            if (!egg.lastHintTime || now - egg.lastHintTime > 3000) {
+                                egg.lastHintTime = now;
+                                const remain = Math.ceil((egg.stayRequired * 1000 - elapsed) / 1000);
+                                showChat('시스템', (egg.hintText || '⏳ 움직이지 말고 가만히...') + ` (${remain}초)`);
+                            }
+                            continue;
+                        }
+                    }
+                    // [요청] 반복형(퀴즈/퍼즐 판정용): triggeredEggs에 기록하지 않아 몇 번이고 다시 시도할 수 있음.
+                    // 대신 "범위에 막 들어온 순간"에만 1회 발동(_wasInside 엣지 감지)해서, 가만히 서 있는 동안
+                    // 매 프레임 반복 발동되는 것을 막음 - 판정 함수(onTrigger) 안에서 정답/오답을 직접 처리함.
+                    if (egg.repeatable) {
+                        if (!egg._wasInside) { egg._wasInside = true; egg.onTrigger(egg); }
+                        continue;
+                    }
                     triggeredEggs.add(egg.id);
                     egg.onTrigger(egg);
                     continue; // [FIX] removeEasterEgg가 배열을 바로 수정할 수 있으므로, 이번 프레임엔 부유 애니메이션을 건너뜀
+                } else {
+                    if (egg.stayRequired) egg._stayStart = null; // 범위를 벗어나면 인내심 진행도 초기화
+                    if (egg.repeatable) egg._wasInside = false; // 범위를 벗어나야 다음 시도로 인정
                 }
                 // 이스터에그 오브젝트는 은은하게 위아래로 부유 (아주 가벼운 연산만)
                 egg.mesh.position.y += Math.sin(Date.now() * 0.001 + egg.x) * 0.005;
@@ -5167,7 +6116,7 @@
             const hint = document.getElementById('minimap-hint');
             if (container) container.style.display = isMinimapOpen ? 'block' : 'none';
             if (hint) hint.style.display = isMinimapOpen ? 'block' : 'none';
-            if (isMinimapOpen) drawMinimap();
+            if (isMinimapOpen) { drawMinimap(); checkMapLandmarkDiscoveries(); }
         }
 
         function minimapBiomeColor(biome) {
@@ -5760,6 +6709,10 @@
             mesh.userData.type = 'decoration';
             scene.add(mesh);
             registerChunkObject(chunkKey, mesh);
+            // [FIX-이스터에그렉] 이 청크가 아직 실제로 생성(generateChunk)된 적 없다면(예: 플레이어가 한 번도 안 가본
+            // 먼 곳에 이스터에그가 미리 배치되는 경우), updateChunkFreezing()의 기본 순회 대상(generatedChunks)에
+            // 안 잡혀서 거리와 무관하게 영원히 안 얼려지던 문제 - 별도 목록에 등록해서 freeze 대상에 포함시킴.
+            if (!generatedChunks.has(chunkKey)) decorationOnlyChunkKeys.add(chunkKey);
             return mesh;
         }
 
@@ -5781,6 +6734,11 @@
 
         function generateChunk(chunkX, chunkZ) {
             const chunkKey = `${chunkX},${chunkZ}`; // [OPTIMIZATION] 키 생성
+            // [요청] 이 청크에서 1회성 몹/보스/아이템 스폰이 이번 플레이(불러오기 이전 포함) 중 이미 일어난 적 있는지 -
+            // 있다면 아래 스폰 블록들을 건너뛰어, 불러오기 후 저장된 몹/아이템과 중복 생성되는 것을 막음.
+            // 건물/지형/장식 같은 시각적 요소는 이 플래그와 무관하게 항상 그대로 재생성됨(결정론적이라 중복 문제 없음).
+            const isFirstEverGeneration = !everGeneratedChunks.has(chunkKey);
+            everGeneratedChunks.add(chunkKey);
             // [NEW] 울슈쎈성 반경 100m 이내 청크는 완전한 평지로 유지하고, 건물/몬스터/랜드마크 생성을 전부 건너뜀
             const castleChunkX = Math.round(CASTLE_CENTER.x / CHUNK_SIZE), castleChunkZ = Math.round(CASTLE_CENTER.z / CHUNK_SIZE);
             if (Math.max(Math.abs(chunkX - castleChunkX), Math.abs(chunkZ - castleChunkZ)) <= 1) { return; }
@@ -5865,7 +6823,7 @@
                 }
                 return res;
             }
-            buildingsInChunk.forEach(b => { if (b.isHighrise) { collectHighriseData(b.x, b.z, b.y, chunkCityGrayMatrices, chunkCityGrayProxies, chunkKey, computeHighriseNeighbors(b)); } else { collectBuildingData(b.x, b.z, b.y, chunkCityBrownMatrices, chunkCityBrownProxies, chunkRoofMatrices, chunkRoofProxies); } });
+            buildingsInChunk.forEach(b => { if (b.isHighrise) { collectHighriseData(b.x, b.z, b.y, chunkCityGrayMatrices, chunkCityGrayProxies, chunkKey, computeHighriseNeighbors(b), isFirstEverGeneration); } else { collectBuildingData(b.x, b.z, b.y, chunkCityBrownMatrices, chunkCityBrownProxies, chunkRoofMatrices, chunkRoofProxies); } });
             createChunkInstancedMeshes(chunkCityGrayMatrices, sharedBoxGeo, sharedCityMatGray, chunkCityGrayProxies, chunkKey); createChunkInstancedMeshes(chunkCityBrownMatrices, sharedBoxGeo, sharedCityMatBrown, chunkCityBrownProxies, chunkKey); createChunkInstancedMeshes(chunkRoofMatrices, sharedConeGeo, sharedRoofMat, chunkRoofProxies, chunkKey);
             const chunkTrunkMatrices = []; const chunkLeafMatrices = []; const chunkRockMatrices = []; const chunkTrunkProxies = []; const chunkLeafProxies = []; const chunkRockProxies = [];
             if (centerBiome !== 'city' && (chunkRand() > 0.3 || centerBiome === 'forest' || centerBiome === 'volcano')) { for (let i = 0; i < objectCount; i++) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const type = chunkRand(); let inBuildingArea = false; for (const building of buildingsInChunk) { const halfW = building.size.w / 2; const halfD = building.size.d / 2; if (x >= building.x - halfW && x <= building.x + halfW && z >= building.z - halfD && z <= building.z + halfD) { inBuildingArea = true; break; } } if (inBuildingArea) continue; const yBase = getTerrainHeight(x, z); let treeChance = 0.75; if (centerBiome === 'forest') treeChance = 0.92 / 3; if (centerBiome === 'mountain') treeChance = 0.35; if (centerBiome === 'volcano') treeChance = 0.05; if (centerBiome === 'volcano' && yBase < LAVA_LEVEL + 1) continue; let rockChance = (centerBiome === 'forest') ? treeChance + (Math.min(treeChance + (0.9 - treeChance) * 2, 0.95) - treeChance) * 0.25 : treeChance + (0.9 - treeChance) * 0.5; if (type < treeChance) { collectTreeData(x, z, yBase, chunkTrunkMatrices, chunkLeafMatrices, chunkTrunkProxies, chunkLeafProxies, centerBiome === 'forest' ? 1.1 : 1.0); } else if (type < rockChance || centerBiome === 'volcano') { collectRockData(x, z, yBase, chunkRockMatrices, chunkRockProxies); } } }
@@ -5882,7 +6840,7 @@
             
             // [MODIFIED] 청크 면적이 1/4가 된 만큼(청크 개수는 4배), 적/보스 스폰 확률도 1/4로 낮춰 월드 전체 밀도를 동일하게 유지
             const enemySpawnThreshold = (centerBiome === 'city') ? 0.955 : 0.92;
-            if (chunkRand() > enemySpawnThreshold) { 
+            if (isFirstEverGeneration && chunkRand() > enemySpawnThreshold) { 
                 const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); 
                 // [수정] 몹은 화산을 무서워해 화산 바이옴엔 아예 스폰되지 않음 (기존엔 용암 위쪽 맨땅이면 스폰됐음)
                 if (centerBiome !== 'volcano') { createRangedEnemy(x, z, 500 + chunkRand() * 500, yBase); }
@@ -5890,7 +6848,7 @@
             }
 
             // [MODIFIED] 밤에는 청크가 로딩될 때 10% 확률로 좀비/적이 추가로 태어남 (안전구역 밖에서만, 화산 제외)
-            if (isNight && centerBiome !== 'volcano') {
+            if (isFirstEverGeneration && isNight && centerBiome !== 'volcano') {
                 const distFromOrigin = Math.sqrt(chunkOriginX * chunkOriginX + chunkOriginZ * chunkOriginZ);
                 if (distFromOrigin > SAFE_ZONE_RADIUS && chunkRand() > 0.90) {
                     const nx = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const nz = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const ny = getTerrainHeight(nx, nz);
@@ -5904,29 +6862,29 @@
 
             if (centerBiome === 'city') {
                 const cityDeepNoise = simplex.noise2D(chunkOriginX / 3000, chunkOriginZ / 3000);
-                if (cityDeepNoise < -0.8 && chunkRand() > 0.995833) {
+                if (isFirstEverGeneration && cityDeepNoise < -0.8 && chunkRand() > 0.995833) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('witch', x, z, y);
                 }
                 // 강령술사: 도시에서 가끔 등장
-                if (cityDeepNoise < -0.5 && chunkRand() > 0.9975) {
+                if (isFirstEverGeneration && cityDeepNoise < -0.5 && chunkRand() > 0.9975) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('necromancer', x, z, y);
                 }
             }
             if (centerBiome === 'volcano') {
-                if (chunkRand() > 0.99) {
+                if (isFirstEverGeneration && chunkRand() > 0.99) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z);
                     if (y > LAVA_LEVEL) { createBoss('fire_demon', x, z, y); }
                 }
             }
             if (centerBiome === 'mountain') {
                 // 골렘: 산 지형에서 가끔 등장
-                if (chunkRand() > 0.99) {
+                if (isFirstEverGeneration && chunkRand() > 0.99) {
                     const x = chunkOriginX + (chunkRand() - 0.5) * 20; const z = chunkOriginZ + (chunkRand() - 0.5) * 20; const y = getTerrainHeight(x, z); createBoss('golem', x, z, y);
                 }
             }
 
             // [MODIFIED] 청크 면적이 1/4가 된 만큼(청크 개수는 4배), 확률도 기존의 1/4로 낮춰서 월드 전체 밀도를 동일하게 유지
-            if (chunkRand() > 0.9825) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRandomLoot(x, z, yBase + 0.5); } }
+            if (isFirstEverGeneration && chunkRand() > 0.9825) { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); if (centerBiome !== 'volcano' || yBase > LAVA_LEVEL) { createRandomLoot(x, z, yBase + 0.5); } }
             if (chunkRand() > 0.92 && centerBiome !== 'volcano') { const x = chunkOriginX + (chunkRand() - 0.5) * CHUNK_SIZE; const z = chunkOriginZ + (chunkRand() - 0.5) * CHUNK_SIZE; const yBase = getTerrainHeight(x, z); createVehicle(x, z, yBase); }
             
             // 강도 캠프 (도시/화산 제외 - 도시는 이미 건물+적 밀도가 높아 렉 방지)
@@ -5962,10 +6920,10 @@
             }
             if (chunkX === 0 && chunkZ === 0) {
                 const y1 = getTerrainHeight(-20, -20);
-                createNPC(-20, -20, 0x0000ff, '상인', ["무한한 세계에 오신 것을 환영합니다!", "제게 남는 탄약이나 무기를 파시면 몰록(화폐)을 드립니다."], y1);
+                createNPC(-20, -20, 0x0000ff, '상인', ["무한한 세계에 오신 것을 환영합니다!", "제게 남는 탄약이나 무기를 파시면 몰록(화폐)을 드립니다.", "장사꾼에게 정직함은 최고의 무기죠.", "귀한 물건이 들어오면 제일 먼저 알려드리죠.", "요즘같은 세상엔 믿을 건 몰록뿐이라니까요.", "다음에 오실 땐 또 뭔가 새로운 게 있을지도 몰라요.", "장사는 믿음이죠! 하하, 또 오세요!"], y1);
                 // 생존자는 처음엔 조금 떨어진 곳에 대기 (허수아비 처치 후 텔레포트)
                 const y2 = getTerrainHeight(40, 30);
-                createNPC(40, 30, 0x00ff00, '생존자', ["지평선 너머엔 무엇이 있을까요?", "항상 주변을 경계하세요.", "조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다."], y2);
+                createNPC(40, 30, 0x00ff00, '생존자', ["지평선 너머엔 무엇이 있을까요?", "항상 주변을 경계하세요.", "조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다.", "이 폐허가 된 세상에도 아직 희망은 남아있어요.", "가끔은 밤하늘의 별을 보며 예전을 떠올리곤 해요.", "당신처럼 강한 사람을 만난 건 오랜만이에요.", "몸 성히 다니세요. 여긴 어디든 위험할 수 있어요.", "몸조심하게, 이 세상에 자네 하나뿐인 사람은 아니니까."], y2);
                 // [MODIFIED] 튜토리얼(허수아비+조작 안내)은 더 이상 여기서 자동 시작하지 않음 - 생존자와의 첫 대화가 끝난 뒤 startTutorial()에서 시작됨
             }
         }
@@ -6001,7 +6959,7 @@
             const tuskR = tuskL.clone(); tuskR.position.set(0.2, 1.05, 0.35); npc.add(tuskR);
             npc.userData = {
                 type: 'npc', name: '오크 사절', isOrcEmissary: true,
-                dialogue: ['우리 부족은 함부로 인간을 믿지 않는다.', '힘없는 자의 말은 바람 소리와 다를 바 없지.', '네가 진정 강하다면, 그 힘을 우리에게 보여라.'],
+                dialogue: ['우리 부족은 함부로 인간을 믿지 않는다.', '힘없는 자의 말은 바람 소리와 다를 바 없지.', '네가 진정 강하다면, 그 힘을 우리에게 보여라.', '오크는 은혜도, 원한도 잊지 않는다.', '족장님은 인간을 시험하고 계시다.', '우리 부족의 전사들은 좀비 따위에게 밀리지 않는다.', '피가 끓는 자만이 우리와 나란히 설 수 있다.', '힘이 곧 진실이다. 그 외의 말은 필요 없다.'],
                 dialogueIndex: 0, spawnPosition: npc.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.5,
                 health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
             };
@@ -6130,7 +7088,7 @@
                 const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), mat); head.position.set(0, 1.0, 0); npc.add(head);
                 npc.userData = {
                     type: 'npc', name: '용병 대장 에일린', isElf: true,
-                    dialogue: ['나는 에일린. 한때는 용병단을 이끌었지만, 지금은 이 폐허를 지키는 게 내 마지막 임무요.', `몰록을 가져오면 용병을 고용해 드리리다. 한 명당 ${MERCENARY_HIRE_COST} 몰록 — 다시 말을 걸면 바로 계약이 성사되오.`],
+                    dialogue: ['나는 에일린. 한때는 용병단을 이끌었지만, 지금은 이 폐허를 지키는 게 내 마지막 임무요.', `몰록을 가져오면 용병을 고용해 드리리다. 한 명당 ${MERCENARY_HIRE_COST} 몰록 — 다시 말을 걸면 바로 계약이 성사되오.`, '전장에서 등을 맡길 사람은 신중하게 골라야 하오.', '용병들은 훈련만큼 정직하게 싸우지. 돈값은 하는 셈이오.', '한때 잃었던 부하들을 생각하면... 지금도 마음이 무겁소.', '성벽이 완성되면 밤이 조금은 덜 무서워질 거요.', '임무엔 감정을 섞지 않소. 하지만... 자네는 다르군.'],
                     dialogueIndex: 0, spawnPosition: npc.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.8,
                     health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
                 };
@@ -6146,7 +7104,7 @@
                 const beard = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.4, 6), new THREE.MeshLambertMaterial({ color: 0xeeeeee })); beard.position.set(0, 0.55, 0.2); npc.add(beard);
                 npc.userData = {
                     type: 'npc', name: '드워프 촌장', isDwarf: true,
-                    dialogue: ['이 작은 마을이... 울슈쎈성의 마지막 희망이라고들 하더군.', '벽 하나 없이 밤을 보내는 게 얼마나 무서운 일인지, 자네는 모를 거요.', '고맙소, 생존자여. 당신 덕에 다시 잠을 이룰 수 있을 것 같소.'],
+                    dialogue: ['이 작은 마을이... 울슈쎈성의 마지막 희망이라고들 하더군.', '벽 하나 없이 밤을 보내는 게 얼마나 무서운 일인지, 자네는 모를 거요.', '고맙소, 생존자여. 당신 덕에 다시 잠을 이룰 수 있을 것 같소.', '광산에서 캐온 광석으로 성벽을 조금씩 보강하고 있소.', '드워프는 땅속에서 나고 자랐지만, 이젠 이 마을이 우리 집이오.', '밤마다 아이들이 무서워하지 않도록, 우리 어른들이 먼저 강해져야지.', '우리 마을 사람들 모두... 자네 덕에 오늘도 무사하다네.'],
                     dialogueIndex: 0, spawnPosition: npc.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.6,
                     health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
                 };
@@ -6161,7 +7119,7 @@
                 const head = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 8), new THREE.MeshLambertMaterial({ color: 0xe0b090 })); head.position.set(0, 1.05, 0); npc.add(head);
                 npc.userData = {
                     type: 'npc', name: '마을 이장',
-                    dialogue: ['여기가 울슈쎈성이오. 폐허가 되었지만... 아직은 우리의 집이지.', '하늘에서 운석이 떨어졌다는 소문을 들었소. 엘프들이라면 그 뜻을 읽어낼 수 있을지도 모르지.', '부디 우리를 지켜주시오. 더는 잃을 게 남아있지 않으니까.'],
+                    dialogue: ['여기가 울슈쎈성이오. 폐허가 되었지만... 아직은 우리의 집이지.', '하늘에서 운석이 떨어졌다는 소문을 들었소. 엘프들이라면 그 뜻을 읽어낼 수 있을지도 모르지.', '부디 우리를 지켜주시오. 더는 잃을 게 남아있지 않으니까.', '예전엔 이곳도 사람들로 북적이던 곳이었소.', '좀비들이 나타나기 전까진, 평범한 삶이었지.', '당신 같은 이가 나타난 게 정말 행운이오.', '그저... 평범한 하루가 그리울 뿐이오.'],
                     dialogueIndex: 0, spawnPosition: npc.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.6,
                     health: 9999, maxHealth: 9999, originalColor: mat.color.clone()
                 };
@@ -6484,6 +7442,13 @@
         }
 
         function createBoss(type, x, z, yBase) {
+            // [요청] 보스가 안전구역(스폰 지점 기준 SAFE_ZONE_RADIUS 반경) 안에 생성되지 않도록 함.
+            // final_boss는 플레이어가 직접 제단까지 가서 상호작용으로 소환하는 스토리 이벤트라 이 제한에서 제외함
+            // (안전구역과 무관하게 항상 정상적으로 소환되어야 퀘스트가 막히지 않음).
+            if (type !== 'final_boss') {
+                const distFromOrigin = Math.sqrt(x * x + z * z);
+                if (distFromOrigin <= SAFE_ZONE_RADIUS) return;
+            }
             let bossMesh, bossHealth, bossName, scale, speed, color;
             if (type === 'witch') {
                 bossHealth = 5000; bossName = "저주받은 마녀"; scale = 1.2; speed = 20.0; color = 0x800080; 
@@ -6539,7 +7504,6 @@
 
         function updateBosses(delta, now, playerPos) {
             let activeBoss = null; let minDst = 300; 
-            const isSafeZone = (hasLeftSafeZone === 0);
             const BOSS_LEASH_RADIUS = 500; // [NEW] 보스 생성지역 기준, 이 반경을 벗어나면 보스가 추격을 포기하고 귀환함
 
             bosses.forEach((boss, index) => {
@@ -6555,7 +7519,7 @@
                         boss.userData.isLeashing = true;
                         showChat(boss.userData.name, '...(전투 구역을 벗어났다. 물러난다.)');
                     }
-                    if (!isEnemyInActiveChunk(boss)) {
+                    if (!isInViewRange(boss.position)) {
                         // 렌더링 안 되는 먼 거리라면 애니메이션 없이 즉시 생성 위치로 스냅 (성능 최적화)
                         boss.visible = false;
                         boss.position.copy(boss.userData.homePosition);
@@ -6586,14 +7550,17 @@
                     boss.userData.isLeashing = false;
                 }
 
-                // 비활성 청크의 보스: 렌더링 끄고 AI 계산 완전 정지 + 체력을 만땅으로 되돌려 놓음
-                if (!isEnemyInActiveChunk(boss)) {
+                // 시야범위 밖의 보스: 렌더링 끄고 AI 계산 완전 정지 + 체력을 만땅으로 되돌려 놓음
+                if (!isInViewRange(boss.position)) {
                     boss.visible = false;
                     if (boss.userData.health < boss.userData.maxHealth) boss.userData.health = boss.userData.maxHealth; // [NEW] 로딩 안 되는 범위로 나가면 체력 완전 회복
                     return;
                 }
                 boss.visible = true;
                 const dist = boss.position.distanceTo(playerPos);
+                // [요청] 안전구역 이탈 인식도 매 프레임 실시간이 아니라 캐시된 값으로 판단 (좀비/원거리 적과 동일한 패턴)
+                if (boss.userData.leftSafeZoneRecognized === undefined) boss.userData.leftSafeZoneRecognized = (hasLeftSafeZone === 1);
+                const isSafeZone = !boss.userData.leftSafeZoneRecognized;
                 if (isSafeZone && boss.userData.health >= boss.userData.maxHealth) return;
                 if (dist < minDst) { minDst = dist; activeBoss = boss; }
                 // [NEW] 감지 범위 판정을 10프레임에 1번만 갱신하고, 그 사이엔 마지막 판정 결과를 그대로 재사용
@@ -7060,22 +8027,22 @@
         const QUEST_GIVER_CONFIG = {
             '생존자': {
                 color: 0x00ff00,
-                dialogue: ["지평선 너머엔 무엇이 있을까요?", "항상 주변을 경계하세요.", "조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다."],
+                dialogue: ["지평선 너머엔 무엇이 있을까요?", "항상 주변을 경계하세요.", "조준 중에 마우스 휠을 굴리면 줌을 조절할 수 있습니다.", "이 폐허가 된 세상에도 아직 희망은 남아있어요.", "가끔은 밤하늘의 별을 보며 예전을 떠올리곤 해요.", "당신처럼 강한 사람을 만난 건 오랜만이에요.", "몸 성히 다니세요. 여긴 어디든 위험할 수 있어요.", "몸조심하게, 이 세상에 자네 하나뿐인 사람은 아니니까."],
                 hasTutorial: true, health: 120,
             },
             '상인': {
                 color: 0x0000ff,
-                dialogue: ["무한한 세계에 오신 것을 환영합니다!", "제게 남는 탄약이나 무기를 파시면 몰록(화폐)을 드립니다."],
+                dialogue: ["무한한 세계에 오신 것을 환영합니다!", "제게 남는 탄약이나 무기를 파시면 몰록(화폐)을 드립니다.", "장사꾼에게 정직함은 최고의 무기죠.", "귀한 물건이 들어오면 제일 먼저 알려드리죠.", "요즘같은 세상엔 믿을 건 몰록뿐이라니까요.", "다음에 오실 땐 또 뭔가 새로운 게 있을지도 몰라요.", "장사는 믿음이죠! 하하, 또 오세요!"],
                 health: 120,
             },
             '엘프 장로': {
                 color: 0x80cbc4,
-                dialogue: ['우리 숲에 온 것을 환영하오.', '세계수가 오염의 기운을 느끼고 있소.', '강도들이 숲을 위협하고 있소. 도와주시겠소?'],
+                dialogue: ['우리 숲에 온 것을 환영하오.', '세계수가 오염의 기운을 느끼고 있소.', '강도들이 숲을 위협하고 있소. 도와주시겠소?', '세계수의 뿌리는 이 대륙 전체와 이어져 있다오.', '당신 같은 인간은 오랜만에 보오.', '자연의 섭리를 거스르는 것들이 늘고 있소.', '엘프는 서두르지 않소. 하지만 필요할 땐 누구보다 빠르지.', '자연의 순리는 서두르는 법이 없다오.'],
                 isElf: true, health: 9999,
             },
             '드워프 대장장이': {
                 color: 0xff8c00,
-                dialogue: ['어서 오소! 전임자의 뒤를 이어받았소.', '광산에서 귀한 광석을 캐고 있소. 필요한 게 있소?'],
+                dialogue: ['어서 오소! 전임자의 뒤를 이어받았소.', '광산에서 귀한 광석을 캐고 있소. 필요한 게 있소?', '이 산에는 오염된 골렘이 산다오. 조심하시오.', '우리 조상들은 이 산 아래 왕국을 세웠다오.', '좋은 무기는 좋은 재료에서 나오는 법이오.', '드워프의 손끝에서 나온 건 절대 배신하지 않소.', '좋은 무기는 좋은 마음에서 나오는 법이오.'],
                 isDwarf: true, health: 9999,
             },
         };
@@ -7509,7 +8476,7 @@
             // [MODIFIED] 저층 건물의 입구->옥상 직통 포탈 제거: 좀비가 이 포탈을 타고 옥상까지 올라가는 걸 막기 위함 (고층 빌딩에만 단계별 포탈 유지)
         }
 
-        function collectHighriseData(x, z, yBase, matrices, proxies, chunkKey, neighbors) {
+        function collectHighriseData(x, z, yBase, matrices, proxies, chunkKey, neighbors, isFirstEverGeneration) {
             // [OPTIMIZATION] 건물 벽 통합 (프레임 드랍 방지)
             // 기존: 층마다 벽을 따로 생성 -> 변경: 건물 전체 높이만큼 벽을 한 번에 생성
             neighbors = neighbors || { left: false, right: false, front: false, back: false }; // [NEW] 인접 건물과 맞닿은 방향 - true인 방향은 벽을 세우지 않고 뚫어서 하나의 공간으로 연결함
@@ -7611,14 +8578,14 @@
                     createPortal(pEntrance, pExit, buildingId, true); 
                 }
                 
-                if (i < 3) { createBuildingLoot(x + (Math.random()-0.5)*(dim.w-4), y + 0.5, z + (Math.random()-0.5)*(dim.d-4)); }
+                if (i < 3 && isFirstEverGeneration) { createBuildingLoot(x + (Math.random()-0.5)*(dim.w-4), y + 0.5, z + (Math.random()-0.5)*(dim.d-4)); }
             }
             
             // 옥상
             const roofY = dim.floors * dim.h + yOffset; 
             const roofData = { ...userData, type: 'roof' }; 
             addBoxInstance(matrices, proxies, x, roofY, z, dim.w, wallThickness, dim.d, roofData, color); 
-            for(let k=0; k<2; k++) { createBuildingLoot(x + (Math.random()-0.5)*(dim.w-4), roofY + 0.5, z + (Math.random()-0.5)*(dim.d-4)); }
+            if (isFirstEverGeneration) { for(let k=0; k<2; k++) { createBuildingLoot(x + (Math.random()-0.5)*(dim.w-4), roofY + 0.5, z + (Math.random()-0.5)*(dim.d-4)); } }
         }
         
         function createNPC(x, z, color, name, dialogue, yBase) { 
@@ -7758,7 +8725,10 @@
             const dialogue = [
                 '오, 여행자여! 마침 잘 만났군. 좋은 물건이 많다네.',
                 '이런 외진 곳까지 장사를 다니다 보니 별의별 일을 다 겪었지.',
-                '오래 머물진 않을 거야. 살펴보고 싶은 게 있으면 지금 보게.'
+                '오래 머물진 않을 거야. 살펴보고 싶은 게 있으면 지금 보게.',
+                '쉿... 이건 아무한테나 안 파는 물건인데 말이죠...',
+                '여기저기 떠돌다 보면 재밌는 소문도 많이 듣는다니까.',
+                '오래 머물지 않는 게 내 방식이야. 정 붙이면 피곤해지거든.'
             ];
             const merchant = createNPC(cx, cz, 0xffd700, '방랑 상인', dialogue, cy);
             merchant.userData.isWandering = true;
@@ -7943,21 +8913,21 @@
                     scene.remove(enemy); zombies.splice(index, 1); continue;
                 }
 
-                // 비활성 청크의 몹: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존).
-                // [FIX] 거대 좀비는 유일하게 "너무 멀어져도 삭제되지 않는" 몹이라, 청크가 비활성일 때도 계속 살아있어야 함.
-                // 하지만 그렇다고 매 프레임 무거운 계산(지형 높이 등)을 계속할 필요는 없으므로, 청크가 비활성인 동안엔
-                // 위치만 그대로 유지("저장")하고 다른 모든 계산은 청크가 다시 로드될 때까지 완전히 멈춤.
-                // "청크가 다시 로드됐는지" 확인 자체도 매 프레임이 아니라 140프레임에 1번만 계산해 그 비용마저 아낌.
+                // 시야범위 밖의 몹: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존).
+                // [FIX] 거대 좀비는 유일하게 "너무 멀어져도 삭제되지 않는" 몹이라, 시야범위 밖일 때도 계속 살아있어야 함.
+                // 하지만 그렇다고 매 프레임 무거운 계산(지형 높이 등)을 계속할 필요는 없으므로, 시야범위 밖인 동안엔
+                // 위치만 그대로 유지("저장")하고 다른 모든 계산은 시야범위 안으로 돌아올 때까지 완전히 멈춤.
+                // "시야범위 안으로 돌아왔는지" 확인 자체도 매 프레임이 아니라 140프레임에 1번만 계산해 그 비용마저 아낌.
                 if (data.isGiant) {
                     if (data.giantChunkCheckFrame === undefined || frameCount - data.giantChunkCheckFrame >= 140) {
                         data.giantChunkCheckFrame = frameCount;
-                        data.giantChunkActive = isEnemyInActiveChunk(enemy);
+                        data.giantChunkActive = isInViewRange(enemy.position);
                     }
                     if (!data.giantChunkActive) {
                         enemy.visible = false; // 위치만 저장(유지) - 그 외 모든 계산 스킵
                         continue;
                     }
-                } else if (!isEnemyInActiveChunk(enemy)) {
+                } else if (!isInViewRange(enemy.position)) {
                     enemy.visible = false;
                     continue;
                 }
@@ -8000,7 +8970,13 @@
                 
                 const effectiveDelta = delta * updateRate;
 
-                if (isDayTime && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager && !data.isGiant && !data.isMutant && !data.isGolem && data.health > 0) {
+                // [요청] "지금이 낮인지"를 매번 실시간(isDayTime)으로 검사하지 않고, 낮/밤이 "바뀌는 시점"에만
+                // updateWorldState에서 전체 좀비에게 한 번 data.isDayRecognized 값을 박아넣고, 다음 전환 전까지는
+                // 그 값을 그대로 씀. 이 좀비가 그 사이(밤 중/낮 중)에 새로 생성됐다면 아직 값이 없을 것이므로,
+                // 그때만 생성 시점의 낮/밤 상태로 한 번 초기화함 (이후엔 역시 전환 이벤트로만 바뀜).
+                if (data.isDayRecognized === undefined) data.isDayRecognized = isDayTime;
+
+                if (data.isDayRecognized && !data.isTroll && !data.isOrc && !data.isElfVillager && !data.isDwarfVillager && !data.isGiant && !data.isMutant && !data.isGolem && data.health > 0) {
                     if ((frameCount + index) % 60 === 0) {
                         const damagePerSec = 100; 
                         data.health -= damagePerSec;
@@ -8059,7 +9035,10 @@
                 if (data.customTarget) { if (data.customTarget.parent && data.customTarget.userData.health > 0) { currentTargetPos = data.customTarget.position; isTargetPlayer = false; } else { data.customTarget = null; } }
 
                 if (!currentTargetPos || !enemy || !enemy.position) continue; const distSq = enemy.position.distanceToSquared(currentTargetPos); const distToTarget = Math.sqrt(distSq); const heightDiff = currentTargetPos.y - enemy.position.y; data.targetHeight = heightDiff; data.playerElevated = isTargetPlayer && heightDiff > 3; 
-                const isSafeZone = isTargetPlayer && (hasLeftSafeZone === 0); const isProvoked = data.isProvoked;
+                // [요청] 안전구역 이탈 인식도 매 프레임 실시간(hasLeftSafeZone)이 아니라 캐시된 값으로 판단 - 전환 시점에
+                // 이미 살아있던 몹은 위 sweep에서 세팅되고, 그 이후(안전구역 이탈 후)에 새로 생성된 몹만 최초 1회 지연 초기화됨.
+                if (data.leftSafeZoneRecognized === undefined) data.leftSafeZoneRecognized = (hasLeftSafeZone === 1);
+                const isSafeZone = isTargetPlayer && !data.leftSafeZoneRecognized; const isProvoked = data.isProvoked;
 
                 if (now - data.lastPortalCheck > data.portalCheckInterval) { 
                     data.lastPortalCheck = now; const verticalDist = Math.abs(heightDiff);
@@ -8068,11 +9047,14 @@
 
                 let hasLineOfSight = false; 
                 if (!isSafeZone || isProvoked) { 
-                    // [요청] 시야 재확인 주기를 기존보다 2배 느리게(10프레임 -> 20프레임)
-                    if (data.state === 'chase' && (frameCount + index) % 20 !== 0) {
-                        hasLineOfSight = true; 
+                    // [요청] 시야 계산(=마지막 목격 위치를 향해 탐색하는 중 플레이어를 다시 찾았는지 확인하는 것도 포함)을
+                    // 상태(추적 중/탐색 중 등)와 무관하게 항상 20프레임에 1번만 수행하고, 그 사이 프레임엔 직전 계산값을 재사용함.
+                    // 기존엔 이미 'chase' 상태일 때만 20프레임 주기가 적용되고, 탐색 중(wander로 전환된 뒤)엔 매번(엔티티별 1/3/5프레임) 다시 계산했음.
+                    if (data.cachedLOS === undefined || (frameCount + index) % 20 === 0) {
+                        hasLineOfSight = checkLineOfSight(enemy.position, currentTargetPos);
+                        data.cachedLOS = hasLineOfSight;
                     } else {
-                        hasLineOfSight = checkLineOfSight(enemy.position, currentTargetPos); 
+                        hasLineOfSight = data.cachedLOS;
                     }
                 } 
                 if (hasLineOfSight) { data.lastKnownPlayerPosition.copy(currentTargetPos); }
@@ -8097,9 +9079,25 @@
         }
 
         function findBestPortalAction(zombiePos, targetY) {
-            let bestPortal = null; let minDist = Infinity;
+            // [FIX-건물혼동] 기존엔 buildingId를 전혀 걸러보지 않고 "맵 전체의 모든 포탈"을 대상으로
+            // 입구 거리+높이 조건만으로 가장 가까운 것을 골랐음. 고층 건물끼리 가까이 붙어 있는 도시에서는
+            // 지금 서 있는 건물이 아니라 "옆 건물"의 계단 입구가 우연히 더 가깝거나 높이가 맞아서 선택되는 경우가 있었고,
+            // 그러면 좀비/원거리 적이 옆 건물 벽 너머의 입구를 향해 직진하다가 자기 건물 벽(또는 옆 건물 벽)에 막혀
+            // "엘리베이터 근처까지는 오는데 다음 층으로 못 올라가고 벽만 붙잡고 있는" 것처럼 보이는 버그가 생겼음
+            // (벽에 딱 붙어 미끄러지길 반복하다 가끔 벽 속으로 파고드는 것처럼 보이는 것도 같은 원인).
+            // 해결: 먼저 "입구까지 거리"만으로 가장 가까운 포탈을 찾아 그 buildingId를 "지금 있는 건물"로 특정하고,
+            // 높이 조건에 맞는 포탈은 반드시 그 buildingId 안에서만 고르도록 제한함.
+            let nearestPortal = null, nearestDist = Infinity;
             for (const portal of portals) {
                 if (!portal.isActive) continue;
+                const d = zombiePos.distanceTo(portal.entrance);
+                if (d < 40 && d < nearestDist) { nearestDist = d; nearestPortal = portal; }
+            }
+            if (!nearestPortal) return null;
+            const myBuildingId = nearestPortal.buildingId;
+            let bestPortal = null; let minDist = Infinity;
+            for (const portal of portals) {
+                if (!portal.isActive || portal.buildingId !== myBuildingId) continue;
                 const distToEntrance = zombiePos.distanceTo(portal.entrance);
                 if (distToEntrance < 40) { // [FIX] 고층 빌딩 한 층 구석(최대 약 32m)에서도 포탈을 인식할 수 있도록 반경을 30→40으로 확장
                     const heightDiff = Math.abs(portal.exit.y - targetY);
@@ -8371,7 +9369,6 @@
             }
             createBandit(centerX, centerZ, centerY, true);
             for (let i = 0; i < 2; i++) { createRandomLoot(centerX + (randFunc() - 0.5) * 15, centerZ + (randFunc() - 0.5) * 15, centerY + 0.5); }
-            showChat('시스템', '⚠️ 근처에 강도 캠프가 있습니다!');
         }
         // ──────────────────────────────────────────────────────────────────────
 
@@ -8472,7 +9469,7 @@
                     // 장로: 메인 퀘스트 NPC
                     elf.userData = {
                         type: 'npc', name: '엘프 장로', isElf: true, isElfElder: true, // [NEW] isElfElder: 강도 감시 신호 시스템에서 장로만 식별하기 위한 플래그
-                        dialogue: ['우리 숲에 온 것을 환영하오.', '세계수가 오염의 기운을 느끼고 있소.', '강도들이 숲을 위협하고 있소. 도와주시겠소?', '세계수의 뿌리는 이 대륙 전체와 이어져 있다오.', '당신 같은 인간은 오랜만에 보오.'],
+                        dialogue: ['우리 숲에 온 것을 환영하오.', '세계수가 오염의 기운을 느끼고 있소.', '강도들이 숲을 위협하고 있소. 도와주시겠소?', '세계수의 뿌리는 이 대륙 전체와 이어져 있다오.', '당신 같은 인간은 오랜만에 보오.', '자연의 섭리를 거스르는 것들이 늘고 있소.', '엘프는 서두르지 않소. 하지만 필요할 땐 누구보다 빠르지.', '자연의 순리는 서두르는 법이 없다오.'],
                         dialogueIndex: 0, spawnPosition: elf.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 1.0,
                         questGiven: false, health: 9999, maxHealth: 9999, originalColor: elfMat.color.clone()
                     };
@@ -8519,7 +9516,7 @@
             const raidDelay = (90 + Math.random() * 90) * 1000;
             setTimeout(() => triggerElfRaid(centerX, centerZ), raidDelay);
 
-            showChat('시스템', '🌿 엘프 마을 발견! [E]키로 장로/전사/상인에게 대화하세요.');
+
         }
 
         function triggerElfRaid(cx, cz) {
@@ -8682,7 +9679,7 @@
                     dwarf.position.set(forgX + 3, forgY + 1, forgZ + 2);
                     dwarf.userData = {
                         type: 'npc', name: '드워프 대장장이', isDwarf: true,
-                        dialogue: ['어서 오소! 대장장이 브롬이라고 하오.', '광산에서 귀한 광석을 캐고 있소. 필요한 게 있소?', '이 산에는 오염된 골렘이 산다오. 조심하시오.', '우리 조상들은 이 산 아래 왕국을 세웠다오.', '망치질 소리만 들으면 마음이 편해진다오.'],
+                        dialogue: ['어서 오소! 대장장이 브롬이라고 하오.', '광산에서 귀한 광석을 캐고 있소. 필요한 게 있소?', '이 산에는 오염된 골렘이 산다오. 조심하시오.', '우리 조상들은 이 산 아래 왕국을 세웠다오.', '망치질 소리만 들으면 마음이 편해진다오.', '좋은 무기는 좋은 재료에서 나오는 법이오.', '드워프의 손끝에서 나온 건 절대 배신하지 않소.', '좋은 무기는 좋은 마음에서 나오는 법이오.'],
                         dialogueIndex: 0, spawnPosition: dwarf.position.clone(), wanderTarget: null, lastMoveTime: 0, speed: 0.8,
                         questGiven: false, health: 9999, maxHealth: 9999, originalColor: new THREE.Color(dCol)
                     };
@@ -8733,7 +9730,6 @@
             const raidDelay = (120 + Math.random() * 120) * 1000;
             setTimeout(() => triggerDwarfRaid(centerX, centerZ), raidDelay);
 
-            showChat('시스템', '⛏️ 드워프 광산 발견! 장로/광부/상인에게 [E]로 대화하세요.');
         }
 
         function triggerDwarfRaid(cx, cz) {
@@ -8925,10 +9921,12 @@
             } else {
                 modal.style.display = 'none';
             }
+            applyUICustomization(); // [FIX] 매 프레임/탭 전환이 아니라 접근성 설정에 들어갈 때·나갈 때만 재적용
         }
         function closeAccessibilityModal() {
             isAccessibilityOpen = false;
             document.getElementById('accessibility-modal').style.display = 'none';
+            applyUICustomization(); // [FIX] 접근성 설정 나갈 때 재적용
         }
         function renderAccessibilityModal() {
             const radiusSlider = document.getElementById('accessibility-chunk-radius');
@@ -8944,6 +9942,98 @@
             if (sensSlider) sensSlider.value = Math.round(accessibilitySettings.mouseSensitivity * 100);
             if (sensVal) sensVal.textContent = `${accessibilitySettings.mouseSensitivity.toFixed(2)}x`;
         }
+
+        // ── [NEW] UI 커스터마이징 (표시여부/색/투명도) ──────────────────────────────
+        // 각 HUD 요소가 실제로 화면에서 어느 DOM에 대응되는지 정의. fillSelector가 있으면(체력/보스처럼 막대형 UI)
+        // 색상을 막대 채움(container 배경색)에도 같이 적용함.
+        const UI_CUSTOMIZABLE_ELEMENTS = {
+            boss:    { label: '보스 UI',        selectors: ['#boss-container'],       fillSelector: '#boss-bar-fill' },
+            moloch:  { label: '몰록 UI',        selectors: ['#moloch-display'] },
+            quest:   { label: '임무 UI',        selectors: ['#quest-display'] },
+            system:  { label: '시스템 UI (채팅)', selectors: ['#chat-box'] },
+            holding: { label: '현재 들고있는 UI', selectors: ['#ammo-container'] },
+            health:  { label: '체력 UI',        selectors: ['#health-status-row'],    fillSelector: '#health-fill' },
+            clock:   { label: '시계 UI',        selectors: ['#time-display'] },
+            coord:   { label: '좌표와 지역 UI',  selectors: ['#coord-display'] },
+            level:   { label: '레벨 UI',        selectors: ['#level-badge', '#xp-bar-container'] },
+            scope:   { label: '스코프 UI',      selectors: ['#scope-display-container'] },
+        };
+        const DEFAULT_UI_CUSTOMIZATION = {};
+        Object.keys(UI_CUSTOMIZABLE_ELEMENTS).forEach(k => { DEFAULT_UI_CUSTOMIZATION[k] = { visible: true, color: '', opacity: 1 }; });
+        let uiCustomization = {};
+        Object.keys(UI_CUSTOMIZABLE_ELEMENTS).forEach(k => { uiCustomization[k] = { ...DEFAULT_UI_CUSTOMIZATION[k] }; });
+        function loadUICustomization() {
+            try {
+                const saved = localStorage.getItem('gameUICustomization');
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    Object.keys(parsed).forEach(k => { if (uiCustomization[k]) uiCustomization[k] = { ...uiCustomization[k], ...parsed[k] }; });
+                }
+            } catch (e) { /* localStorage 사용 불가 - 기본값 사용 */ }
+            applyUICustomization();
+        }
+        function saveUICustomization() {
+            try { localStorage.setItem('gameUICustomization', JSON.stringify(uiCustomization)); } catch (e) { /* 무시 */ }
+        }
+        // [NEW] 실제로 DOM에 표시여부/색/투명도를 반영. 매 프레임 도는 게 아니라, 설정이 바뀔 때 / 게임 시작 시 /
+        // 화면(탭)으로 돌아올 때(visibilitychange)만 호출됨 - 계속 폴링하지 않음.
+        function applyUICustomization() {
+            Object.keys(UI_CUSTOMIZABLE_ELEMENTS).forEach(key => {
+                const cfg = UI_CUSTOMIZABLE_ELEMENTS[key];
+                const setting = uiCustomization[key] || DEFAULT_UI_CUSTOMIZATION[key];
+                cfg.selectors.forEach(sel => {
+                    const el = document.querySelector(sel);
+                    if (!el) return;
+                    // ui-custom-hidden은 !important라서, 게임 로직이 이 요소의 display를 따로 조작해도(예: 보스 등장 시
+                    // boss-container를 flex로 바꾸는 것) 항상 우선해서 숨김 - 내부 계산/로직 자체는 전혀 안 건드림
+                    el.classList.toggle('ui-custom-hidden', !setting.visible);
+                    el.style.opacity = setting.opacity;
+                    if (setting.color) el.style.color = setting.color; else el.style.removeProperty('color');
+                });
+                if (cfg.fillSelector) {
+                    const fillEl = document.querySelector(cfg.fillSelector);
+                    if (fillEl) { if (setting.color) fillEl.style.backgroundColor = setting.color; else fillEl.style.removeProperty('background-color'); }
+                }
+            });
+        }
+        function renderUICustomModal() {
+            const list = document.getElementById('ui-custom-list');
+            if (!list) return;
+            list.innerHTML = '';
+            Object.keys(UI_CUSTOMIZABLE_ELEMENTS).forEach(key => {
+                const cfg = UI_CUSTOMIZABLE_ELEMENTS[key];
+                const setting = uiCustomization[key] || (uiCustomization[key] = { ...DEFAULT_UI_CUSTOMIZATION[key] });
+                const row = document.createElement('div'); row.className = 'ui-custom-row';
+                const name = document.createElement('div'); name.className = 'ui-custom-name'; name.textContent = cfg.label;
+                const visCheck = document.createElement('input'); visCheck.type = 'checkbox'; visCheck.title = '표시 여부'; visCheck.checked = setting.visible;
+                visCheck.addEventListener('change', () => { setting.visible = visCheck.checked; saveUICustomization(); applyUICustomization(); });
+                const colorInput = document.createElement('input'); colorInput.type = 'color'; colorInput.title = '색상'; colorInput.value = setting.color || '#ffffff';
+                colorInput.addEventListener('input', () => { setting.color = colorInput.value; saveUICustomization(); applyUICustomization(); });
+                const opacityWrap = document.createElement('div'); opacityWrap.style.display = 'flex'; opacityWrap.style.alignItems = 'center'; opacityWrap.style.gap = '4px';
+                const opacitySlider = document.createElement('input'); opacitySlider.type = 'range'; opacitySlider.min = '20'; opacitySlider.max = '100'; opacitySlider.step = '5'; opacitySlider.value = Math.round(setting.opacity * 100); opacitySlider.title = '투명도';
+                const opacityVal = document.createElement('span'); opacityVal.className = 'ui-custom-opacity-val'; opacityVal.textContent = `${Math.round(setting.opacity * 100)}%`;
+                opacitySlider.addEventListener('input', () => { setting.opacity = parseInt(opacitySlider.value, 10) / 100; opacityVal.textContent = `${opacitySlider.value}%`; saveUICustomization(); applyUICustomization(); });
+                opacityWrap.appendChild(opacitySlider); opacityWrap.appendChild(opacityVal);
+                row.appendChild(name); row.appendChild(visCheck); row.appendChild(colorInput); row.appendChild(opacityWrap);
+                list.appendChild(row);
+            });
+        }
+        let isUICustomOpen = false;
+        function toggleUICustomModal() {
+            isUICustomOpen = !isUICustomOpen;
+            const modal = document.getElementById('ui-custom-modal');
+            const accModal = document.getElementById('accessibility-modal');
+            if (isUICustomOpen) {
+                if (accModal) accModal.style.display = 'none'; // [NEW] 접근성 설정 위에 겹쳐 뜨지 않도록 잠깐 숨김 (뒤로가기 시 복원)
+                document.exitPointerLock();
+                modal.style.display = 'flex';
+                renderUICustomModal();
+            } else {
+                modal.style.display = 'none';
+                if (accModal && isAccessibilityOpen) accModal.style.display = 'flex'; // 접근성 설정으로 복귀
+            }
+        }
+
         let listeningForAction = null; // 현재 키 입력을 기다리는 중인 액션 이름
         function renderKeybindModal() {
             const list = document.getElementById('keybind-list');
@@ -8992,7 +10082,7 @@
             document.getElementById('pause-resume-btn').addEventListener('click', () => { closePauseModal(); });
             document.getElementById('pause-save-btn').addEventListener('click', () => { saveGameToFile(); });
             document.getElementById('pause-quit-btn').addEventListener('click', () => {
-                if (confirm('정말 게임을 종료하시겠습니까? 저장하지 않은 진행 상황은 사라집니다.')) { quitGame(); }
+                if (confirm('게임을 종료하시겠습니까? 종료 전에 자동으로 저장됩니다 (파일이 다운로드됩니다).')) { quitGame(); }
             });
             const pauseLoadInput = document.getElementById('pause-load-input');
             document.getElementById('pause-load-btn').addEventListener('click', () => { pauseLoadInput.click(); });
@@ -9048,6 +10138,10 @@
                 accessibilitySettings.chunkPreloadRadius = parseInt(e.target.value, 10);
                 document.getElementById('accessibility-chunk-radius-val').textContent = `${accessibilitySettings.chunkPreloadRadius}m`;
                 saveAccessibilitySettings();
+                // [FIX-반경축소버그] 기존엔 슬라이더를 움직여도 다음에 플레이어가 실제로 움직여야만(청크 이동 체크 주기)
+                // freeze 재계산이 일어나서, 슬라이더를 줄인 직후 가만히 있으면 "줄어들지 않는 것처럼" 보였음.
+                // 슬라이더 값이 바뀌는 즉시 청크 freeze 상태를 다시 계산해 곧바로 반영되도록 함.
+                updateChunkFreezing();
             });
             // [NEW] 시야 범위 슬라이더 - 안개(scene.fog.far) 거리를 실시간으로 반영
             document.getElementById('accessibility-view-distance').addEventListener('input', (e) => {
@@ -9067,6 +10161,18 @@
                 saveAccessibilitySettings();
                 renderAccessibilityModal();
             });
+
+            // [NEW] 접근성 설정 -> UI 수정 버튼
+            document.getElementById('open-ui-custom-btn').addEventListener('click', () => { toggleUICustomModal(); });
+            document.getElementById('close-ui-custom-btn').addEventListener('click', () => { toggleUICustomModal(); });
+            document.getElementById('ui-custom-reset-btn').addEventListener('click', () => {
+                Object.keys(UI_CUSTOMIZABLE_ELEMENTS).forEach(k => { uiCustomization[k] = { ...DEFAULT_UI_CUSTOMIZATION[k] }; });
+                saveUICustomization();
+                applyUICustomization();
+                renderUICustomModal();
+            });
+            // [FIX] visibilitychange(탭 전환) 기반 재적용은 제거함 - 요청대로 접근성 설정 들어갈 때/나갈 때(toggleAccessibilityModal,
+            // closeAccessibilityModal)에서만 재적용하도록 변경. 매 프레임은 물론 탭 전환 시점에도 별도로 체크 안 함.
 
             document.addEventListener('keydown', (e) => { 
                 // [NEW] 키 설정 창에서 새 키를 입력받는 중이라면, 이 키 입력을 바인딩에만 사용하고 게임 조작으로는 전달하지 않음
@@ -10212,6 +11318,46 @@
             return ch.steps[mainStory.step] || null;
         }
 
+        // [요청] 생존자가 게임의 모든 기능을 한 번에 설명하지 않고, 각 장을 깨나갈 때마다 실전 상황에 맞춰
+        // 하나씩 알려주도록 함. STORY_CHAPTERS의 챕터 완료(advanceStoryChapter) 시점에 맞춰 순서대로 발동됨.
+        const SURVIVOR_FEATURE_LESSONS = {
+            1: [
+                "그러고 보니 아직 장비 다루는 법을 안 알려줬군. ESC나 E로 메뉴를 열고 '장비창'으로 들어가면, 주운 방어구를 직접 장착할 수 있어.",
+                "무기는 숫자키 1~5로 바로 바꿀 수 있고, 탄이 떨어지면 R로 재장전하는 것 잊지 말고."
+            ],
+            2: [
+                "가르도 같은 상인을 만나면 F키로 말을 걸어봐. 안 쓰는 무기나 탄약을 팔고, 필요한 걸 살 수 있어.",
+                "몰록만 있으면 뭐든 거래할 수 있으니, 굳이 다 짊어지고 다닐 필요 없어."
+            ],
+            3: [
+                "슬슬 힘에 부친다면 P키를 눌러봐. 그동안 모은 능력치 포인트를 찍어서 몸을 더 강하게 만들 수 있어.",
+                "위급할 때는 I키로 수류탄도 던질 수 있으니 기억해둬. (설정에서 키는 바꿀 수 있어)"
+            ],
+            4: [
+                "이 근방엔 엘프, 드워프, 오크 같은 다른 종족들도 살고 있어. 먼저 손대지만 않으면 대체로 평화로울 거야.",
+                "그리고... 한 가지 경고해두지. 이 안전한 곳을 벗어나는 순간부터 몬스터들이 자넬 알아채기 시작해. 한번 벗어나면 돌이킬 수 없으니 각오하고 가.",
+                "밤은 낮보다 훨씬 위험해. 낮엔 좀비들이 스스로 상하지만, 밤엔 그렇지 않으니 조심하고."
+            ],
+            5: [
+                "차량을 보면 F키로 올라타 봐. 이동이 한결 편해질 거야.",
+                "높은 건물 안에 들어가 보면 층마다 엘리베이터 같은 게 있어서 오르내리기 편할 거야."
+            ],
+            6: [
+                "이제 슬슬 위험한 곳도 많이 다니게 될 텐데... 일시정지 메뉴에서 틈틈이 저장해두는 습관을 들이는 게 좋을 거야.",
+                "M키로 미니맵도 열어봐. 어디로 가야 할지 감이 잡힐 거고, T키에 마우스 휠을 더하면 조준경 배율도 마음대로 바꿀 수 있어.",
+                "혹시 화면이 너무 뿌옇게 느껴지면, 일시정지 메뉴의 접근성 설정에서 시야범위를 조절해봐."
+            ],
+            7: [
+                "여기까지 오다니... 정말 대단하군. 이제부터는 자네 스스로 길을 찾아나갈 시간인 것 같아.",
+                "혹시 모르니 말해두는데, 이 세상엔 아직 내가 다 말해주지 못한 것들도 많아. 직접 부딪히면서 찾아보는 재미도 있을 거야."
+            ],
+        };
+        function deliverSurvivorLesson(chapterNum) {
+            const lines = SURVIVOR_FEATURE_LESSONS[chapterNum];
+            if (!lines) return;
+            lines.forEach((line, i) => setTimeout(() => showChat('생존자', line), 2000 + i * 3200));
+        }
+
         function advanceStoryStep() {
             const ch = STORY_CHAPTERS[mainStory.chapter];
             if (!ch) return;
@@ -10243,6 +11389,7 @@
 
         function advanceStoryChapter() {
             const ch = STORY_CHAPTERS[mainStory.chapter];
+            const completedChapterNum = mainStory.chapter; // [요청] 생존자의 단계별 기능 설명을 위해 방금 완료한 챕터 번호를 미리 챙겨둠
             // 챕터 보상 지급
             if (ch && ch.reward) {
                 addMoloch(ch.reward.moloch);
@@ -10259,6 +11406,7 @@
                     showChat('시스템', '🛡️ 특수 방어구가 지급되었습니다!');
                 }
             }
+            deliverSurvivorLesson(completedChapterNum); // [요청] 한 번에 전부가 아니라, 챕터를 깰 때마다 하나씩 실전 기능을 설명해줌
             mainStory.chapter++;
             mainStory.step = 0;
             mainStory.phase = 'intro';
@@ -10508,7 +11656,7 @@
                             return;
                         }
                         // 스토리 완료 후 한담
-                        const idle = ["항상 주변을 경계하게.", "화산 지대는 아직도 위험해.", "자네가 있어서 든든해.", "더 필요한 게 있으면 상인을 찾아가게.", "가끔은 균열 쪽에서 이상한 소리가 들려... 기분 탓이겠지?", "이 정도 평화도 자네 덕분이야. 고맙네."];
+                        const idle = ["항상 주변을 경계하게.", "화산 지대는 아직도 위험해.", "자네가 있어서 든든해.", "더 필요한 게 있으면 상인을 찾아가게.", "가끔은 균열 쪽에서 이상한 소리가 들려... 기분 탓이겠지?", "이 정도 평화도 자네 덕분이야. 고맙네.", "가끔은 예전 세상이 그리워... 이젠 기억도 희미하지만.", "엘프와 드워프 마을 쪽도 한 번씩 들러보는 게 어때? 다들 자넬 반길 거야.", "무기는 항상 손질해두는 게 좋아. 언제 급하게 필요할지 모르니까.", "이 근처에 아직 발견 못 한 게 많을 거야. 눈을 크게 뜨고 다녀봐.", "가끔은 그냥... 숨 좀 돌리고 쉬어도 돼. 너무 무리하지 말게."];
                         showChat('생존자', idle[Math.floor(Math.random() * idle.length)]);
                         return;
                     }
@@ -10730,7 +11878,7 @@
             const questDisplay = document.getElementById('quest-display');
             const chatBox = document.getElementById('chat-box');
             if (!chatBox) return;
-            if (questDisplay && questDisplay.style.display !== 'none') {
+            if (questDisplay && questDisplay.style.display !== 'none' && !questDisplay.classList.contains('ui-custom-hidden')) {
                 const rect = questDisplay.getBoundingClientRect();
                 const newTop = rect.bottom + 12;
                 chatBox.style.top = newTop + 'px';
@@ -10813,15 +11961,73 @@
             removeItemFromWorld(item); // [FIX-아이템렉] 기존 인라인 제거 로직을 공용 헬퍼로 교체 (removeItemFromWorld - 자동 만료(despawn)와 동일 로직 재사용)
             updateUI(); 
         }
+        let chatMessages = []; // [NEW] 채팅/시스템 메시지의 소멸 타이머를 실시간(setTimeout)이 아니라 게임 틱 기준으로 관리 - E키 일시정지 중엔 다른 몹들처럼 멈춰있음
+        // [요청] NPC마다 말하는 속도(글자당 밀리초)를 조금씩 다르게 함 - 목록에 없으면(시스템/전투 로그 등) 0이라
+        // 타이핑 효과 없이 즉시 표시됨(전투 중 빠른 정보 전달은 여전히 즉각적이어야 하므로).
+        // [요청] 각 NPC별로 뚜렷한 성격을 부여함. trait는 대사를 쓸 때 일관성을 유지하기 위한 설정이고,
+        // color는 채팅창에서 그 인물만의 이름 색으로 표시되어 "누가 말하는지"가 대사 속도와 색으로도 구분되게 함.
+        const NPC_PERSONALITIES = {
+            '생존자':          { trait: '차분하고 다정한 리더. 항상 플레이어의 안전을 먼저 걱정함', color: '#55dd77' },
+            '상인':            { trait: '쾌활하고 넉살 좋은 장사꾼. 돈과 거래 얘기를 제일 좋아함', color: '#4499ff' },
+            '방랑 상인':       { trait: '은밀하고 수상쩍은 떠돌이. 속삭이듯 말하며 뜸을 들임', color: '#9966cc' },
+            '엘프 장로':       { trait: '우아하고 신비로운 자연의 수호자. 고어체로 느긋하게 말함', color: '#80cbc4' },
+            '드워프 대장장이': { trait: '투박하지만 정 많은 장인. 짧고 직설적으로 말함', color: '#ff8c00' },
+            '드워프 촌장':     { trait: '인자하고 걱정 많은 마을 지도자. 마을 사람들 얘기를 자주 함', color: '#d2a679' },
+            '마을 이장':       { trait: '소박하고 현실적인 인간. 다소 지쳐있지만 희망을 놓지 않음', color: '#9acb52' },
+            '용병 대장 에일린': { trait: '절도있고 책임감 강한 전직 용병단장. 군인다운 말투', color: '#33cccc' },
+            '오크 사절':       { trait: '위압적이고 자존심 강한 전사. 힘을 최우선 가치로 여김', color: '#5a9a3a' },
+        };
+        const NPC_TALK_SPEED_MS = {
+            '생존자': 30,          // 차분하고 신중하게
+            '상인': 16,            // 수다스럽고 빠르게
+            '방랑 상인': 14,       // 더 빠르고 촐싹거리듯
+            '엘프 장로': 46,       // 느긋하고 우아하게
+            '드워프 대장장이': 34, // 투박하고 묵직하게
+            '드워프 촌장': 36,     // 드워프 대장장이보다 조금 더 느긋한 노인
+            '마을 이장': 28,       // 담담하게
+            '용병 대장 에일린': 22, // 절도있는 군인 말투
+            '오크 사절': 40,       // 위압적으로 한마디씩 눌러 말함
+            '???': 44,             // 신비롭게 뜸을 들이며
+        };
+        function getTalkSpeed(name) { return NPC_TALK_SPEED_MS[name] || 0; }
         function showChat(name, message) { const chatBox = document.getElementById('chat-box'); const messageDiv = document.createElement('div'); messageDiv.className = 'chat-message'; let nameSpan; 
             if (name === '시스템') nameSpan = `<span class="system-name">${name}:</span>`; 
             else if (name === '좀비') nameSpan = `<span class="zombie-name">${name}:</span>`; 
             else if (name === '트롤') nameSpan = `<span style="color:#556B2F; font-weight:bold; font-size:1.1em;">${name}:</span>`; 
             else if (name === '불의 악마') nameSpan = `<span style="color:#ff4500; font-weight:bold;">${name}:</span>`; 
             else if (name === '저주받은 마녀') nameSpan = `<span style="color:#800080; font-weight:bold;">${name}:</span>`; 
+            else if (NPC_PERSONALITIES[name]) nameSpan = `<span style="color:${NPC_PERSONALITIES[name].color}; font-weight:bold;">${name}:</span>`;
             else if (name.includes('오크')) nameSpan = `<span style="color:#228B22; font-weight:bold;">${name}:</span>`; 
             else nameSpan = `<span class="npc-name">${name}:</span>`; 
-            messageDiv.innerHTML = `${nameSpan} ${message}`; chatBox.appendChild(messageDiv); chatBox.style.display = 'flex'; updateChatBoxPosition(); while (chatBox.children.length > 5) { chatBox.removeChild(chatBox.firstChild); } setTimeout(() => { if (chatBox.contains(messageDiv)) { messageDiv.style.opacity = '0'; setTimeout(() => { if (chatBox.contains(messageDiv)) chatBox.removeChild(messageDiv); if (chatBox.children.length === 0) chatBox.style.display = 'none'; }, 500); } }, 5000); }
+            const msPerChar = getTalkSpeed(name);
+            const textSpan = document.createElement('span');
+            messageDiv.innerHTML = `${nameSpan} `; messageDiv.appendChild(textSpan);
+            if (msPerChar <= 0) textSpan.textContent = message; // 타이핑 효과 없이 즉시 전체 표시
+            chatBox.appendChild(messageDiv); chatBox.style.display = 'flex'; updateChatBoxPosition(); while (chatBox.children.length > 5) { chatBox.removeChild(chatBox.firstChild); chatMessages = chatMessages.filter(m => m.el.parentNode); }
+            chatMessages.push({ el: messageDiv, textEl: textSpan, fullText: message, charsRevealed: msPerChar > 0 ? 0 : message.length, msPerChar, typeProgressMs: 0, remainingMs: 5000, fading: false });
+        }
+        // [NEW] 채팅 메시지의 타이핑 진행 + 5초 소멸 처리 - isWorldFrozen()이 아닐 때만(다른 몹들과 동일한 게이트) animate()에서 호출됨.
+        // 기존엔 setTimeout(실시간 기준)이라 E키로 일시정지해도 뒤에서 계속 타이머가 흘러 메시지가 사라졌었음.
+        function updateChatMessages(delta) {
+            if (chatMessages.length === 0) return;
+            const chatBox = document.getElementById('chat-box');
+            const ms = delta * 1000;
+            for (let i = chatMessages.length - 1; i >= 0; i--) {
+                const m = chatMessages[i];
+                if (!m.el.parentNode) { chatMessages.splice(i, 1); continue; }
+                // [요청] NPC별 속도로 한 글자씩 타이핑 - 일시정지 중엔 animate()가 이 함수를 아예 안 부르므로 자동으로 같이 멈춤
+                if (m.msPerChar > 0 && m.charsRevealed < m.fullText.length) {
+                    m.typeProgressMs += ms;
+                    const shouldShow = Math.min(m.fullText.length, Math.floor(m.typeProgressMs / m.msPerChar));
+                    if (shouldShow !== m.charsRevealed) { m.charsRevealed = shouldShow; m.textEl.textContent = m.fullText.slice(0, m.charsRevealed); }
+                    continue; // 다 타이핑되기 전까지는 소멸 타이머를 시작하지 않음
+                }
+                m.remainingMs -= ms;
+                if (!m.fading && m.remainingMs <= 0) { m.fading = true; m.el.style.opacity = '0'; m.remainingMs = 500; }
+                else if (m.fading && m.remainingMs <= 0) { chatBox.removeChild(m.el); chatMessages.splice(i, 1); }
+            }
+            if (chatBox.children.length === 0) chatBox.style.display = 'none';
+        }
         function updateInteraction() {
             if (isPointerLocked === false || playerInVehicle || isTrading || isStatsOpen || isPaused || isEquipOpen || isKeybindOpen || isMeritOpen) { document.getElementById('interaction-prompt').style.display = 'none'; interactableObject = null; return; }
             const range = 3.5; let closestObject = null; let minDistance = range; const checkableObjects = [...getNearbyItems(gameState.position), ...vehicles, ...npcs]; checkableObjects.forEach(obj => { if (!obj.parent) return; const dist = gameState.position.distanceTo(obj.position); if (dist < minDistance) { minDistance = dist; closestObject = obj; } });
@@ -11245,7 +12451,7 @@
             const nearbyObjects = getNearbyStaticObjects(playerPos);
 
             for(let i = vehicles.length -1; i >= 0; i--) {
-                const vehicleA = vehicles[i]; if (!vehicleA.parent) continue; if (playerInVehicle !== vehicleA) { const distSq = vehicleA.position.distanceToSquared(playerPos); if (distSq > VEHICLE_ACTIVE_SQ) { vehicleA.visible = false; continue; } vehicleA.visible = true; }
+                const vehicleA = vehicles[i]; if (!vehicleA.parent) continue; if (playerInVehicle !== vehicleA) { if (!isInViewRange(vehicleA.position)) { vehicleA.visible = false; continue; } vehicleA.visible = true; }
                 for(let j = i - 1; j >= 0; j--) { const vehicleB = vehicles[j]; if (!vehicleB.parent) continue; if (vehicleA.position.distanceToSquared(vehicleB.position) > 100) continue; const boxA = vehicleA.userData.collisionBox.clone().translate(vehicleA.position); const boxB = vehicleB.userData.collisionBox.clone().translate(vehicleB.position); if(boxA.intersectsBox(boxB)) { const relativeSpeed = Math.abs(vehicleA.userData.speed) + Math.abs(vehicleB.userData.speed); const damage = relativeSpeed * 30 * 0.625; vehicleA.userData.health -= damage; vehicleB.userData.health -= damage; const tempSpeed = vehicleA.userData.speed; vehicleA.userData.speed = vehicleB.userData.speed * -0.5; vehicleB.userData.speed = tempSpeed * -0.5; } }
                 if (playerInVehicle === vehicleA) {
                     const data = vehicleA.userData; data.steering = THREE.MathUtils.lerp(data.steering, vehicleSteering, delta * 5); const forwardDir = new THREE.Vector3(0, 0, 1).applyQuaternion(vehicleA.quaternion).normalize(); const samplePos = vehicleA.position.clone().add(forwardDir.clone().multiplyScalar(2.0)); const currentH = getTerrainHeight(vehicleA.position.x, vehicleA.position.z); const nextH = getTerrainHeight(samplePos.x, samplePos.z); 
@@ -11297,7 +12503,17 @@
                     }
                     // [OPTIMIZATION] 차량 충돌도 nearbyObjects 사용
                     for (const object of nearbyObjects) { const distSq = vehicleA.position.distanceToSquared(object.position); if (distSq > COLLISION_CHECK_DISTANCE_SQ) continue; if (!object.geometry || !object.parent || object.geometry.type === 'PlaneGeometry' || object.userData.type === 'roof' || object.userData.type === 'lava' || object.userData.type === 'decoration' || object.userData.type === 'teleporter') continue; if (!object.geometry.boundingBox) object.geometry.computeBoundingBox(); const objectBox = tempBox.setFromObject(object); if (vehicleBox.intersectsBox(objectBox)) { vehicleA.position.copy(oldPosition); const damage = Math.abs(oldSpeed) * 40 * 0.31; vehicleA.userData.health -= damage; vehicleA.userData.speed *= -0.5; break; } }
-                } else { raycaster.set(vehicleA.position.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(0, -1, 0)); const vehicleIntersects = raycaster.intersectObjects(activeStructuresCache, true); let vehicleGroundY = vehicleA.position.y; if (vehicleIntersects.length > 0) { const firstHit = vehicleIntersects.find(hit => hit.object.geometry.type === 'PlaneGeometry' || hit.object.userData.type === 'roof' || hit.object.userData.type === 'floor' || hit.object.userData.type === 'object' || hit.object.userData.type === 'lava'); if(firstHit) vehicleGroundY = firstHit.point.y; } vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, vehicleGroundY + 0.4, 0.1); }
+                } else { 
+                    // [FIX-차량우주비행버그] 기존엔 activeStructuresCache에 대한 검증 없는 자체 레이캐스트만 썼음 - 근처에
+                    // 등록된 구조물이 아직 없거나(그 구역 청크가 아직 로딩/생성되지 않은 상태) 레이가 아무것도 못 맞히면
+                    // vehicleGroundY가 "현재 y값 그대로"로 남아 전혀 보정되지 않았고, 반대로 엉뚱한 걸 맞혀도 검증 없이
+                    // 그대로 믿어버려서 나중에 위치가 크게 어긋난 채로 굳어질 수 있었음 - 이게 나중에 다른 계기로 급격히
+                    // 보정되면서 "하늘로 날아가는" 것처럼 보였던 원인. 좀비/적이 쓰는 것과 동일한 검증된 함수로 교체함:
+                    // 근처에 건물이 없으면 즉시 안전하게 지형 높이(청크 로딩 여부와 무관하게 항상 정확한 순수 함수)로
+                    // 스냅되고, 건물 위/안에서는 기존처럼 바닥·지붕 높이를 범위까지 검증해서 사용함.
+                    const vehicleGroundY = getStructureAwareGroundY(vehicleA.position, vehicleA.userData);
+                    vehicleA.position.y = THREE.MathUtils.lerp(vehicleA.position.y, vehicleGroundY + 0.4, 0.1); 
+                }
                 
                 // [MODIFIED] 차량 용암 데미지 로직 변경: 높이 비교 방식
                 // [PERF] 화산 근처가 아니면 무거운 getLavaHeight() 호출을 건너뜀 (화산 렉 개선)
@@ -12010,19 +13226,24 @@
                 if (!item.parent) return; // 이미 주웠거나 제거된 아이템(청크 버킷 정리 지연) 방어
                 // [NEW] 300틱 만료 체크 (보스를 제외한 몹 처치 드랍만 expireFrame이 붙어있음 - spawnItem의 despawnable 참고)
                 if (item.userData.expireFrame && frameCount >= item.userData.expireFrame) { removeItemFromWorld(item); return; }
+                // [요청] 이스터에그와 동일하게, 아이템이 속한 청크가 실제로 로딩(활성)된 상태일 때만 보이게 함.
+                // 청크 로딩 반경을 아주 작게 줄인 상태에서, 아직 청크가 로딩되지 않은(혹은 얼어있는) 먼 곳의
+                // 아이템이 80m 이내라는 이유만으로 보이거나 주워지는 것을 방지함.
+                const chunkOk = !item.userData.chunkKey || activeChunkKeys.has(item.userData.chunkKey);
                 const distSq = item.position.distanceToSquared(playerPos);
-                item.visible = distSq <= ITEM_VISIBLE_SQ;
+                item.visible = chunkOk && distSq <= ITEM_VISIBLE_SQ;
             });
         }
         
         // [NEW] 일시정지 메뉴(E)가 떠 있으면 true - 이 동안은 좀비/적/보스/차량/아이템 등 모든 오브젝트 계산을 멈춤
-        function isWorldFrozen() { return isPaused || isKeybindOpen || isAccessibilityOpen; }
+        function isWorldFrozen() { return isPaused || isKeybindOpen || isAccessibilityOpen || isUICustomOpen; }
         function animate() {
             if (isGameOver) return; requestAnimationFrame(animate); 
             const now = Date.now(); const delta = clock.getDelta(); frameCount++;
             
             if (!isWorldFrozen()) {
             updateWorldState(delta); updatePlayer(delta); handleAutoFire(); updateBullets(delta); updateGrenades(delta); updateZombies(delta);
+            updateChatMessages(delta); // [NEW] 시스템/채팅 메시지의 5초 소멸 타이머도 다른 몹들과 동일하게 여기서만 흐름 - E키로 멈추면 메시지도 같이 멈추고, 풀면 이어서 흐름
             if (frameCount % 3 === 0) updateMercenaries(); // [NEW] 용병 AI (히트스캔이라 가벼움 - 3프레임마다 체크로 더 절약)
             if (isMinimapOpen && frameCount % 4 === 0) drawMinimap(); // [NEW] 미니맵은 4프레임마다 갱신 (성능 최적화)
             if (curseState.active && frameCount % 30 === 0) updateCurseSystem(now); // [NEW] 저주 시스템은 저빈도로 체크 (성능 영향 거의 없음)
@@ -12046,8 +13267,8 @@
                 const distSq = enemy.position.distanceToSquared(gameState.position);
                 const data = enemy.userData;
 
-                // 비활성 청크의 원거리 적/강도: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존, 디스폰 아님)
-                if (!isEnemyInActiveChunk(enemy)) {
+                // 시야범위 밖의 원거리 적/강도: 렌더링 끄고 AI 계산 완전 정지 (위치만 보존, 디스폰 아님)
+                if (!isInViewRange(enemy.position)) {
                     enemy.visible = false;
                     return;
                 }
@@ -12075,7 +13296,6 @@
                 if (distSq > 10000 && (frameCount + index) % 5 !== 0) return; // 100m+ (기존 4 -> 5)
                 if (distSq > 2500 && (frameCount + index) % 2 !== 0) return;  // 50m+ (근접전 정확도 유지, 변경 없음)
 
-                if (distSq > ACTIVE_RADIUS_SQ) { enemy.visible = false; return; }
                 enemy.visible = true;
 
                 const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position;
@@ -12083,7 +13303,9 @@
                 // [FIX] 원거리 적 스폰 보호 적용
                 // 아직 안전 구역(hasLeftSafeZone === 0)이고, 적이 화난 상태('chase')가 아니면 무시
                 // 플레이어가 총을 쏘거나 때리면 performPunch에서 state가 'chase'로 바뀌므로 그때부턴 반격함
-                const isSafeZone = (hasLeftSafeZone === 0);
+                // [요청] 안전구역 이탈 인식도 매 프레임 실시간이 아니라 캐시된 값으로 판단 (좀비와 동일한 패턴)
+                if (data.leftSafeZoneRecognized === undefined) data.leftSafeZoneRecognized = (hasLeftSafeZone === 1);
+                const isSafeZone = !data.leftSafeZoneRecognized;
                 if (isSafeZone && data.state !== 'chase') return;
 
                 const groundY = getStructureAwareGroundY(enemy.position, data); // [FIX] 도시 건물 바닥 인식 (기존엔 항상 맨땅으로 스냅되어 바닥을 뚫음)
@@ -12098,9 +13320,14 @@
                     // [NEW] 시야 확인: 실제로 플레이어가 보일 때만 정확한 위치를 갱신하고, 안 보이면 마지막으로 목격한 위치로 이동
                     let hasLOS = true;
                     if (dist <= Math.max(data.detectionRange, data.attackRange) + 5) {
-                        // [요청] 시야 재확인 주기를 기존보다 2배 느리게(10프레임 -> 20프레임)
-                        if (data.state === 'chase' && (frameCount + index) % 20 !== 0) { hasLOS = true; }
-                        else { hasLOS = checkLineOfSight(enemy.position, playerPos); }
+                        // [요청] 시야 계산(마지막 목격 위치로 탐색하며 플레이어를 다시 찾았는지 확인하는 것 포함)을
+                        // 상태와 무관하게 항상 20프레임에 1번만 하고, 그 사이엔 직전 결과를 재사용함
+                        if (data.cachedLOS === undefined || (frameCount + index) % 20 === 0) {
+                            hasLOS = checkLineOfSight(enemy.position, playerPos);
+                            data.cachedLOS = hasLOS;
+                        } else {
+                            hasLOS = data.cachedLOS;
+                        }
                     }
                     if (hasLOS) { data.lastKnownPlayerPosition.copy(playerPos); }
                     const hasLastKnown = data.lastKnownPlayerPosition.lengthSq() > 0;
@@ -12286,7 +13513,8 @@
         }
         
         function updateWorldState(delta) {
-            gameTime += delta * 0.5;
+            // [요청] 시간이 가는 속도를 기존보다 2배 느리게 (0.5 -> 0.25)
+            gameTime += delta * 0.25;
             const timeOfDay = (gameTime % GAME_DAY_DURATION) / GAME_DAY_DURATION; const totalMinutes = Math.floor(timeOfDay * 24 * 60); const hours = Math.floor(totalMinutes / 60); const minutes = totalMinutes % 60; document.getElementById('time-display').textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
             const theta = (timeOfDay - 0.25) * Math.PI * 2; const sunHeight = Math.sin(theta); const cosTheta = Math.cos(theta); const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const lightOffset = 100;
             sun.position.x = playerPos.x + cosTheta * lightOffset; sun.position.y = playerPos.y + sunHeight * lightOffset; sun.position.z = playerPos.z; sun.target.position.copy(playerPos); sun.target.updateMatrixWorld();
@@ -12307,16 +13535,26 @@
             const oldIsNight = isNight; isNight = sunHeight < 0;
             if (isNight && !oldIsNight) {
                 showChat('시스템', '밤이 되었습니다. 주변이 위험해집니다...');
+                // [요청] 밤이 시작되는 이 순간에 딱 한 번, 모든 좀비의 "낮 인식" 상태를 꺼서 낮 데미지를 멈춤 (다음 낮이 될 때까지 유지)
+                for (const z of zombies) { if (z.userData) z.userData.isDayRecognized = false; }
                 // [MODIFIED] 밤이 될 때마다 무조건 좀비떼가 오는 것이 아니라, 밤이 시작될 때 15% 확률로만 발생
                 if (hasLeftSafeZone === 1 && !gameState.hordeActive && Math.random() < 0.15) { startHordeEvent(); }
                 // [NEW] 울슈쎈성 방어전 - 성벽이 완성된 상태로 밤이 되면 다음 공성일을 시작함
                 if (castleQuest.phase === 'wallBuilt') { startSiegeDay(castleQuest.siegeDay + 1); }
             } else if (!isNight && oldIsNight) {
                 showChat('시스템', '아침이 밝았습니다.'); gameStats.nightsSurvived++; checkAchievements();
+                // [요청] 낮이 시작되는 이 순간에 딱 한 번, 모든 좀비의 "낮 인식" 상태를 켜서 낮 데미지를 시작함 (다음 밤이 될 때까지 유지)
+                for (const z of zombies) { if (z.userData) z.userData.isDayRecognized = true; }
                 // [NEW] 공성전 중이었다면 밤을 버텨낸 것으로 처리하고 보상 지급
                 if (castleQuest.phase === 'siege') { clearSiegeDay(); }
             }
-            if (hasLeftSafeZone === 0) { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const distFromSpawn = playerPos.length(); if (distFromSpawn > SAFE_ZONE_RADIUS) { hasLeftSafeZone = 1; showChat('시스템', '⚠️ 안전 구역을 벗어났습니다! 이제부터 적들이 당신을 인식합니다. (되돌아와도 소용없음)'); } }
+            if (hasLeftSafeZone === 0) { const playerPos = playerInVehicle ? playerInVehicle.position : gameState.position; const distFromSpawn = playerPos.length(); if (distFromSpawn > SAFE_ZONE_RADIUS) { hasLeftSafeZone = 1; showChat('시스템', '⚠️ 안전 구역을 벗어났습니다! 이제부터 적들이 당신을 인식합니다. (되돌아와도 소용없음)');
+                // [요청] "안전구역을 벗어났다"는 인식도 낮/밤과 동일하게, 매 프레임 실시간(hasLeftSafeZone)으로 검사하지 않고
+                // 이 전환 순간에 딱 한 번 모든 적대 몹에게 박아넣어 유지시킴 (되돌아와도 안 풀리는 것과 동일하게, 한 번 켜지면 계속 유지)
+                for (const z of zombies) { if (z.userData) z.userData.leftSafeZoneRecognized = true; }
+                for (const re of rangedEnemies) { if (re.userData) re.userData.leftSafeZoneRecognized = true; }
+                for (const b of bosses) { if (b.userData) b.userData.leftSafeZoneRecognized = true; }
+            } }
         }
         
         function startHordeEvent() {
